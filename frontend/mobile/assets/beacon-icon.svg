@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#232742" />
+      <stop offset="100%" stop-color="#111322" />
+    </linearGradient>
+
+    <!-- Signal Arc & Pin Gradient -->
+    <linearGradient id="signalGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF5252" />
+      <stop offset="50%" stop-color="#FF7A00" />
+      <stop offset="100%" stop-color="#FFC107" />
+    </linearGradient>
+
+    <!-- Subtle Outer Ring Glow -->
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.05" />
+    </linearGradient>
+  </defs>
+
+  <!-- App Icon Rounded Squircle Base -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)" />
+
+  <!-- Background Signal Distance Rings (Subtle/Safe Proximity) -->
+  <circle cx="256" cy="270" r="180" stroke="url(#ringGrad)" stroke-width="3" fill="none" stroke-dasharray="8 8"/>
+  <circle cx="256" cy="270" r="130" stroke="url(#ringGrad)" stroke-width="4" fill="none" />
+
+  <!-- Radiant Broadcast Waves (The Beacon Signal) -->
+  <!-- Outer Signal Wave -->
+  <path d="M 156 190 A 130 130 0 0 1 356 190"
+        fill="none" stroke="url(#signalGrad)" stroke-width="20" stroke-linecap="round" opacity="0.4" />
+
+  <!-- Middle Signal Wave -->
+  <path d="M 186 215 A 90 90 0 0 1 326 215"
+        fill="none" stroke="url(#signalGrad)" stroke-width="20" stroke-linecap="round" opacity="0.75" />
+
+  <!-- Core Pin Body (Clean & Curved) -->
+  <path d="M 256 180
+           C 220 180, 192 208, 192 244
+           C 192 288, 256 360, 256 360
+           C 256 360, 320 288, 320 244
+           C 320 208, 292 180, 256 180 Z"
+        fill="url(#signalGrad)" />
+
+  <!-- Core Inner Beacon Light -->
+  <circle cx="256" cy="240" r="22" fill="#FFFFFF" />
+</svg>

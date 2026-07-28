@@ -1,0 +1,50 @@
+import { getCurrentUserOrNull } from "@/lib/api";
+import { AppNav } from "@/components/AppNav";
+import { redirect } from "next/navigation";
+
+export default async function ProfilePage() {
+  const user = await getCurrentUserOrNull();
+  if (!user) redirect("/login");
+
+  return (
+    <div className="min-h-screen">
+      <AppNav />
+      <main className="max-w-2xl mx-auto px-5 py-6">
+        <h1 className="font-display text-xl font-bold mb-5">Your profile</h1>
+
+        <div className="card mb-4">
+          <p className="font-semibold">{user.display_name}</p>
+          <p className="text-parchment-500 text-sm font-mono">@{user.username}</p>
+          {user.location_label && <p className="text-parchment-500 text-sm mt-2">{user.location_label}</p>}
+        </div>
+
+        <div className="card mb-4">
+          <p className="font-medium mb-2">Tags</p>
+          <div className="flex flex-wrap gap-2">
+            {user.tags.length === 0 && <p className="text-parchment-500 text-sm">No tags yet.</p>}
+            {user.tags.map((t) => (
+              <span key={t.id} className="tag-pill">{t.label}</span>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <p className="font-medium">Discoverable in broadcasts</p>
+          <p className="text-parchment-500 text-sm mt-1">
+            Controls whether you're counted in aggregate "people near you" stats — like the weekly
+            digest — for others who share your tags. This never exposes your identity individually.
+          </p>
+          <p className="text-parchment-500 text-xs font-mono mt-3">
+            Current: {user.discoverable_in_broadcasts ? "On" : "Off"} — TODO: wire toggle to PATCH /users/me
+          </p>
+        </div>
+
+        <form action="/auth/logout" method="post" className="mt-4">
+          <button type="submit" className="btn-secondary w-full border border-rust-400 text-rust-400 hover:text-rust-300">
+            Sign out
+          </button>
+        </form>
+      </main>
+    </div>
+  );
+}

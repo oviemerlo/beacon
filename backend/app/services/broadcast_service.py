@@ -1,0 +1,42 @@
+"""Broadcast creation/deletion business rules."""
+
+import uuid
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.models.broadcast import Broadcast
+from app.repositories import broadcast_repository
+from app.schemas.schemas import BroadcastCreateIn
+from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
+
+
+async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: BroadcastCreateIn) -> Broadcast:
+    if payload.radius_meters > settings.MAX_BROADCAST_RADIUS_METERS:
+        raise ValidationError(f"radius_meters cannot exceed {settings.MAX_BROADCAST_RADIUS_METERS}")
+
+    broadcast = await broadcast_repository.create(
+        db,
+        sender_id=sender_id,
+        content=payload.content,
+        origin_point=f"SRID=4326;POINT({payload.longitude} {payload.latitude})",
+        radius_meters=payload.radius_meters,
+        tag_match_mode=payload.tag_match_mode,
+        expires_at=(datetime.now(timezone.utc) + timedelta(days=payload.expires_in_days)) if payload.expires_in_days else None,
+        tag_ids=payload.tag_ids,
+    )
+    await db.commit()
+    await db.refresh(broadcast)
+    return broadcast
+
+
+async def delete_broadcast(db: AsyncSession, current_user_id: uuid.UUID, broadcast_id: str) -> None:
+    broadcast = await broadcast_repository.get_by_id(db, broadcast_id)
+    if broadcast is None:
+        raise NotFoundError("Broadcast not found")
+    if broadcast.sender_id != current_user_id:
+        raise ForbiddenError("You can only delete your own broadcasts")
+
+    await broadcast_repository.delete(db, broadcast)
+    await db.commit()

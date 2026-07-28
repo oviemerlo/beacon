@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Beacon",
+    "slug": "beacon-mobile",
+    "version": "0.1.0",
+    "icon": "./assets/beacon-icon.svg.png",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "beacon",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.beacon.app.oviemerlo",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Beacon uses your location to show broadcasts posted near you and to set the radius your own broadcasts reach."
+      }
+    },
+    "android": {
+      "package": "com.beacon.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/beacon-icon.svg.png",
+        "backgroundColor": "#111322"
+      },
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+    },
+    "plugins": ["expo-secure-store", "expo-location", "expo-apple-authentication"]
+  }
+}

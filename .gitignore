@@ -1,0 +1,32 @@
+# --- Backend (Python) ---
+backend/**/__pycache__/
+backend/**/*.py[cod]
+backend/**/*.egg-info/
+backend/venv/
+backend/.venv/
+backend/**/.pytest_cache/
+backend/**/.mypy_cache/
+backend/**/.ruff_cache/
+backend/.env
+
+# --- Web (Next.js) ---
+frontend/web/node_modules/
+frontend/web/.next/
+frontend/web/out/
+frontend/web/tsconfig.tsbuildinfo
+frontend/web/next-env.d.ts
+frontend/web/.env
+frontend/web/.env.local
+
+# --- Mobile (Expo / React Native) ---
+frontend/mobile/node_modules/
+frontend/mobile/.expo/
+frontend/mobile/dist/
+frontend/mobile/ios/Pods/
+frontend/mobile/ios/build/
+frontend/mobile/android/build/
+frontend/mobile/android/app/build/
+frontend/mobile/*.jks
+frontend/mobile/*.p12
+frontend/mobile/*.key
+frontend/mobile/.envfrontend/google.txt

@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-dusk-950 text-parchment-100 font-body antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-display;
+  }
+  ::selection {
+    @apply bg-signal-500/30 text-parchment-100;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-signal-400;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-signal-500 text-dusk-950 font-semibold rounded-beacon px-4 py-2.5
+           hover:bg-signal-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-dusk-700 text-parchment-100 font-medium rounded-beacon px-4 py-2.5
+           hover:bg-dusk-600 transition-colors;
+  }
+  .card {
+    @apply bg-dusk-900 border border-dusk-700 rounded-beacon p-5;
+  }
+  .input-field {
+    @apply bg-dusk-800 border border-dusk-600 rounded-beacon px-3.5 py-2.5 text-parchment-100
+           placeholder:text-parchment-500 focus:border-signal-500 outline-none transition-colors w-full;
+  }
+  .tag-pill {
+    @apply inline-flex items-center gap-1 rounded-full border border-dusk-600 bg-dusk-800
+           px-3 py-1 text-xs font-mono text-parchment-300;
+  }
+  .tag-pill-active {
+    @apply border-signal-500 bg-signal-500/10 text-signal-400;
+  }
+}
