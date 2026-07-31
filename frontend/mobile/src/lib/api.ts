@@ -1,4 +1,5 @@
 import { TokenStore } from "./secureStore";
+import { extractErrorMessage } from "./httpError";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -48,7 +49,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit, _retried = f
 
   if (!res.ok) {
     const body = await res.text();
-    throw new ApiError(res.status, body || res.statusText);
+    throw new ApiError(res.status, extractErrorMessage(body, res.statusText));
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

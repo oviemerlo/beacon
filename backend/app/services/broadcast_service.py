@@ -13,6 +13,8 @@ from app.services.exceptions import ForbiddenError, NotFoundError, ValidationErr
 
 
 async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: BroadcastCreateIn) -> Broadcast:
+    if payload.radius_meters < settings.MIN_RADIUS_METERS:
+        raise ValidationError(f"radius_meters must be at least {settings.MIN_RADIUS_METERS}")
     if payload.radius_meters > settings.MAX_BROADCAST_RADIUS_METERS:
         raise ValidationError(f"radius_meters cannot exceed {settings.MAX_BROADCAST_RADIUS_METERS}")
 

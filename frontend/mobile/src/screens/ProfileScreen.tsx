@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Pressable } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
 import { apiFetch } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { colors, radii } from "../theme/tokens";
@@ -8,10 +8,39 @@ import type { UserProfile } from "../types/api";
 
 export function ProfileScreen({ onSignedOut }: { onSignedOut: () => void }) {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [displayNameDraft, setDisplayNameDraft] = useState("");
+  const [savingDisplayName, setSavingDisplayName] = useState(false);
+  const [displayNameError, setDisplayNameError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiFetch<UserProfile>("/users/me").then(setUser);
+    apiFetch<UserProfile>("/users/me").then((me) => {
+      setUser(me);
+      setDisplayNameDraft(me.display_name);
+    });
   }, []);
+
+  async function saveDisplayName() {
+    const trimmed = displayNameDraft.trim();
+    if (!trimmed) {
+      setDisplayNameError("Display name is required.");
+      return;
+    }
+
+    setSavingDisplayName(true);
+    setDisplayNameError(null);
+    try {
+      const updated = await apiFetch<UserProfile>("/users/me", {
+        method: "PATCH",
+        body: JSON.stringify({ display_name: trimmed }),
+      });
+      setUser(updated);
+      setDisplayNameDraft(updated.display_name);
+    } catch (error) {
+      setDisplayNameError(error instanceof Error ? error.message : "Could not update display name.");
+    } finally {
+      setSavingDisplayName(false);
+    }
+  }
 
   if (!user) return <ActivityIndicator color={colors.signal500} style={{ marginTop: 40 }} />;
 
@@ -22,7 +51,24 @@ export function ProfileScreen({ onSignedOut }: { onSignedOut: () => void }) {
       <Card style={{ marginBottom: 12 }}>
         <Text style={styles.name}>{user.display_name}</Text>
         <Text style={styles.username}>@{user.username}</Text>
+        {typeof user.age === "number" && <Text style={styles.locationLabel}>{user.age} years old</Text>}
         {user.location_label && <Text style={styles.locationLabel}>{user.location_label}</Text>}
+      </Card>
+
+      <Card style={{ marginBottom: 12 }}>
+        <Text style={styles.sectionLabel}>Display name</Text>
+        <TextInput
+          style={styles.input}
+          value={displayNameDraft}
+          onChangeText={setDisplayNameDraft}
+          placeholder="Display name"
+          placeholderTextColor={colors.parchment500}
+          autoCapitalize="words"
+        />
+        {displayNameError && <Text style={styles.errorText}>{displayNameError}</Text>}
+        <Pressable style={styles.saveButton} onPress={saveDisplayName} disabled={savingDisplayName}>
+          {savingDisplayName ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.saveButtonText}>Save name</Text>}
+        </Pressable>
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
@@ -70,6 +116,23 @@ const styles = StyleSheet.create({
   name: { color: colors.parchment100, fontWeight: "600", fontSize: 16 },
   username: { color: colors.parchment500, fontFamily: "monospace", fontSize: 12, marginTop: 2 },
   locationLabel: { color: colors.parchment500, fontSize: 13, marginTop: 8 },
+  input: {
+    backgroundColor: colors.dusk800,
+    borderColor: colors.dusk600,
+    borderWidth: 1,
+    borderRadius: radii.beacon,
+    padding: 10,
+    color: colors.parchment100,
+  },
+  saveButton: {
+    backgroundColor: colors.signal500,
+    borderRadius: radii.beacon,
+    paddingVertical: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  saveButtonText: { color: colors.dusk950, fontWeight: "700" },
+  errorText: { color: colors.rust400, fontSize: 12, marginTop: 8 },
   sectionLabel: { color: colors.parchment100, fontWeight: "600", marginBottom: 8 },
   emptyText: { color: colors.parchment500, fontSize: 13 },
   todo: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace", marginTop: 10 },

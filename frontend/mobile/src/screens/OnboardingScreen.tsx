@@ -4,27 +4,68 @@ import * as Location from "expo-location";
 import { apiFetch } from "../lib/api";
 import { colors, radii } from "../theme/tokens";
 
+const DOB_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidIsoDate(value: string): boolean {
+  if (!DOB_PATTERN.test(value)) return false;
+  const [yearRaw, monthRaw, dayRaw] = value.split("-");
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() + 1 === month &&
+    date.getUTCDate() === day
+  );
+}
+
 export function OnboardingScreen({ onDone }: { onDone: () => void }) {
-  const [step, setStep] = useState<"location" | "tags">("location");
+  const [step, setStep] = useState<"profile" | "location" | "tags">("profile");
+  const [displayName, setDisplayName] = useState("");
+  const [birthdate, setBirthdate] = useState("");
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLabel, setLocationLabel] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [prefillingLocationLabel, setPrefillingLocationLabel] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  async function prefillLocationLabel(latitude: number, longitude: number) {
+    setPrefillingLocationLabel(true);
+    try {
+      const response = await apiFetch<{ label: string | null }>(
+        `/geocode/reverse?latitude=${latitude}&longitude=${longitude}`
+      );
+      if (response?.label) {
+        setLocationLabel(response.label);
+      }
+    } catch {
+      // Best-effort only; manual entry stays available on any failure.
+    } finally {
+      setPrefillingLocationLabel(false);
+    }
+  }
+
   async function requestLocation() {
-    setError(null);
+    setLocationError(null);
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") {
-      setError("Location permission was denied — enter your area manually below.");
+      setLocationError("Location permission was denied — enter your area manually below.");
       return;
     }
     const pos = await Location.getCurrentPositionAsync({});
-    setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    const latitude = pos.coords.latitude;
+    const longitude = pos.coords.longitude;
+    setCoords({ lat: latitude, lng: longitude });
+    void prefillLocationLabel(latitude, longitude);
   }
 
   async function saveLocationAndContinue() {
     if (!coords) {
-      setError("Set your location to continue — this is what broadcasts near you are measured against.");
+      setLocationError("Set your location to continue — this is what broadcasts near you are measured against.");
       return;
     }
     setSubmitting(true);
@@ -39,9 +80,48 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
     }
   }
 
+  async function saveProfileAndContinue() {
+    const trimmedName = displayName.trim();
+    if (!trimmedName) {
+      setProfileError("Display name is required.");
+      return;
+    }
+    if (!isValidIsoDate(birthdate)) {
+      setProfileError("Birthdate must be in YYYY-MM-DD format.");
+      return;
+    }
+
+    setProfileError(null);
+    setProfileSubmitting(true);
+    try {
+      await apiFetch("/users/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          display_name: trimmedName,
+          date_of_birth: birthdate,
+        }),
+      });
+      setStep("location");
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Could not save profile.");
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
   return (
     <View style={styles.container}>
-      {step === "location" ? (
+      {step === "profile" ? (
+        <ProfileStep
+          displayName={displayName}
+          birthdate={birthdate}
+          profileError={profileError}
+          profileSubmitting={profileSubmitting}
+          onDisplayNameChange={setDisplayName}
+          onBirthdateChange={setBirthdate}
+          onContinue={saveProfileAndContinue}
+        />
+      ) : step === "location" ? (
         <>
           <Text style={styles.title}>Where are you based?</Text>
           <Text style={styles.subtitle}>
@@ -59,8 +139,13 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
             value={locationLabel}
             onChangeText={setLocationLabel}
           />
+          {prefillingLocationLabel && (
+            <View style={styles.inlinePrefillLoader}>
+              <ActivityIndicator size="small" color={colors.parchment500} />
+            </View>
+          )}
 
-          {error && <Text style={styles.error}>{error}</Text>}
+          {locationError && <Text style={styles.error}>{locationError}</Text>}
 
           <Pressable style={styles.buttonPrimary} onPress={saveLocationAndContinue} disabled={submitting}>
             {submitting ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonPrimaryText}>Continue</Text>}
@@ -70,6 +155,54 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
         <TagStep onDone={onDone} />
       )}
     </View>
+  );
+}
+
+function ProfileStep({
+  displayName,
+  birthdate,
+  profileError,
+  profileSubmitting,
+  onDisplayNameChange,
+  onBirthdateChange,
+  onContinue,
+}: {
+  displayName: string;
+  birthdate: string;
+  profileError: string | null;
+  profileSubmitting: boolean;
+  onDisplayNameChange: (value: string) => void;
+  onBirthdateChange: (value: string) => void;
+  onContinue: () => void;
+}) {
+  return (
+    <>
+      <Text style={styles.title}>Set up your profile</Text>
+      <Text style={styles.subtitle}>Pick the name people see and confirm your age.</Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Display name"
+        placeholderTextColor={colors.parchment500}
+        value={displayName}
+        onChangeText={onDisplayNameChange}
+        autoCapitalize="words"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Birthdate (YYYY-MM-DD)"
+        placeholderTextColor={colors.parchment500}
+        value={birthdate}
+        onChangeText={onBirthdateChange}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+
+      {profileError && <Text style={styles.error}>{profileError}</Text>}
+      <Pressable style={styles.buttonPrimary} onPress={onContinue} disabled={profileSubmitting}>
+        {profileSubmitting ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonPrimaryText}>Continue</Text>}
+      </Pressable>
+    </>
   );
 }
 
@@ -124,4 +257,5 @@ const styles = StyleSheet.create({
   buttonPrimary: { backgroundColor: colors.signal500, borderRadius: radii.beacon, paddingVertical: 14, alignItems: "center", marginTop: 16 },
   buttonPrimaryText: { color: colors.dusk950, fontWeight: "700" },
   error: { color: colors.rust400, fontSize: 13, marginTop: 8 },
+  inlinePrefillLoader: { marginBottom: 8, alignItems: "flex-start" },
 });

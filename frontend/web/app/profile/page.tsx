@@ -1,8 +1,21 @@
-import { getCurrentUserOrNull } from "@/lib/api";
+import { apiFetch, getCurrentUserOrNull } from "@/lib/api";
 import { AppNav } from "@/components/AppNav";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export default async function ProfilePage() {
+  async function updateDisplayName(formData: FormData) {
+    "use server";
+    const displayName = String(formData.get("display_name") ?? "").trim();
+    if (!displayName) return;
+
+    await apiFetch("/users/me", {
+      method: "PATCH",
+      body: JSON.stringify({ display_name: displayName }),
+    });
+    revalidatePath("/profile");
+  }
+
   const user = await getCurrentUserOrNull();
   if (!user) redirect("/login");
 
@@ -15,8 +28,25 @@ export default async function ProfilePage() {
         <div className="card mb-4">
           <p className="font-semibold">{user.display_name}</p>
           <p className="text-parchment-500 text-sm font-mono">@{user.username}</p>
+          {typeof user.age === "number" && <p className="text-parchment-500 text-sm mt-2">{user.age} years old</p>}
           {user.location_label && <p className="text-parchment-500 text-sm mt-2">{user.location_label}</p>}
         </div>
+
+        <form action={updateDisplayName} className="card mb-4">
+          <p className="font-medium mb-2">Display name</p>
+          <input
+            type="text"
+            name="display_name"
+            defaultValue={user.display_name}
+            required
+            minLength={1}
+            maxLength={100}
+            className="input-field mb-3"
+          />
+          <button type="submit" className="btn-primary w-full">
+            Save name
+          </button>
+        </form>
 
         <div className="card mb-4">
           <p className="font-medium mb-2">Tags</p>

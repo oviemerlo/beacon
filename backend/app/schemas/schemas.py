@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -22,6 +22,7 @@ class UserProfileOut(BaseModel):
     account_type: str
     is_verified: bool
     location_label: str | None
+    age: int | None = None
     latitude: float | None = None
     longitude: float | None = None
     feed_radius_meters: int
@@ -49,11 +50,12 @@ class PublicProfileOut(BaseModel):
 
 
 class ProfileUpdateIn(BaseModel):
-    display_name: str | None = None
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+    date_of_birth: date | None = None
     location_label: str | None = None
     latitude: float | None = None
     longitude: float | None = None
-    feed_radius_meters: int | None = Field(default=None, ge=500, le=50000)
+    feed_radius_meters: int | None = Field(default=None, gt=0)
     discoverable_in_broadcasts: bool | None = None
     nationality_tag_ids: list[int] | None = None
     hobby_tag_ids: list[int] | None = None
@@ -63,7 +65,7 @@ class BroadcastCreateIn(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
     latitude: float
     longitude: float
-    radius_meters: int = Field(ge=500, le=50000)
+    radius_meters: int = Field(gt=0)
     tag_match_mode: str = Field(default="any", pattern="^(any|all)$")
     tag_ids: list[int] = []
     expires_in_days: int | None = Field(default=14, ge=1, le=90)

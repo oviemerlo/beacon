@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
-from app.api.routes import auth, broadcasts, feed, messages, search, users
+from app.api.routes import auth, broadcasts, feed, geocode, messages, search, users
 from app.api.routes.search import limiter
 from app.api.error_handlers import register_error_handlers
 from app.core.config import settings
@@ -53,6 +53,7 @@ app.include_router(broadcasts.router)
 app.include_router(feed.router)
 app.include_router(search.router)
 app.include_router(messages.router)
+app.include_router(geocode.router)
 
 
 @app.get("/health")

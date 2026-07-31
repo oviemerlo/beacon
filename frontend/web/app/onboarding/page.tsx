@@ -6,11 +6,58 @@ import { clientFetch } from "@/lib/client-api";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"location" | "tags">("location");
+  const [step, setStep] = useState<"profile" | "location" | "tags">("profile");
+  const [displayName, setDisplayName] = useState("");
+  const [birthdate, setBirthdate] = useState("");
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLabel, setLocationLabel] = useState("");
+  const [resolvingLocationLabel, setResolvingLocationLabel] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  async function prefillLocationLabel(latitude: number, longitude: number) {
+    setResolvingLocationLabel(true);
+    try {
+      const response = await clientFetch<{ label: string | null }>(
+        `/geocode/reverse?latitude=${latitude}&longitude=${longitude}`
+      );
+      if (response?.label) {
+        setLocationLabel(response.label);
+      }
+    } catch {
+      // Best-effort only: keep manual entry flow unchanged on any failure.
+    } finally {
+      setResolvingLocationLabel(false);
+    }
+  }
+
+  async function saveProfileAndContinue() {
+    const trimmedName = displayName.trim();
+    if (!trimmedName) {
+      setProfileError("Display name is required.");
+      return;
+    }
+    if (!birthdate) {
+      setProfileError("Birthdate is required.");
+      return;
+    }
+
+    setProfileError(null);
+    setProfileSubmitting(true);
+    try {
+      await clientFetch("/users/me", {
+        method: "PATCH",
+        body: JSON.stringify({ display_name: trimmedName, date_of_birth: birthdate }),
+      });
+      setStep("location");
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Could not save profile.");
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
 
   function requestLocation() {
     setLocError(null);
@@ -19,7 +66,12 @@ export default function OnboardingPage() {
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => {
+        const latitude = pos.coords.latitude;
+        const longitude = pos.coords.longitude;
+        setCoords({ lat: latitude, lng: longitude });
+        void prefillLocationLabel(latitude, longitude);
+      },
       () => setLocError("Location permission was denied — enter your area manually below.")
     );
   }
@@ -44,7 +96,17 @@ export default function OnboardingPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-6">
       <div className="card w-full max-w-md">
-        {step === "location" ? (
+        {step === "profile" ? (
+          <ProfileStep
+            displayName={displayName}
+            birthdate={birthdate}
+            profileError={profileError}
+            profileSubmitting={profileSubmitting}
+            onDisplayNameChange={setDisplayName}
+            onBirthdateChange={setBirthdate}
+            onContinue={saveProfileAndContinue}
+          />
+        ) : step === "location" ? (
           <>
             <h1 className="font-display text-xl font-bold">Where are you based?</h1>
             <p className="text-parchment-500 text-sm mt-2 mb-5">
@@ -59,6 +121,7 @@ export default function OnboardingPage() {
               value={locationLabel}
               onChange={(e) => setLocationLabel(e.target.value)}
             />
+            {resolvingLocationLabel && <p className="text-parchment-500 text-xs mb-2">…</p>}
             {locError && <p className="text-rust-400 text-sm mt-2">{locError}</p>}
             <button onClick={saveLocationAndContinue} disabled={submitting} className="btn-primary w-full mt-5">
               {submitting ? "Saving…" : "Continue"}
@@ -69,6 +132,49 @@ export default function OnboardingPage() {
         )}
       </div>
     </main>
+  );
+}
+
+function ProfileStep({
+  displayName,
+  birthdate,
+  profileError,
+  profileSubmitting,
+  onDisplayNameChange,
+  onBirthdateChange,
+  onContinue,
+}: {
+  displayName: string;
+  birthdate: string;
+  profileError: string | null;
+  profileSubmitting: boolean;
+  onDisplayNameChange: (value: string) => void;
+  onBirthdateChange: (value: string) => void;
+  onContinue: () => void;
+}) {
+  return (
+    <>
+      <h1 className="font-display text-xl font-bold">Set up your profile</h1>
+      <p className="text-parchment-500 text-sm mt-2 mb-5">
+        Pick the name people see and confirm your age.
+      </p>
+      <input
+        className="input-field mb-3"
+        placeholder="Display name"
+        value={displayName}
+        onChange={(e) => onDisplayNameChange(e.target.value)}
+      />
+      <input
+        type="date"
+        className="input-field mb-2"
+        value={birthdate}
+        onChange={(e) => onBirthdateChange(e.target.value)}
+      />
+      {profileError && <p className="text-rust-400 text-sm mt-2">{profileError}</p>}
+      <button onClick={onContinue} disabled={profileSubmitting} className="btn-primary w-full mt-5">
+        {profileSubmitting ? "Saving…" : "Continue"}
+      </button>
+    </>
   );
 }
 

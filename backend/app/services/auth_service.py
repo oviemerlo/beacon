@@ -20,6 +20,7 @@ from app.services.exceptions import UnauthorizedError
 
 
 async def upsert_user_from_identity(db: AsyncSession, *, provider: str, provider_user_id: str, email: str | None, name: str | None) -> User:
+    _ = name
     existing_account = await user_repository.get_oauth_account(db, provider, provider_user_id)
     if existing_account is not None:
         user = await user_repository.get_by_id(db, existing_account.user_id)
@@ -33,7 +34,7 @@ async def upsert_user_from_identity(db: AsyncSession, *, provider: str, provider
         suffix += 1
         username = f"{base_username}{suffix}"
 
-    user = user_repository.build_new_user(username=username, display_name=name or username)
+    user = user_repository.build_new_user(username=username, display_name=username)
     await user_repository.add(db, user)
     await user_repository.add_oauth_account(db, user.id, provider, provider_user_id, email)
     await db.commit()

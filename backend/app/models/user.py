@@ -1,13 +1,14 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from geoalchemy2 import Geography
 from geoalchemy2.shape import to_shape
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.associationproxy import association_proxy
 
+from app.core.age_utils import calculate_age
 from app.db.base import Base
 
 
@@ -24,6 +25,7 @@ class User(Base):
     # an API response must round/jitter it — see services/matching.py.
     location: Mapped[str] = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=False)
     location_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     feed_radius_meters: Mapped[int] = mapped_column(default=8000)
     discoverable_in_broadcasts: Mapped[bool] = mapped_column(Boolean, default=True)  # opt-out toggle
@@ -57,6 +59,13 @@ class User(Base):
             return float(to_shape(self.location).x)
         except Exception:
             return None
+
+    @property
+    def age(self) -> int | None:
+        """Computed age for self-profile responses; never stored in DB."""
+        if self.date_of_birth is None:
+            return None
+        return calculate_age(self.date_of_birth)
 
 
 class OAuthAccount(Base):

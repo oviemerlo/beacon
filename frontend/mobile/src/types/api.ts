@@ -13,6 +13,7 @@ export interface UserProfile {
   account_type: "individual" | "business";
   is_verified: boolean;
   location_label: string | null;
+  age: number | null;
   latitude: number | null;
   longitude: number | null;
   feed_radius_meters: number;

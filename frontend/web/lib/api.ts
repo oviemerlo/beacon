@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { extractErrorMessage } from "@/lib/http-error";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -36,7 +37,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   if (!res.ok) {
     const body = await res.text();
-    throw new ApiError(res.status, body || res.statusText);
+    throw new ApiError(res.status, extractErrorMessage(body, res.statusText));
   }
 
   if (res.status === 204) return undefined as T;

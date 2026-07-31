@@ -1,7 +1,6 @@
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import * as AppleAuthentication from "expo-apple-authentication";
-import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
 import { TokenStore } from "./secureStore";
 
@@ -11,6 +10,15 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
 
+function getGoogleIosRedirectUri(clientId: string): string {
+  const suffix = ".apps.googleusercontent.com";
+  if (!clientId.endsWith(suffix)) {
+    throw new Error("EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID is not a valid Google iOS client ID");
+  }
+  const clientPrefix = clientId.slice(0, -suffix.length);
+  return `com.googleusercontent.apps.${clientPrefix}:/oauthredirect`;
+}
+
 /**
  * Runs Google Sign-In on-device to get an ID token, then hands it to the
  * backend's POST /auth/google/token-exchange — the native-app path the
@@ -18,9 +26,9 @@ const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
  * The web app uses the redirect-based /auth/google/login flow instead;
  * both land on the same upsert logic server-side.
  *
- * Uses a direct app-scheme redirect (beacon://) rather than the deprecated
- * auth.expo.io proxy — see CVE-2023-28131. Requires a dev build, not Expo Go,
- * since Expo Go can't register the custom scheme.
+ * Uses direct native redirects (Google iOS redirect on iOS, app scheme on other
+ * platforms) rather than the deprecated auth.expo.io proxy. Requires a dev
+ * build, not Expo Go, since Expo Go can't register custom schemes.
  */
 export async function signInWithGoogle(): Promise<void> {
   const clientId = Platform.OS === "ios" ? GOOGLE_IOS_CLIENT_ID : GOOGLE_WEB_CLIENT_ID;
@@ -32,22 +40,18 @@ export async function signInWithGoogle(): Promise<void> {
     );
   }
 
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: "beacon" });
-
-  // Random nonce for the id_token flow, from a CSPRNG (not Math.random()).
-  const nonceBytes = await Crypto.getRandomBytesAsync(16);
-  const nonce = Array.from(nonceBytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const redirectUri =
+    Platform.OS === "ios"
+      ? getGoogleIosRedirectUri(clientId)
+      : AuthSession.makeRedirectUri({ scheme: "beacon" });
 
   const request = new AuthSession.AuthRequest({
     clientId,
     scopes: ["openid", "profile", "email"],
     redirectUri,
-    responseType: AuthSession.ResponseType.IdToken,
-    usePKCE: false,
+    responseType: AuthSession.ResponseType.Code,
+    usePKCE: true,
     extraParams: {
-      nonce,
       prompt: "select_account",
     },
   });
@@ -57,15 +61,38 @@ export async function signInWithGoogle(): Promise<void> {
   };
   const result = await request.promptAsync(discovery);
 
-  const idToken = result.type === "success" ? (result.params as any).id_token : undefined;
+  const code = result.type === "success" ? (result.params as any).code : undefined;
+  if (!code) throw new Error("Google sign-in was cancelled or failed");
+
+  const codeVerifier = (request as any).codeVerifier as string | undefined;
+  if (!codeVerifier) throw new Error("Missing PKCE code_verifier for Google token exchange");
+
+  const tokenExchangeRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      code,
+      code_verifier: codeVerifier,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+    }).toString(),
+  });
+  if (!tokenExchangeRes.ok) {
+    const text = await tokenExchangeRes.text();
+    throw new Error(`Google token exchange failed: ${text}`);
+  }
+  const tokenPayload = await tokenExchangeRes.json();
+  const idToken = tokenPayload?.id_token as string | undefined;
   if (!idToken) throw new Error("Google sign-in was cancelled or failed");
 
-  const res = await fetch(`${API_URL}/auth/google/token-exchange`, {
+  const res = await fetch(`${API_URL}/auth/google/token-exchange?id_token=${encodeURIComponent(idToken)}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id_token: idToken }),
   });
-  if (!res.ok) throw new Error("Backend rejected Google sign-in");
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Backend rejected Google sign-in: ${text}`);
+  }
 
   const { access_token, refresh_token } = await res.json();
   await TokenStore.save(access_token, refresh_token);

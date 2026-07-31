@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = ""
+    GOOGLE_GEOCODING_API_KEY: str = ""
     # Google issues a different OAuth client (and therefore a different
     # `aud` claim in the resulting ID token) per platform — a Web client
     # for the browser redirect flow, and typically iOS/Android clients for
@@ -45,11 +46,14 @@ class Settings(BaseSettings):
         return list(dict.fromkeys([self.FRONTEND_URL, *extra]))
 
     # Product rules — see /docs/PRODUCT_BRIEF.md for rationale.
+    MIN_RADIUS_METERS: int = 100
     DEFAULT_FEED_RADIUS_METERS: int = 8000
+    MAX_FEED_RADIUS_METERS: int = 50000
     MAX_BROADCAST_RADIUS_METERS: int = 50000
     USERNAME_SEARCH_MIN_CHARS: int = 3
     USERNAME_SEARCH_MAX_RESULTS: int = 5
     GROUP_THREAD_DM_THRESHOLD: int = 3  # DMs on one broadcast before "start a group" is offered
+    MIN_AGE_YEARS: int = 13
 
     # Guards POST /internal/jobs/run-digest-now — required header value.
     # Leave unset (empty string) to disable the route entirely in an
