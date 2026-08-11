@@ -97,6 +97,11 @@ async def unfollow_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> Non
     await db.flush()
 
 
+async def list_followed_tag_ids(db: AsyncSession, user_id: uuid.UUID) -> list[int]:
+    result = await db.execute(select(UserFollowedTag.tag_id).where(UserFollowedTag.user_id == user_id))
+    return list(result.scalars().all())
+
+
 async def get_oauth_account(db: AsyncSession, provider: str, provider_user_id: str) -> OAuthAccount | None:
     result = await db.execute(
         select(OAuthAccount).where(OAuthAccount.provider == provider, OAuthAccount.provider_user_id == provider_user_id)
@@ -118,9 +123,30 @@ async def list_all(db: AsyncSession) -> list[User]:
     return list(result.scalars().all())
 
 
+async def admin_signup_stats(db: AsyncSession) -> tuple[int, int, int]:
+    total_users_result = await db.execute(select(func.count(User.id)))
+    suspended_users_result = await db.execute(select(func.count(User.id)).where(User.is_suspended.is_(True)))
+    new_users_7d_result = await db.execute(
+        select(func.count(User.id)).where(User.created_at >= func.now() - text("interval '7 days'"))
+    )
+    return (
+        int(total_users_result.scalar_one() or 0),
+        int(suspended_users_result.scalar_one() or 0),
+        int(new_users_7d_result.scalar_one() or 0),
+    )
+
+
 async def set_last_digest_sent(db: AsyncSession, user: User, when: datetime) -> None:
     user.last_digest_sent_at = when
     await db.flush()
+
+
+async def suspend_user(db: AsyncSession, user: User, reason: str | None, when: datetime) -> User:
+    user.is_suspended = True
+    user.suspended_reason = reason
+    user.suspended_at = when
+    await db.flush()
+    return user
 
 
 async def count_users_sharing_tags_created_since(db: AsyncSession, user_id: uuid.UUID, within_meters: int, since_days: int) -> int:

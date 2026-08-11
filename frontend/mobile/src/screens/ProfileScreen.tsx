@@ -6,7 +6,7 @@ import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
 import type { UserProfile } from "../types/api";
 
-export function ProfileScreen({ onSignedOut }: { onSignedOut: () => void }) {
+export function ProfileScreen({ onSignedOut, onOpenFollowTags }: { onSignedOut: () => void; onOpenFollowTags: () => void }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [displayNameDraft, setDisplayNameDraft] = useState("");
   const [savingDisplayName, setSavingDisplayName] = useState(false);
@@ -73,6 +73,9 @@ export function ProfileScreen({ onSignedOut }: { onSignedOut: () => void }) {
 
       <Card style={{ marginBottom: 12 }}>
         <Text style={styles.sectionLabel}>Tags</Text>
+        <Pressable onPress={onOpenFollowTags} style={styles.followTagsButton}>
+          <Text style={styles.followTagsButtonText}>Follow tags</Text>
+        </Pressable>
         {user.tags.length === 0 ? (
           <Text style={styles.emptyText}>No tags yet.</Text>
         ) : (
@@ -139,6 +142,8 @@ const styles = StyleSheet.create({
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
   pillText: { color: colors.parchment300, fontSize: 11, fontFamily: "monospace" },
+  followTagsButton: { borderColor: colors.signal500, borderWidth: 1, borderRadius: radii.beacon, paddingVertical: 8, alignItems: "center", marginBottom: 10 },
+  followTagsButtonText: { color: colors.signal400, fontWeight: "600" },
   signOutButton: { borderColor: colors.rust400, borderWidth: 1, borderRadius: radii.beacon, paddingVertical: 12, alignItems: "center" },
   signOutText: { color: colors.rust400, fontWeight: "600" },
 });

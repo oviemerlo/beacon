@@ -2,11 +2,15 @@ import uuid
 from datetime import datetime
 
 from geoalchemy2 import Geography
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import TYPE_CHECKING
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class Broadcast(Base):
@@ -20,13 +24,15 @@ class Broadcast(Base):
     # registered location but a business can choose an arbitrary point
     # (e.g. targeting a neighborhood they're opening a shop in).
     origin_point: Mapped[str] = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=False)
-    radius_meters: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    radius_meters: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     tag_match_mode: Mapped[str] = mapped_column(String(10), default="any")  # 'any' | 'all'
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     tags: Mapped[list["BroadcastTag"]] = relationship(back_populates="broadcast", cascade="all, delete-orphan")
+    sender: Mapped["User"] = relationship()
 
 
 class BroadcastTag(Base):

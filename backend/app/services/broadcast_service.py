@@ -13,17 +13,26 @@ from app.services.exceptions import ForbiddenError, NotFoundError, ValidationErr
 
 
 async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: BroadcastCreateIn) -> Broadcast:
-    if payload.radius_meters < settings.MIN_RADIUS_METERS:
-        raise ValidationError(f"radius_meters must be at least {settings.MIN_RADIUS_METERS}")
-    if payload.radius_meters > settings.MAX_BROADCAST_RADIUS_METERS:
-        raise ValidationError(f"radius_meters cannot exceed {settings.MAX_BROADCAST_RADIUS_METERS}")
+    if payload.is_global:
+        if payload.radius_meters is not None:
+            raise ValidationError("radius_meters must be omitted when is_global is true")
+        radius_meters = None
+    else:
+        if payload.radius_meters is None:
+            raise ValidationError("radius_meters is required when is_global is false")
+        if payload.radius_meters < settings.MIN_RADIUS_METERS:
+            raise ValidationError(f"radius_meters must be at least {settings.MIN_RADIUS_METERS}")
+        if payload.radius_meters > settings.MAX_BROADCAST_RADIUS_METERS:
+            raise ValidationError(f"radius_meters cannot exceed {settings.MAX_BROADCAST_RADIUS_METERS}")
+        radius_meters = payload.radius_meters
 
     broadcast = await broadcast_repository.create(
         db,
         sender_id=sender_id,
         content=payload.content,
         origin_point=f"SRID=4326;POINT({payload.longitude} {payload.latitude})",
-        radius_meters=payload.radius_meters,
+        is_global=payload.is_global,
+        radius_meters=radius_meters,
         tag_match_mode=payload.tag_match_mode,
         expires_at=(datetime.now(timezone.utc) + timedelta(days=payload.expires_in_days)) if payload.expires_in_days else None,
         tag_ids=payload.tag_ids,

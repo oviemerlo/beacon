@@ -10,6 +10,14 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
 
+function logAuth(stage: string, details?: Record<string, unknown>) {
+  if (details) {
+    console.log(`[auth] ${stage}`, details);
+    return;
+  }
+  console.log(`[auth] ${stage}`);
+}
+
 function getGoogleIosRedirectUri(clientId: string): string {
   const suffix = ".apps.googleusercontent.com";
   if (!clientId.endsWith(suffix)) {
@@ -31,6 +39,7 @@ function getGoogleIosRedirectUri(clientId: string): string {
  * build, not Expo Go, since Expo Go can't register custom schemes.
  */
 export async function signInWithGoogle(): Promise<void> {
+  logAuth("google:start", { platform: Platform.OS });
   const clientId = Platform.OS === "ios" ? GOOGLE_IOS_CLIENT_ID : GOOGLE_WEB_CLIENT_ID;
   if (!clientId) {
     throw new Error(
@@ -44,6 +53,7 @@ export async function signInWithGoogle(): Promise<void> {
     Platform.OS === "ios"
       ? getGoogleIosRedirectUri(clientId)
       : AuthSession.makeRedirectUri({ scheme: "beacon" });
+  logAuth("google:redirect-uri", { redirectUri, clientId });
 
   const request = new AuthSession.AuthRequest({
     clientId,
@@ -59,7 +69,9 @@ export async function signInWithGoogle(): Promise<void> {
   const discovery = {
     authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
   };
+  logAuth("google:prompt:start");
   const result = await request.promptAsync(discovery);
+  logAuth("google:prompt:result", { type: result.type, params: result.type === "success" ? result.params : undefined });
 
   const code = result.type === "success" ? (result.params as any).code : undefined;
   if (!code) throw new Error("Google sign-in was cancelled or failed");
@@ -78,24 +90,30 @@ export async function signInWithGoogle(): Promise<void> {
       redirect_uri: redirectUri,
     }).toString(),
   });
+  logAuth("google:token-exchange:response", { ok: tokenExchangeRes.ok, status: tokenExchangeRes.status });
   if (!tokenExchangeRes.ok) {
     const text = await tokenExchangeRes.text();
+    logAuth("google:token-exchange:error", { body: text });
     throw new Error(`Google token exchange failed: ${text}`);
   }
   const tokenPayload = await tokenExchangeRes.json();
   const idToken = tokenPayload?.id_token as string | undefined;
   if (!idToken) throw new Error("Google sign-in was cancelled or failed");
+  logAuth("google:id-token:received");
 
   const res = await fetch(`${API_URL}/auth/google/token-exchange?id_token=${encodeURIComponent(idToken)}`, {
     method: "POST",
   });
+  logAuth("google:backend-exchange:response", { ok: res.ok, status: res.status, apiUrl: API_URL });
   if (!res.ok) {
     const text = await res.text();
+    logAuth("google:backend-exchange:error", { body: text });
     throw new Error(`Backend rejected Google sign-in: ${text}`);
   }
 
   const { access_token, refresh_token } = await res.json();
   await TokenStore.save(access_token, refresh_token);
+  logAuth("google:success");
 }
 
 /** iOS only — the Apple button is conditionally rendered in LoginScreen. */

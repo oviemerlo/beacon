@@ -13,6 +13,7 @@ import { NewBroadcastScreen } from "../screens/NewBroadcastScreen";
 import { BroadcastDetailScreen } from "../screens/BroadcastDetailScreen";
 import { ConversationsScreen } from "../screens/ConversationsScreen";
 import { ConversationDetailScreen } from "../screens/ConversationDetailScreen";
+import { FollowTagsScreen } from "../screens/FollowTagsScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { colors } from "../theme/tokens";
 import type { UserProfile } from "../types/api";
@@ -20,6 +21,7 @@ import type { UserProfile } from "../types/api";
 const RootStack = createNativeStackNavigator();
 const FeedStack = createNativeStackNavigator();
 const ConversationsStack = createNativeStackNavigator();
+const ProfileStack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
 
 const navTheme = {
@@ -32,7 +34,10 @@ function FeedStackNavigator() {
     <FeedStack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.dusk900 }, headerTintColor: colors.parchment100 }}>
       <FeedStack.Screen name="FeedHome" options={{ title: "Beacon" }}>
         {({ navigation }: any) => (
-          <FeedScreen onOpenBroadcast={(id) => navigation.navigate("BroadcastDetail", { broadcastId: id })} />
+          <FeedScreen
+            onOpenBroadcast={(id) => navigation.navigate("BroadcastDetail", { broadcastId: id })}
+            onOpenConversation={(conversationId) => navigation.navigate("ConversationDetail", { conversationId })}
+          />
         )}
       </FeedStack.Screen>
       <FeedStack.Screen name="BroadcastDetail" options={{ title: "Reply" }}>
@@ -53,11 +58,26 @@ function FeedStackNavigator() {
 function ConversationsStackNavigator() {
   return (
     <ConversationsStack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.dusk900 }, headerTintColor: colors.parchment100 }}>
-      <ConversationsStack.Screen name="ConversationsHome" component={ConversationsScreen} options={{ title: "Messages" }} />
+      <ConversationsStack.Screen name="ConversationsHome" options={{ title: "Messages" }}>
+        {({ navigation }: any) => (
+          <ConversationsScreen onOpenConversation={(conversationId) => navigation.navigate("ConversationDetail", { conversationId })} />
+        )}
+      </ConversationsStack.Screen>
       <ConversationsStack.Screen name="ConversationDetail" options={{ title: "Conversation" }}>
         {({ route }: any) => <ConversationDetailScreen conversationId={route.params.conversationId} />}
       </ConversationsStack.Screen>
     </ConversationsStack.Navigator>
+  );
+}
+
+function ProfileStackNavigator({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <ProfileStack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.dusk900 }, headerTintColor: colors.parchment100 }}>
+      <ProfileStack.Screen name="ProfileHome" options={{ title: "Profile" }}>
+        {({ navigation }: any) => <ProfileScreen onSignedOut={onSignOut} onOpenFollowTags={() => navigation.navigate("FollowTags")} />}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen name="FollowTags" component={FollowTagsScreen} options={{ title: "Follow tags" }} />
+    </ProfileStack.Navigator>
   );
 }
 
@@ -76,9 +96,7 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
         {({ navigation }: any) => <NewBroadcastScreen onPosted={() => navigation.navigate("Feed")} />}
       </Tabs.Screen>
       <Tabs.Screen name="Messages" component={ConversationsStackNavigator} />
-      <Tabs.Screen name="Profile">
-        {() => <ProfileScreen onSignedOut={onSignOut} />}
-      </Tabs.Screen>
+      <Tabs.Screen name="Profile">{() => <ProfileStackNavigator onSignOut={onSignOut} />}</Tabs.Screen>
     </Tabs.Navigator>
   );
 }

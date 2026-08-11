@@ -29,4 +29,6 @@ frontend/mobile/android/app/build/
 frontend/mobile/*.jks
 frontend/mobile/*.p12
 frontend/mobile/*.key
-frontend/mobile/.envfrontend/google.txt
+frontend/mobile/.env
+frontend/google.txt
+

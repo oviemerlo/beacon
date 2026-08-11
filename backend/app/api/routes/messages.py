@@ -16,6 +16,11 @@ async def start_conversation(payload: ConversationStartIn, current_user: User = 
     return {"conversation_id": str(conversation.id)}
 
 
+@router.get("")
+async def list_conversations(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await conversation_service.list_conversations_for_user(db, current_user.id)
+
+
 @router.get("/{conversation_id}/messages", response_model=list[MessageOut])
 async def list_messages(conversation_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await conversation_service.list_messages(db, current_user.id, conversation_id)

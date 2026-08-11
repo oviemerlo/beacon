@@ -1,33 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { LocationDriftBanner } from "@/components/LocationDriftBanner";
+import { promptAndSubmitReport } from "@/lib/report-actions";
+import { reachBadgeLabel } from "@/lib/broadcast-reach";
 import { clientFetch } from "@/lib/client-api";
+import { usePolling } from "@/lib/usePolling";
 import type { FeedBroadcast, UserProfile } from "@/types/api";
 
 type Tab = "for-you" | "opt-in";
 
 export default function FeedPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("for-you");
   const [broadcasts, setBroadcasts] = useState<FeedBroadcast[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadFeed = useCallback(async ({ silent }: { silent: boolean }) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+    try {
+      const rows = await clientFetch<FeedBroadcast[]>(`/feed/${tab}`);
+      setBroadcasts(rows);
+    } catch {
+      if (!silent) setError("Couldn't load your feed. Try refreshing.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [tab]);
+
   useEffect(() => {
     clientFetch<UserProfile>("/users/me").then(setUser).catch(() => setUser(null));
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    clientFetch<FeedBroadcast[]>(`/feed/${tab}`)
-      .then(setBroadcasts)
-      .catch(() => setError("Couldn't load your feed. Try refreshing."))
-      .finally(() => setLoading(false));
-  }, [tab]);
+  usePolling(loadFeed, [loadFeed], 5000);
 
   return (
     <div className="min-h-screen">
@@ -63,7 +76,7 @@ export default function FeedPage() {
 
         <div className="flex flex-col gap-3">
           {broadcasts.map((b) => (
-            <BroadcastCard key={b.id} broadcast={b} />
+            <BroadcastCard key={b.id} broadcast={b} currentUserId={user?.id ?? null} onOpenConversation={(id) => router.push(`/conversations/${id}`)} />
           ))}
         </div>
       </main>
@@ -84,18 +97,77 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function BroadcastCard({ broadcast }: { broadcast: FeedBroadcast }) {
+function BroadcastCard({
+  broadcast,
+  currentUserId,
+  onOpenConversation,
+}: {
+  broadcast: FeedBroadcast;
+  currentUserId: string | null;
+  onOpenConversation: (conversationId: string) => void;
+}) {
   const km = (broadcast.distance_m / 1000).toFixed(1);
+  const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
+  const isOwn = currentUserId === broadcast.sender_id;
+
+  async function startPrivateReply() {
+    const firstMessage = window.prompt("Private message");
+    if (!firstMessage || !firstMessage.trim()) return;
+    try {
+      const res = await clientFetch<{ conversation_id: string }>("/conversations", {
+        method: "POST",
+        body: JSON.stringify({ broadcast_id: broadcast.id, first_message: firstMessage.trim() }),
+      });
+      onOpenConversation(res.conversation_id);
+    } catch {
+      window.alert("Couldn't start private reply.");
+    }
+  }
+
   return (
-    <Link href={`/broadcasts/${broadcast.id}`} className="card block hover:border-signal-500/50 transition-colors">
+    <div className="card block hover:border-signal-500/50 transition-colors">
+      <p className="text-parchment-500 text-sm mb-2">{broadcast.sender_display_name}</p>
       <p className="text-parchment-100">{broadcast.content}</p>
+      {broadcast.tags.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          {broadcast.tags.map((tag) => (
+            <span key={tag.id} className="tag-pill">
+              {tag.label}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex items-center gap-3 mt-3 text-xs font-mono text-parchment-500">
-        <span>{km} km away</span>
+        {!isOwn && <span>{km} km away</span>}
+        <span className="tag-pill">{reachLabel}</span>
         {typeof broadcast.shared_tag_count === "number" && broadcast.shared_tag_count > 0 && (
           <span className="tag-pill tag-pill-active">{broadcast.shared_tag_count} shared tag{broadcast.shared_tag_count > 1 ? "s" : ""}</span>
         )}
       </div>
-    </Link>
+      {!isOwn && (
+        <div className="flex gap-2 mt-3">
+          <Link href={`/broadcasts/${broadcast.id}`} className="tag-pill">
+            Reply in feed
+          </Link>
+          <button onClick={startPrivateReply} className="tag-pill">
+            Reply privately
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                await promptAndSubmitReport("broadcast", broadcast.id, "this broadcast");
+                window.alert("Report submitted.");
+              } catch {
+                window.alert("Couldn't submit report.");
+              }
+            }}
+            className="tag-pill"
+          >
+            Report
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

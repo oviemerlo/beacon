@@ -2,6 +2,7 @@ import { apiFetch, getCurrentUserOrNull } from "@/lib/api";
 import { AppNav } from "@/components/AppNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 export default async function ProfilePage() {
   async function updateDisplayName(formData: FormData) {
@@ -50,6 +51,9 @@ export default async function ProfilePage() {
 
         <div className="card mb-4">
           <p className="font-medium mb-2">Tags</p>
+          <Link href="/follow-tags" className="inline-block text-sm text-signal-400 hover:text-signal-300 mb-3">
+            Follow tags
+          </Link>
           <div className="flex flex-wrap gap-2">
             {user.tags.length === 0 && <p className="text-parchment-500 text-sm">No tags yet.</p>}
             {user.tags.map((t) => (
@@ -68,6 +72,15 @@ export default async function ProfilePage() {
             Current: {user.discoverable_in_broadcasts ? "On" : "Off"} — TODO: wire toggle to PATCH /users/me
           </p>
         </div>
+
+        {user.is_admin && (
+          <div className="card mt-4">
+            <p className="font-medium mb-2">Moderation</p>
+            <Link href="/admin/reports" className="inline-block text-sm text-signal-400 hover:text-signal-300">
+              Open admin reports queue
+            </Link>
+          </div>
+        )}
 
         <form action="/auth/logout" method="post" className="mt-4">
           <button type="submit" className="btn-secondary w-full border border-rust-400 text-rust-400 hover:text-rust-300">

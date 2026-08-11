@@ -30,3 +30,9 @@ async def follow_tag(tag_id: int, notifications_enabled: bool = False, current_u
 async def unfollow_tag(tag_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await user_service.unfollow_tag(db, current_user.id, tag_id)
     return {"status": "ok"}
+
+
+@router.get("/me/followed-tags")
+async def list_followed_tags(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    tag_ids = await user_service.get_followed_tag_ids(db, current_user.id)
+    return {"tag_ids": tag_ids}

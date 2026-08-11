@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { clientFetch } from "@/lib/client-api";
+import { promptAndSubmitReport } from "@/lib/report-actions";
 import type { Message } from "@/types/api";
 
 export default function ConversationDetailPage() {
@@ -51,9 +52,24 @@ export default function ConversationDetailPage() {
           {messages.map((m) => (
             <div key={m.id} className="card py-2.5 px-3.5 max-w-[80%] self-start">
               <p className="text-sm">{m.body}</p>
-              <p className="text-parchment-500 text-[10px] font-mono mt-1">
-                {new Date(m.sent_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-parchment-500 text-[10px] font-mono">
+                  {new Date(m.sent_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </p>
+                <button
+                  className="text-[10px] font-mono text-rust-400 hover:text-rust-300"
+                  onClick={async () => {
+                    try {
+                      await promptAndSubmitReport("message", m.id, "this message");
+                      window.alert("Report submitted.");
+                    } catch {
+                      window.alert("Couldn't submit report.");
+                    }
+                  }}
+                >
+                  Report
+                </button>
+              </div>
             </div>
           ))}
           <div ref={bottomRef} />

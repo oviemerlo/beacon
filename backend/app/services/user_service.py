@@ -61,3 +61,7 @@ async def get_profile_with_tags(db: AsyncSession, user_id: uuid.UUID) -> User:
 async def unfollow_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> None:
     await user_repository.unfollow_tag(db, user_id, tag_id)
     await db.commit()
+
+
+async def get_followed_tag_ids(db: AsyncSession, user_id: uuid.UUID) -> list[int]:
+    return await user_repository.list_followed_tag_ids(db, user_id)

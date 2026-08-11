@@ -14,8 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.broadcast import Broadcast
 from app.models.conversation import Conversation, Message
-from app.repositories import block_repository, broadcast_repository, conversation_repository
+from app.repositories import block_repository, broadcast_repository, conversation_repository, user_repository
 from app.services.exceptions import ForbiddenError, NotFoundError
+
+
+async def _assert_messaging_allowed(db: AsyncSession, user_a: uuid.UUID, user_b: uuid.UUID) -> None:
+    if await block_repository.is_blocked_either_direction(db, user_a, user_b):
+        raise ForbiddenError("Messaging is unavailable between these users")
 
 
 async def _assert_can_initiate(db: AsyncSession, initiator_id: uuid.UUID, broadcast_id: uuid.UUID) -> Broadcast:
@@ -28,8 +33,7 @@ async def _assert_can_initiate(db: AsyncSession, initiator_id: uuid.UUID, broadc
     if not await broadcast_repository.has_impression(db, broadcast_id, initiator_id):
         raise ForbiddenError("This broadcast was never shown in your feed")
 
-    if await block_repository.is_blocked_either_direction(db, initiator_id, broadcast.sender_id):
-        raise ForbiddenError("Messaging is unavailable between these users")
+    await _assert_messaging_allowed(db, initiator_id, broadcast.sender_id)
 
     return broadcast
 
@@ -60,8 +64,32 @@ async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: s
 
 
 async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: str, body: str) -> Message:
-    await _assert_participant(db, user_id, conversation_id)
+    conversation = await _assert_participant(db, user_id, conversation_id)
+    other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
+    await _assert_messaging_allowed(db, user_id, other_user_id)
     message = await conversation_repository.add_message(db, conversation_id, user_id, body)
     await db.commit()
     await db.refresh(message)
     return message
+
+
+async def list_conversations_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[dict]:
+    conversations = await conversation_repository.list_for_user(db, user_id)
+    items: list[dict] = []
+    for conversation in conversations:
+        other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
+        other_user = await user_repository.get_by_id(db, other_user_id)
+        latest = await conversation_repository.latest_message_for_conversation(db, conversation.id)
+        items.append(
+            {
+                "id": str(conversation.id),
+                "origin_broadcast_id": str(conversation.origin_broadcast_id),
+                "other_participant": {
+                    "id": str(other_user_id),
+                    "display_name": other_user.display_name if other_user else "Unknown",
+                },
+                "last_message": latest.body if latest else "",
+                "last_message_at": latest.sent_at if latest else conversation.created_at,
+            }
+        )
+    return items

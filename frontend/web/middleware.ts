@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isJwtExpired } from "./lib/jwt";
 
-const PROTECTED_PREFIXES = ["/feed", "/broadcasts", "/conversations", "/profile", "/onboarding"];
+const PROTECTED_PREFIXES = ["/feed", "/broadcasts", "/conversations", "/profile", "/follow-tags", "/onboarding", "/admin"];
 
 export function middleware(req: NextRequest) {
   const isProtected = PROTECTED_PREFIXES.some((p) => req.nextUrl.pathname.startsWith(p));
@@ -29,5 +29,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/feed/:path*", "/broadcasts/:path*", "/conversations/:path*", "/profile/:path*", "/onboarding/:path*"],
+  matcher: ["/feed/:path*", "/broadcasts/:path*", "/conversations/:path*", "/profile/:path*", "/follow-tags/:path*", "/onboarding/:path*", "/admin/:path*"],
 };

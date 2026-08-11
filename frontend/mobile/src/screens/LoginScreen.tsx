@@ -16,6 +16,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
       await fn();
       onSignedIn();
     } catch (e: any) {
+      console.error("[auth] login-screen:error", e);
       setError(e.message ?? "Sign-in failed");
     } finally {
       setBusy(false);

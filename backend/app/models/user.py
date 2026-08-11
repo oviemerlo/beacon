@@ -20,6 +20,10 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     account_type: Mapped[str] = mapped_column(String(20), default="individual")  # individual | business
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_suspended: Mapped[bool] = mapped_column(Boolean, default=False)
+    suspended_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Registered location. Stored precisely; every read path that can reach
     # an API response must round/jitter it — see services/matching.py.

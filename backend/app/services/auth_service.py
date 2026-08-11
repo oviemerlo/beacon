@@ -58,4 +58,6 @@ async def refresh_token_pair(db: AsyncSession, refresh_token: str) -> TokenPairO
     user = await user_repository.get_by_id(db, user_id)
     if user is None:
         raise UnauthorizedError("User not found")
+    if user.is_suspended:
+        raise UnauthorizedError("Account suspended")
     return issue_tokens(user)
