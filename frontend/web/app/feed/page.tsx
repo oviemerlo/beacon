@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { LocationDriftBanner } from "@/components/LocationDriftBanner";
-import { promptAndSubmitReport } from "@/lib/report-actions";
-import { reachBadgeLabel } from "@/lib/broadcast-reach";
-import { clientFetch } from "@/lib/client-api";
-import { usePolling } from "@/lib/usePolling";
+import { promptAndSubmitReport } from "@/helpers/report-actions";
+import { reachBadgeLabel } from "@/helpers/broadcast-reach";
+import { clientFetch } from "@/helpers/client-api";
+import { formatBroadcastSentAt } from "@/helpers/time";
+import { usePolling } from "@/helpers/usePolling";
 import type { FeedBroadcast, UserProfile } from "@/types/api";
 
 type Tab = "for-you" | "opt-in";
@@ -109,6 +110,8 @@ function BroadcastCard({
   const km = (broadcast.distance_m / 1000).toFixed(1);
   const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
   const isOwn = currentUserId === broadcast.sender_id;
+  const isLocalReach = reachLabel === "Local";
+  const isGlobalReach = reachLabel === "Global";
 
   async function startPrivateReply() {
     const firstMessage = window.prompt("Private message");
@@ -128,6 +131,9 @@ function BroadcastCard({
     <div className="card block hover:border-signal-500/50 transition-colors">
       <p className="text-parchment-500 text-sm mb-2">{broadcast.sender_display_name}</p>
       <p className="text-parchment-100">{broadcast.content}</p>
+      <p className="text-parchment-500 text-xs font-mono mt-2">
+        {formatBroadcastSentAt(broadcast.created_at)}
+      </p>
       {broadcast.tags.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-3">
           {broadcast.tags.map((tag) => (
@@ -139,19 +145,40 @@ function BroadcastCard({
       )}
       <div className="flex items-center gap-3 mt-3 text-xs font-mono text-parchment-500">
         {!isOwn && <span>{km} km away</span>}
-        <span className="tag-pill">{reachLabel}</span>
+        <span
+          className="tag-pill"
+          style={
+            isLocalReach
+              ? { backgroundColor: "#7F1D1D", borderColor: "#991B1B", color: "#F5F2EA" }
+              : isGlobalReach
+                ? { backgroundColor: "#FFFFFF", borderColor: "#D1D5DB", color: "#111827" }
+                : undefined
+          }
+        >
+          {reachLabel}
+        </span>
         {typeof broadcast.shared_tag_count === "number" && broadcast.shared_tag_count > 0 && (
           <span className="tag-pill tag-pill-active">{broadcast.shared_tag_count} shared tag{broadcast.shared_tag_count > 1 ? "s" : ""}</span>
         )}
+        <span className="tag-pill tag-pill-active">
+          {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
+        </span>
       </div>
-      {!isOwn && (
-        <div className="flex gap-2 mt-3">
-          <Link href={`/broadcasts/${broadcast.id}`} className="tag-pill">
-            Reply in feed
-          </Link>
-          <button onClick={startPrivateReply} className="tag-pill">
-            Reply privately
-          </button>
+      <div className="flex gap-2 mt-3">
+        {!isOwn && (
+          <>
+            <Link href={`/broadcasts/${broadcast.id}`} className="tag-pill">
+              Reply in feed
+            </Link>
+            <button onClick={startPrivateReply} className="tag-pill">
+              Reply privately
+            </button>
+          </>
+        )}
+        <Link href={`/broadcasts/${broadcast.id}`} className="tag-pill">
+          View thread
+        </Link>
+        {!isOwn && (
           <button
             onClick={async () => {
               try {
@@ -165,8 +192,8 @@ function BroadcastCard({
           >
             Report
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { clientFetch } from "@/lib/client-api";
+import { clientFetch } from "@/helpers/client-api";
 
 export default function OnboardingPage() {
   const router = useRouter();

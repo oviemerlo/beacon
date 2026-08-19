@@ -3,24 +3,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
-import { clientFetch } from "@/lib/client-api";
+import { clientFetch } from "@/helpers/client-api";
 import {
   EMPTY_SECTION_QUERIES,
   EMPTY_TAG_GROUPS,
   filterTagGroupsBySectionQuery,
   isAutosuggestOnlySection,
+  selectedTagsForSection,
   TAG_SECTIONS,
   toggleTagId,
   updateSectionQuery,
   visibleTagsForSection,
-} from "@/lib/tags";
+} from "@/helpers/tags";
 import {
   buildReachPayload,
   LOCAL_RADIUS_STEPS_M,
   radiusLabel,
   ReachCategory,
   REGIONAL_RADIUS_STEPS_M,
-} from "@/lib/broadcast-reach";
+} from "@/helpers/broadcast-reach";
 import type { TagGroups } from "@/types/api";
 
 export default function NewBroadcastPage() {
@@ -148,6 +149,22 @@ export default function NewBroadcastPage() {
             {TAG_SECTIONS.map(({ key, title }) => (
               <div key={key} className="mb-4">
                 <p className="text-sm font-medium mb-2">{title}</p>
+                {selectedTagsForSection(key, tagGroups, selectedTagIds).length > 0 && (
+                  <div className="mb-2">
+                    <p className="text-parchment-500 text-xs font-mono mb-2">Selected</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedTagsForSection(key, tagGroups, selectedTagIds).map((tag) => (
+                        <button
+                          key={tag.id}
+                          onClick={() => setSelectedTagIds((prev) => toggleTagId(prev, tag.id))}
+                          className="tag-pill tag-pill-active"
+                        >
+                          {tag.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <input
                   type="text"
                   className="input-field mb-2 text-sm py-2"
@@ -159,7 +176,7 @@ export default function NewBroadcastPage() {
                   <p className="text-parchment-500 text-xs mb-2">Start typing to search all countries.</p>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  {visibleTagsForSection(key, filteredTagGroups, sectionQueries).map((tag) => {
+                  {visibleTagsForSection(key, filteredTagGroups, sectionQueries, selectedTagIds).map((tag) => {
                     const selected = selectedTagIds.includes(tag.id);
                     return (
                       <button

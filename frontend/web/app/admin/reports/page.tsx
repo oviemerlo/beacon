@@ -1,6 +1,6 @@
 import { AppNav } from "@/components/AppNav";
-import { apiFetch, getCurrentUserOrNull } from "@/lib/api";
-import { reasonLabel } from "@/lib/reports";
+import { apiFetch, getCurrentUserOrNull } from "@/helpers/api";
+import { reasonLabel } from "@/helpers/reports";
 import type { AdminStats, ReportQueueItem } from "@/types/api";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";

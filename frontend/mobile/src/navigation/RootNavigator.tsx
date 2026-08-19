@@ -4,8 +4,8 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { ActivityIndicator, View } from "react-native";
 
-import { TokenStore } from "../lib/secureStore";
-import { apiFetch } from "../lib/api";
+import { TokenStore } from "../helpers/secureStore";
+import { apiFetch } from "../helpers/api";
 import { LoginScreen } from "../screens/LoginScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { FeedScreen } from "../screens/FeedScreen";
@@ -41,12 +41,7 @@ function FeedStackNavigator() {
         )}
       </FeedStack.Screen>
       <FeedStack.Screen name="BroadcastDetail" options={{ title: "Reply" }}>
-        {({ route, navigation }: any) => (
-          <BroadcastDetailScreen
-            broadcastId={route.params.broadcastId}
-            onConversationStarted={(conversationId) => navigation.navigate("ConversationDetail", { conversationId })}
-          />
-        )}
+        {({ route }: any) => <BroadcastDetailScreen broadcastId={route.params.broadcastId} />}
       </FeedStack.Screen>
       <FeedStack.Screen name="ConversationDetail" options={{ title: "Conversation" }}>
         {({ route }: any) => <ConversationDetailScreen conversationId={route.params.conversationId} />}

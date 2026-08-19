@@ -3,9 +3,9 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
-import { clientFetch } from "@/lib/client-api";
-import { promptAndSubmitReport } from "@/lib/report-actions";
-import { usePolling } from "@/lib/usePolling";
+import { clientFetch } from "@/helpers/client-api";
+import { promptAndSubmitReport } from "@/helpers/report-actions";
+import { usePolling } from "@/helpers/usePolling";
 import type { ConversationThread } from "@/types/api";
 
 export default function ConversationsPage() {
@@ -43,6 +43,7 @@ export default function ConversationsPage() {
               <div key={t.id} className="card hover:border-signal-500/50 transition-colors">
                 <Link href={`/conversations/${t.id}`} className="block">
                   <p className="font-medium">{t.other_participant.display_name}</p>
+                  <p className="text-parchment-300 text-sm mt-1">Replying to: {t.origin_broadcast_preview}</p>
                   <p className="text-parchment-500 text-sm mt-1">{t.last_message || "No messages yet."}</p>
                 </Link>
                 <div className="mt-3">

@@ -1,29 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import Slider from "@react-native-community/slider";
 import * as Location from "expo-location";
-import { apiFetch } from "../lib/api";
+import { apiFetch } from "../helpers/api";
 import {
   buildReachPayload,
   LOCAL_RADIUS_STEPS_M,
   radiusLabel,
   ReachCategory,
   REGIONAL_RADIUS_STEPS_M,
-} from "../lib/broadcastReach";
+} from "../helpers/broadcastReach";
 import {
   EMPTY_SECTION_QUERIES,
   EMPTY_TAG_GROUPS,
   filterTagGroupsBySectionQuery,
   isAutosuggestOnlySection,
+  selectedTagsForSection,
   TAG_SECTIONS,
   toggleTagId,
   updateSectionQuery,
   visibleTagsForSection,
-} from "../lib/tags";
+} from "../helpers/tags";
 import { colors, radii } from "../theme/tokens";
 import type { TagGroups } from "../types/api";
 
 export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
+  const tabBarHeight = useBottomTabBarHeight();
   const [content, setContent] = useState("");
   const [reach, setReach] = useState<ReachCategory>("regional");
   const [localRadiusIdx, setLocalRadiusIdx] = useState(3);
@@ -78,7 +81,14 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.contentContainer, { paddingBottom: tabBarHeight + 32 }]}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      nestedScrollEnabled
+      scrollEnabled
+    >
       <Text style={styles.title}>New broadcast</Text>
 
       <TextInput
@@ -139,6 +149,22 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         {TAG_SECTIONS.map(({ key, title }) => (
           <View key={key} style={styles.tagSection}>
             <Text style={styles.label}>{title}</Text>
+            {selectedTagsForSection(key, tagGroups, selectedTagIds).length > 0 && (
+              <View style={styles.selectedGroup}>
+                <Text style={styles.selectedLabel}>Selected</Text>
+                <View style={styles.tagPillRow}>
+                  {selectedTagsForSection(key, tagGroups, selectedTagIds).map((tag) => (
+                    <Pressable
+                      key={tag.id}
+                      onPress={() => setSelectedTagIds((prev) => toggleTagId(prev, tag.id))}
+                      style={[styles.pill, styles.pillActive]}
+                    >
+                      <Text style={[styles.pillText, styles.pillTextActive]}>{tag.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
             <TextInput
               style={styles.searchInput}
               placeholder={`Search ${title.toLowerCase()} tags`}
@@ -149,8 +175,8 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
             {isAutosuggestOnlySection(key) && !sectionQueries[key].trim() && (
               <Text style={styles.hint}>Start typing to search all countries.</Text>
             )}
-            <View style={styles.pillRow}>
-              {visibleTagsForSection(key, filteredTagGroups, sectionQueries).map((tag) => {
+            <View style={styles.tagPillRow}>
+              {visibleTagsForSection(key, filteredTagGroups, sectionQueries, selectedTagIds).map((tag) => {
                 const selected = selectedTagIds.includes(tag.id);
                 return (
                   <Pressable
@@ -172,12 +198,13 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
       <Pressable style={styles.buttonPrimary} onPress={publish} disabled={posting || !content.trim()}>
         {posting ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonPrimaryText}>Post broadcast</Text>}
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dusk950, padding: 16 },
+  container: { flex: 1, backgroundColor: colors.dusk950 },
+  contentContainer: { padding: 16, flexGrow: 1 },
   title: { color: colors.parchment100, fontSize: 20, fontWeight: "700", marginBottom: 16 },
   textarea: {
     backgroundColor: colors.dusk800,
@@ -200,6 +227,9 @@ const styles = StyleSheet.create({
   pillTextActive: { color: colors.signal400 },
   tagSectionWrap: { marginTop: 8, marginBottom: 20, gap: 10 },
   tagSection: { gap: 8 },
+  selectedGroup: { gap: 6 },
+  selectedLabel: { color: colors.parchment500, fontSize: 11, fontFamily: "monospace" },
+  tagPillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   hint: { color: colors.parchment500, fontSize: 11 },
   searchInput: {
     backgroundColor: colors.dusk800,

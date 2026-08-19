@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
-import { clientFetch } from "@/lib/client-api";
-import { promptAndSubmitReport } from "@/lib/report-actions";
+import { clientFetch } from "@/helpers/client-api";
+import { promptAndSubmitReport } from "@/helpers/report-actions";
 import type { Message } from "@/types/api";
 
 export default function ConversationDetailPage() {

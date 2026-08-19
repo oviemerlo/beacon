@@ -18,6 +18,11 @@ class Broadcast(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     sender_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    parent_broadcast_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("broadcasts.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     content: Mapped[str] = mapped_column(String(2000), nullable=False)
 
     # Origin point the radius is measured from. Defaults to the sender's
@@ -33,6 +38,12 @@ class Broadcast(Base):
 
     tags: Mapped[list["BroadcastTag"]] = relationship(back_populates="broadcast", cascade="all, delete-orphan")
     sender: Mapped["User"] = relationship()
+    parent_broadcast: Mapped["Broadcast | None"] = relationship(
+        "Broadcast",
+        remote_side="Broadcast.id",
+        back_populates="replies",
+    )
+    replies: Mapped[list["Broadcast"]] = relationship("Broadcast", back_populates="parent_broadcast")
 
 
 class BroadcastTag(Base):

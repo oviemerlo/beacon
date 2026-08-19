@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { distanceMeters } from "@/lib/distance";
+import { distanceMeters } from "@/helpers/distance";
 
 const LOCATION_DRIFT_THRESHOLD_METERS = 50000;
 const DISMISS_KEY = "beacon.locationDrift.dismissed";

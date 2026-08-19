@@ -1,4 +1,4 @@
-import { apiFetch, getCurrentUserOrNull } from "@/lib/api";
+import { apiFetch, getCurrentUserOrNull } from "@/helpers/api";
 import { AppNav } from "@/components/AppNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";

@@ -1,4 +1,4 @@
-import { clientFetch } from "@/lib/client-api";
+import { clientFetch } from "@/helpers/client-api";
 import type { ReportPayload, ReportReason } from "@/types/api";
 
 export const REPORT_REASONS: { value: ReportReason; label: string }[] = [

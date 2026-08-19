@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, TextInput } from "react-native";
 
-import { apiFetch } from "../lib/api";
+import { apiFetch } from "../helpers/api";
 import {
   EMPTY_SECTION_QUERIES,
   EMPTY_TAG_GROUPS,
   filterTagGroupsBySectionQuery,
   isAutosuggestOnlySection,
+  selectedTagsForSection,
   TAG_SECTIONS,
   updateSectionQuery,
   visibleTagsForSection,
-} from "../lib/tags";
+} from "../helpers/tags";
 import { colors, radii } from "../theme/tokens";
 import type { TagGroups } from "../types/api";
 
@@ -57,6 +58,18 @@ export function FollowTagsScreen() {
       {TAG_SECTIONS.map(({ key, title }) => (
         <View key={key} style={styles.section}>
           <Text style={styles.sectionTitle}>{title}</Text>
+          {selectedTagsForSection(key, tagGroups, followedTagIds).length > 0 && (
+            <View style={styles.selectedGroup}>
+              <Text style={styles.selectedLabel}>Following</Text>
+              <View style={styles.pillRow}>
+                {selectedTagsForSection(key, tagGroups, followedTagIds).map((tag) => (
+                  <Pressable key={tag.id} onPress={() => toggleFollow(tag.id)} style={[styles.pill, styles.pillActive]}>
+                    <Text style={[styles.pillText, styles.pillTextActive]}>{tag.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
           <TextInput
             style={styles.searchInput}
             placeholder={`Search ${title.toLowerCase()} tags`}
@@ -68,7 +81,7 @@ export function FollowTagsScreen() {
             <Text style={styles.hint}>Start typing to search all countries.</Text>
           )}
           <View style={styles.pillRow}>
-            {visibleTagsForSection(key, filteredTagGroups, sectionQueries).map((tag) => {
+            {visibleTagsForSection(key, filteredTagGroups, sectionQueries, followedTagIds).map((tag) => {
               const selected = followedTagIds.includes(tag.id);
               return (
                 <Pressable key={tag.id} onPress={() => toggleFollow(tag.id)} style={[styles.pill, selected && styles.pillActive]}>
@@ -91,6 +104,8 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.parchment500, fontSize: 13, marginBottom: 16 },
   section: { marginBottom: 14 },
   sectionTitle: { color: colors.parchment100, fontWeight: "600", marginBottom: 8 },
+  selectedGroup: { marginBottom: 8 },
+  selectedLabel: { color: colors.parchment500, fontSize: 11, fontFamily: "monospace", marginBottom: 6 },
   hint: { color: colors.parchment500, fontSize: 11, marginBottom: 8 },
   searchInput: {
     backgroundColor: colors.dusk800,

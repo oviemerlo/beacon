@@ -13,6 +13,11 @@ from app.services.exceptions import ForbiddenError, NotFoundError, ValidationErr
 
 
 async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: BroadcastCreateIn) -> Broadcast:
+    if payload.reply_to_broadcast_id is not None:
+        parent_broadcast = await broadcast_repository.get_by_id(db, payload.reply_to_broadcast_id)
+        if parent_broadcast is None:
+            raise NotFoundError("Parent broadcast not found")
+
     if payload.is_global:
         if payload.radius_meters is not None:
             raise ValidationError("radius_meters must be omitted when is_global is true")
@@ -36,6 +41,7 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
         tag_match_mode=payload.tag_match_mode,
         expires_at=(datetime.now(timezone.utc) + timedelta(days=payload.expires_in_days)) if payload.expires_in_days else None,
         tag_ids=payload.tag_ids,
+        parent_broadcast_id=payload.reply_to_broadcast_id,
     )
     await db.commit()
     await db.refresh(broadcast)
@@ -51,3 +57,17 @@ async def delete_broadcast(db: AsyncSession, current_user_id: uuid.UUID, broadca
 
     await broadcast_repository.delete(db, broadcast)
     await db.commit()
+
+
+async def get_broadcast_thread(db: AsyncSession, user_id: uuid.UUID, broadcast_id: str):
+    anchor = await broadcast_repository.get_by_id(db, broadcast_id)
+    if anchor is None:
+        raise NotFoundError("Broadcast not found")
+    root_id = anchor.parent_broadcast_id or anchor.id
+
+    parent_row = await broadcast_repository.get_visible_with_context(db, user_id, root_id)
+    if parent_row is None:
+        raise NotFoundError("Broadcast not found")
+
+    replies = await broadcast_repository.list_visible_replies(db, user_id, root_id)
+    return parent_row, replies

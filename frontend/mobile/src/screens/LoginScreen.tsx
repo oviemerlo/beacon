@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, ActivityIndicator } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
-import { signInWithApple, signInWithGoogle } from "../lib/auth";
+import { signInWithApple, signInWithGoogle } from "../helpers/auth";
 import { colors, radii } from "../theme/tokens";
 import { SignalPing } from "../components/Shared";
 

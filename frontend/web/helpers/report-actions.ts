@@ -1,6 +1,6 @@
 "use client";
 
-import { REPORT_REASONS, submitReport } from "@/lib/reports";
+import { REPORT_REASONS, submitReport } from "@/helpers/reports";
 import type { ReportReason, ReportTargetType } from "@/types/api";
 
 export async function promptAndSubmitReport(targetType: ReportTargetType, targetId: string, targetLabel: string): Promise<void> {

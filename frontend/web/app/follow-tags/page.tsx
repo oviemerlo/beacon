@@ -4,16 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { AppNav } from "@/components/AppNav";
-import { clientFetch } from "@/lib/client-api";
+import { clientFetch } from "@/helpers/client-api";
 import {
   EMPTY_SECTION_QUERIES,
   EMPTY_TAG_GROUPS,
   filterTagGroupsBySectionQuery,
   isAutosuggestOnlySection,
+  selectedTagsForSection,
   TAG_SECTIONS,
   updateSectionQuery,
   visibleTagsForSection,
-} from "@/lib/tags";
+} from "@/helpers/tags";
 import type { TagGroups } from "@/types/api";
 
 export default function FollowTagsPage() {
@@ -67,6 +68,22 @@ export default function FollowTagsPage() {
             {TAG_SECTIONS.map(({ key, title }) => (
               <div key={key} className="mb-4 last:mb-0">
                 <p className="text-sm font-medium mb-2">{title}</p>
+                {selectedTagsForSection(key, tagGroups, followedTagIds).length > 0 && (
+                  <div className="mb-2">
+                    <p className="text-parchment-500 text-xs font-mono mb-2">Following</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedTagsForSection(key, tagGroups, followedTagIds).map((tag) => (
+                        <button
+                          key={tag.id}
+                          onClick={() => toggleFollow(tag.id)}
+                          className="tag-pill tag-pill-active"
+                        >
+                          {tag.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <input
                   type="text"
                   className="input-field mb-2 text-sm py-2"
@@ -78,7 +95,7 @@ export default function FollowTagsPage() {
                   <p className="text-parchment-500 text-xs mb-2">Start typing to search all countries.</p>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  {visibleTagsForSection(key, filteredTagGroups, sectionQueries).map((tag) => {
+                  {visibleTagsForSection(key, filteredTagGroups, sectionQueries, followedTagIds).map((tag) => {
                     const selected = followedTagIds.includes(tag.id);
                     return (
                       <button

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentUserOrNull } from "@/lib/api";
+import { getCurrentUserOrNull } from "@/helpers/api";
 import { SignalPing } from "@/components/SignalPing";
 
 export default async function HomePage() {

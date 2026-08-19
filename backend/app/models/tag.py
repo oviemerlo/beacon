@@ -12,7 +12,7 @@ class Tag(Base):
     __tablename__ = "tags"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tag_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'nationality' | 'hobby' | 'community'
+    tag_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'nationality' | 'continent' | 'hobby' | 'community'
     label: Mapped[str] = mapped_column(String(100), nullable=False)
 
     __table_args__ = (UniqueConstraint("tag_type", "label", name="uq_tag_type_label"),)

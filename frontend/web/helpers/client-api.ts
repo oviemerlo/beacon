@@ -1,4 +1,4 @@
-import { extractErrorMessage } from "@/lib/http-error";
+import { extractErrorMessage } from "@/helpers/http-error";
 
 export class ClientApiError extends Error {
   status: number;

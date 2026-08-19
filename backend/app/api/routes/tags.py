@@ -10,7 +10,7 @@ router = APIRouter(prefix="/tags", tags=["tags"])
 @router.get("")
 async def list_tags(db: AsyncSession = Depends(get_db)):
     tags = await tag_repository.list_all(db)
-    grouped = {"nationality": [], "hobby": [], "community": []}
+    grouped = {"nationality": [], "continent": [], "hobby": [], "community": []}
     for tag in tags:
         if tag.tag_type not in grouped:
             continue

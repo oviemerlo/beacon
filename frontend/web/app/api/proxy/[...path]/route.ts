@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { isJwtExpired } from "@/lib/jwt";
+import { isJwtExpired } from "@/helpers/jwt";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const isProd = process.env.NODE_ENV === "production";

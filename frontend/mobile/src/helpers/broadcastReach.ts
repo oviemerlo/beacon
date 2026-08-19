@@ -22,3 +22,9 @@ export function reachBadgeLabel(isGlobal: boolean, radiusMeters: number | null):
   if ((radiusMeters ?? 0) >= 5000) return "Regional";
   return "Local";
 }
+
+export function reachCategory(isGlobal: boolean, radiusMeters: number | null): ReachCategory {
+  if (isGlobal) return "global";
+  if ((radiusMeters ?? 0) >= 5000) return "regional";
+  return "local";
+}

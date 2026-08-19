@@ -16,7 +16,7 @@ from app.repositories import broadcast_repository
 
 async def get_for_you_feed(db: AsyncSession, user_id: uuid.UUID, limit: int, offset: int):
     rows = await broadcast_repository.for_you_feed(db, user_id, limit, offset)
-    for broadcast, _distance, _shared in rows:
+    for broadcast, _distance, _shared, _reply_count in rows:
         await broadcast_repository.record_impression(db, broadcast.id, user_id)
     await db.commit()
     return rows
@@ -24,7 +24,7 @@ async def get_for_you_feed(db: AsyncSession, user_id: uuid.UUID, limit: int, off
 
 async def get_opt_in_feed(db: AsyncSession, user_id: uuid.UUID, limit: int, offset: int):
     rows = await broadcast_repository.opt_in_feed(db, user_id, limit, offset)
-    for broadcast, _distance in rows:
+    for broadcast, _distance, _reply_count in rows:
         await broadcast_repository.record_impression(db, broadcast.id, user_id)
     await db.commit()
     return rows

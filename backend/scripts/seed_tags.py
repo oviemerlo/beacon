@@ -1,7 +1,8 @@
 """
 Run once against a fresh database: python -m scripts.seed_tags
 Seeds a starter tag taxonomy. Extend this list as needed — the schema
-supports arbitrary tags of type 'nationality', 'hobby', or 'community'.
+supports arbitrary tags of type 'nationality', 'continent', 'hobby', or
+'community'.
 """
 
 import asyncio
@@ -18,6 +19,15 @@ NATIONALITIES = sorted(
         for country in pycountry.countries
     }
 )
+
+CONTINENTS = [
+    "Africa",
+    "Asia",
+    "Europe",
+    "North America",
+    "South America",
+    "Oceania",
+]
 
 HOBBIES = [
     "Football", "Basketball", "Cricket", "Cooking", "Board Games", "Tennis", "Hiking",
@@ -45,6 +55,10 @@ async def seed():
             exists = await db.execute(select(Tag.id).where(Tag.tag_type == "nationality", Tag.label == label))
             if exists.scalar_one_or_none() is None:
                 db.add(Tag(tag_type="nationality", label=label))
+        for label in CONTINENTS:
+            exists = await db.execute(select(Tag.id).where(Tag.tag_type == "continent", Tag.label == label))
+            if exists.scalar_one_or_none() is None:
+                db.add(Tag(tag_type="continent", label=label))
         for label in HOBBIES:
             exists = await db.execute(select(Tag.id).where(Tag.tag_type == "hobby", Tag.label == label))
             if exists.scalar_one_or_none() is None:
@@ -55,8 +69,8 @@ async def seed():
                 db.add(Tag(tag_type="community", label=label))
         await db.commit()
     print(
-        f"Seeded {len(NATIONALITIES)} nationality tags, {len(HOBBIES)} hobby tags, "
-        f"and {len(COMMUNITY)} community tags."
+        f"Seeded {len(NATIONALITIES)} nationality tags, {len(CONTINENTS)} continent tags, "
+        f"{len(HOBBIES)} hobby tags, and {len(COMMUNITY)} community tags."
     )
 
 

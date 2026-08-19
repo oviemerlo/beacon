@@ -80,10 +80,12 @@ async def list_conversations_for_user(db: AsyncSession, user_id: uuid.UUID) -> l
         other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
         other_user = await user_repository.get_by_id(db, other_user_id)
         latest = await conversation_repository.latest_message_for_conversation(db, conversation.id)
+        origin_preview = (conversation.origin_broadcast.content if conversation.origin_broadcast is not None else "").strip()
         items.append(
             {
                 "id": str(conversation.id),
                 "origin_broadcast_id": str(conversation.origin_broadcast_id),
+                "origin_broadcast_preview": origin_preview[:160] if origin_preview else "Original broadcast unavailable.",
                 "other_participant": {
                     "id": str(other_user_id),
                     "display_name": other_user.display_name if other_user else "Unknown",

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from "react-native";
-import { apiFetch } from "../lib/api";
-import { reachBadgeLabel } from "../lib/broadcastReach";
-import { pickReasonAndSubmitReport } from "../lib/reportActions";
-import { usePolling } from "../lib/usePolling";
+import { apiFetch } from "../helpers/api";
+import { reachBadgeLabel } from "../helpers/broadcastReach";
+import { pickReasonAndSubmitReport } from "../helpers/reportActions";
+import { formatBroadcastSentAt } from "../helpers/time";
+import { usePolling } from "../helpers/usePolling";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
 import { LocationDriftBanner } from "../components/LocationDriftBanner";
@@ -104,6 +105,7 @@ export function FeedScreen({
             <Card>
               <Text style={styles.cardText}>{item.content}</Text>
               <Text style={styles.senderName}>{item.sender_display_name}</Text>
+              <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(item.created_at)}</Text>
               {item.tags.length > 0 && (
                 <View style={styles.broadcastTagRow}>
                   {item.tags.map((tag) => (
@@ -115,8 +117,21 @@ export function FeedScreen({
               )}
               <View style={styles.metaRow}>
                 {item.sender_id !== user?.id && <Text style={styles.cardMeta}>{(item.distance_m / 1000).toFixed(1)} km away</Text>}
-                <View style={styles.reachPill}>
-                  <Text style={styles.reachPillText}>{reachBadgeLabel(item.is_global, item.radius_meters)}</Text>
+                <View
+                  style={[
+                    styles.reachPill,
+                    reachBadgeLabel(item.is_global, item.radius_meters) === "Local" && styles.localReachPill,
+                    reachBadgeLabel(item.is_global, item.radius_meters) === "Global" && styles.globalReachPill,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.reachPillText,
+                      reachBadgeLabel(item.is_global, item.radius_meters) === "Global" && styles.globalReachPillText,
+                    ]}
+                  >
+                    {reachBadgeLabel(item.is_global, item.radius_meters)}
+                  </Text>
                 </View>
                 {!!item.shared_tag_count && (
                   <View style={styles.tagPill}>
@@ -125,15 +140,27 @@ export function FeedScreen({
                     </Text>
                   </View>
                 )}
+                <View style={styles.tagPill}>
+                  <Text style={styles.tagPillText}>
+                    {item.reply_count ?? 0} repl{(item.reply_count ?? 0) === 1 ? "y" : "ies"}
+                  </Text>
+                </View>
               </View>
-              {item.sender_id !== user?.id && (
-                <View style={styles.replyRow}>
-                  <Pressable onPress={() => onOpenBroadcast(item.id)} style={styles.replyPill}>
-                    <Text style={styles.replyPillText}>Reply in feed</Text>
-                  </Pressable>
-                  <Pressable onPress={() => startPrivateReply(item.id)} style={styles.replyPill}>
-                    <Text style={styles.replyPillText}>Reply privately</Text>
-                  </Pressable>
+              <View style={styles.replyRow}>
+                {item.sender_id !== user?.id && (
+                  <>
+                    <Pressable onPress={() => onOpenBroadcast(item.id)} style={styles.replyPill}>
+                      <Text style={styles.replyPillText}>Reply in feed</Text>
+                    </Pressable>
+                    <Pressable onPress={() => startPrivateReply(item.id)} style={styles.replyPill}>
+                      <Text style={styles.replyPillText}>Reply privately</Text>
+                    </Pressable>
+                  </>
+                )}
+                <Pressable onPress={() => onOpenBroadcast(item.id)} style={styles.replyPill}>
+                  <Text style={styles.replyPillText}>View thread</Text>
+                </Pressable>
+                {item.sender_id !== user?.id && (
                   <Pressable
                     onPress={async () => {
                       try {
@@ -146,8 +173,8 @@ export function FeedScreen({
                   >
                     <Text style={styles.replyPillText}>Report</Text>
                   </Pressable>
-                </View>
-              )}
+                )}
+              </View>
             </Card>
           )}
         />
@@ -165,13 +192,17 @@ const styles = StyleSheet.create({
   tabTextActive: { color: colors.dusk950 },
   cardText: { color: colors.parchment100, fontSize: 15 },
   senderName: { color: colors.parchment500, fontSize: 12, marginTop: 6 },
+  sentAtLabel: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace", marginTop: 4 },
   broadcastTagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   broadcastTagPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
   broadcastTagPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
   cardMeta: { color: colors.parchment500, fontSize: 11, fontFamily: "monospace" },
   reachPill: { borderColor: colors.parchment500, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
+  localReachPill: { backgroundColor: "#7F1D1D", borderColor: "#991B1B" },
+  globalReachPill: { backgroundColor: "#FFFFFF", borderColor: "#D1D5DB" },
   reachPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
+  globalReachPillText: { color: "#111827" },
   replyRow: { flexDirection: "row", gap: 8, marginTop: 10 },
   replyPill: { borderColor: colors.dusk600, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
   replyPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },

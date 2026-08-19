@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { extractErrorMessage } from "@/lib/http-error";
+import { extractErrorMessage } from "@/helpers/http-error";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isJwtExpired } from "./lib/jwt";
+import { isJwtExpired } from "./helpers/jwt";
 
 const PROTECTED_PREFIXES = ["/feed", "/broadcasts", "/conversations", "/profile", "/follow-tags", "/onboarding", "/admin"];
 

@@ -4,6 +4,7 @@ import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.conversation import Conversation, Message
 
@@ -64,6 +65,7 @@ async def list_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[Conversati
     result = await db.execute(
         select(Conversation)
         .where((Conversation.initiator_id == user_id) | (Conversation.recipient_id == user_id))
+        .options(selectinload(Conversation.origin_broadcast))
         .order_by(Conversation.created_at.desc())
     )
     return list(result.scalars().all())

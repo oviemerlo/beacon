@@ -1,4 +1,4 @@
-export type TagType = "nationality" | "hobby" | "community";
+export type TagType = "nationality" | "continent" | "hobby" | "community";
 
 export interface Tag {
   id: number;
@@ -43,10 +43,32 @@ export interface FeedBroadcast {
   is_global: boolean;
   radius_meters: number | null;
   created_at: string;
+  reply_count?: number;
+  replies?: FeedReply[];
+}
+
+export interface FeedReply {
+  id: string;
+  sender_id: string;
+  sender_display_name: string;
+  content: string;
+  distance_m: number;
+  shared_tag_count?: number;
+  tags: Tag[];
+  is_global: boolean;
+  radius_meters: number | null;
+  created_at: string;
+  reply_count?: number;
+}
+
+export interface BroadcastThread {
+  parent: FeedBroadcast;
+  replies: FeedBroadcast[];
 }
 
 export interface TagGroups {
   nationality: Tag[];
+  continent: Tag[];
   hobby: Tag[];
   community: Tag[];
 }
@@ -59,6 +81,7 @@ export interface Conversation {
 export interface ConversationThread {
   id: string;
   origin_broadcast_id: string;
+  origin_broadcast_preview: string;
   other_participant: { id: string; display_name: string };
   last_message: string;
   last_message_at: string;

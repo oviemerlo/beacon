@@ -73,6 +73,7 @@ class BroadcastCreateIn(BaseModel):
     tag_match_mode: str = Field(default="any", pattern="^(any|all)$")
     tag_ids: list[int] = []
     expires_in_days: int | None = Field(default=14, ge=1, le=90)
+    reply_to_broadcast_id: uuid.UUID | None = None
 
 
 class BroadcastOut(BaseModel):
@@ -85,6 +86,25 @@ class BroadcastOut(BaseModel):
     shared_tag_count: int | None = None
     created_at: datetime
     tags: list[TagOut] = []
+
+
+class FeedBroadcastOut(BaseModel):
+    id: uuid.UUID
+    sender_id: uuid.UUID
+    sender_display_name: str
+    content: str
+    distance_m: float
+    shared_tag_count: int | None = None
+    tags: list[TagOut] = []
+    is_global: bool
+    radius_meters: int | None = None
+    created_at: datetime
+    reply_count: int = 0
+
+
+class BroadcastThreadOut(BaseModel):
+    parent: FeedBroadcastOut
+    replies: list[FeedBroadcastOut]
 
 
 class ConversationStartIn(BaseModel):

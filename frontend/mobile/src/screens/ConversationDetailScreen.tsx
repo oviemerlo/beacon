@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
-import { apiFetch } from "../lib/api";
-import { pickReasonAndSubmitReport } from "../lib/reportActions";
+import { apiFetch } from "../helpers/api";
+import { pickReasonAndSubmitReport } from "../helpers/reportActions";
 import { colors, radii } from "../theme/tokens";
 import type { Message } from "../types/api";
 

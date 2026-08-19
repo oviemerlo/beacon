@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import * as Location from "expo-location";
-import { apiFetch } from "../lib/api";
+import { apiFetch } from "../helpers/api";
 import { colors, radii } from "../theme/tokens";
 
 const DOB_PATTERN = /^\d{4}-\d{2}-\d{2}$/;

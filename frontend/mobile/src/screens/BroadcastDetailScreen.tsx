@@ -1,18 +1,41 @@
-import { useState } from "react";
-import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { useCallback, useState } from "react";
+import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import * as Location from "expo-location";
-import { apiFetch } from "../lib/api";
+import { apiFetch } from "../helpers/api";
+import { reachBadgeLabel } from "../helpers/broadcastReach";
+import { usePolling } from "../helpers/usePolling";
+import { formatBroadcastSentAt } from "../helpers/time";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
+import type { BroadcastThread, FeedBroadcast } from "../types/api";
 
-export function BroadcastDetailScreen({ broadcastId, onConversationStarted }: { broadcastId: string; onConversationStarted: (conversationId: string) => void }) {
-  void broadcastId, onConversationStarted;
+export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) {
+  const [thread, setThread] = useState<BroadcastThread | null>(null);
+  const [loadingThread, setLoadingThread] = useState(true);
+  const [threadError, setThreadError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const loadThread = useCallback(async ({ silent }: { silent: boolean }) => {
+    if (!silent) {
+      setLoadingThread(true);
+      setThreadError(null);
+    }
+    try {
+      const data = await apiFetch<BroadcastThread>(`/broadcasts/${broadcastId}/thread`);
+      setThread(data);
+    } catch (e: any) {
+      if (!silent) setThreadError(e?.message ?? "Couldn't load this thread.");
+    } finally {
+      if (!silent) setLoadingThread(false);
+    }
+  }, [broadcastId]);
+
+  usePolling(loadThread, [loadThread], 5000);
+
   async function postReplyInFeed() {
-    if (!message.trim()) return;
+    if (!message.trim() || !thread) return;
     setSending(true);
     setError(null);
     try {
@@ -30,9 +53,11 @@ export function BroadcastDetailScreen({ broadcastId, onConversationStarted }: { 
           radius_meters: 8000,
           tag_match_mode: "any",
           tag_ids: [],
+          reply_to_broadcast_id: thread.parent.id,
         }),
       });
       setMessage("");
+      await loadThread({ silent: true });
     } catch (e: any) {
       setError(e?.message ?? "Couldn't post your reply in feed.");
     } finally {
@@ -42,6 +67,23 @@ export function BroadcastDetailScreen({ broadcastId, onConversationStarted }: { 
 
   return (
     <View style={styles.container}>
+      {loadingThread && <ActivityIndicator color={colors.signal500} style={{ marginBottom: 12 }} />}
+      {threadError && <Text style={styles.error}>{threadError}</Text>}
+      {thread && (
+        <Card style={styles.threadCard}>
+          <ThreadItem item={thread.parent} />
+          <Text style={styles.repliesHeader}>Replies ({thread.replies.length})</Text>
+          {thread.replies.length === 0 ? (
+            <Text style={styles.hint}>No public replies yet.</Text>
+          ) : (
+            <ScrollView style={styles.repliesList} nestedScrollEnabled>
+              {thread.replies.map((item) => (
+                <ThreadItem key={item.id} item={item} isReply />
+              ))}
+            </ScrollView>
+          )}
+        </Card>
+      )}
       <Card>
         <TextInput
           style={styles.textarea}
@@ -52,7 +94,7 @@ export function BroadcastDetailScreen({ broadcastId, onConversationStarted }: { 
           multiline
         />
         {error && <Text style={styles.error}>{error}</Text>}
-        <Pressable style={styles.button} onPress={postReplyInFeed} disabled={sending}>
+        <Pressable style={styles.button} onPress={postReplyInFeed} disabled={sending || !thread}>
           {sending ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonText}>Reply in feed</Text>}
         </Pressable>
         <Text style={styles.hint}>This creates a public broadcast reply.</Text>
@@ -61,8 +103,45 @@ export function BroadcastDetailScreen({ broadcastId, onConversationStarted }: { 
   );
 }
 
+function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: boolean }) {
+  const reachLabel = reachBadgeLabel(item.is_global, item.radius_meters);
+  const isLocalReach = reachLabel === "Local";
+  const isGlobalReach = reachLabel === "Global";
+  return (
+    <View style={[isReply && styles.replyItem]}>
+      <Text style={styles.senderName}>{item.sender_display_name}</Text>
+      <Text style={styles.threadContent}>{item.content}</Text>
+      <View style={styles.threadMetaRow}>
+        <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(item.created_at)}</Text>
+        <View
+          style={[
+            styles.reachPill,
+            isLocalReach && styles.localReachPill,
+            isGlobalReach && styles.globalReachPill,
+          ]}
+        >
+          <Text style={[styles.reachPillText, isGlobalReach && styles.globalReachPillText]}>{reachLabel}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950, padding: 16 },
+  threadCard: { marginBottom: 12 },
+  repliesHeader: { color: colors.parchment500, fontSize: 11, marginTop: 12, marginBottom: 8, fontFamily: "monospace" },
+  repliesList: { maxHeight: 260 },
+  replyItem: { borderWidth: 1, borderColor: colors.dusk700, borderRadius: radii.beacon, padding: 10, marginBottom: 8 },
+  senderName: { color: colors.parchment500, fontSize: 12 },
+  threadContent: { color: colors.parchment100, marginTop: 4 },
+  threadMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  sentAtLabel: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
+  reachPill: { borderColor: colors.parchment500, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
+  localReachPill: { backgroundColor: "#7F1D1D", borderColor: "#991B1B" },
+  globalReachPill: { backgroundColor: "#FFFFFF", borderColor: "#D1D5DB" },
+  reachPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
+  globalReachPillText: { color: "#111827" },
   textarea: { color: colors.parchment100, minHeight: 100, textAlignVertical: "top" },
   error: { color: colors.rust400, fontSize: 13, marginTop: 8 },
   button: { backgroundColor: colors.signal500, borderRadius: radii.beacon, paddingVertical: 12, alignItems: "center", marginTop: 12 },

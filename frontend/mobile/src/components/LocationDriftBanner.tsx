@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Text, View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import * as Location from "expo-location";
 import { colors, radii } from "../theme/tokens";
-import { distanceMeters } from "../lib/distance";
+import { distanceMeters } from "../helpers/distance";
 
 const LOCATION_DRIFT_THRESHOLD_METERS = 50000;
 let dismissedForSession = false;

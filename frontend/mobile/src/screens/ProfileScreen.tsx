@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
-import { apiFetch } from "../lib/api";
-import { signOut } from "../lib/auth";
+import { apiFetch } from "../helpers/api";
+import { signOut } from "../helpers/auth";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
 import type { UserProfile } from "../types/api";

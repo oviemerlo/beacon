@@ -32,8 +32,9 @@ async def for_you_feed(limit: int = 30, offset: int = 0, current_user: User = De
             "is_global": b.is_global,
             "radius_meters": b.radius_meters,
             "created_at": b.created_at,
+            "reply_count": int(reply_count or 0),
         }
-        for b, distance, shared in rows
+        for b, distance, shared, reply_count in rows
     ]
 
 
@@ -51,6 +52,7 @@ async def opt_in_feed(limit: int = 30, offset: int = 0, current_user: User = Dep
             "is_global": b.is_global,
             "radius_meters": b.radius_meters,
             "created_at": b.created_at,
+            "reply_count": int(reply_count or 0),
         }
-        for b, distance in rows
+        for b, distance, reply_count in rows
     ]

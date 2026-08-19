@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
-import { apiFetch } from "../lib/api";
-import { pickReasonAndSubmitReport } from "../lib/reportActions";
-import { usePolling } from "../lib/usePolling";
+import { apiFetch } from "../helpers/api";
+import { pickReasonAndSubmitReport } from "../helpers/reportActions";
+import { usePolling } from "../helpers/usePolling";
 import { Card } from "../components/Shared";
 import { colors } from "../theme/tokens";
 import type { ConversationThread } from "../types/api";
@@ -35,6 +35,7 @@ export function ConversationsScreen({ onOpenConversation }: { onOpenConversation
             <Card key={thread.id}>
               <Pressable onPress={() => onOpenConversation(thread.id)}>
                 <Text style={styles.threadName}>{thread.other_participant.display_name}</Text>
+                <Text style={styles.originPreview}>Replying to: {thread.origin_broadcast_preview}</Text>
                 <Text style={styles.threadPreview}>{thread.last_message || "No messages yet."}</Text>
               </Pressable>
               <Pressable
@@ -62,6 +63,7 @@ const styles = StyleSheet.create({
   title: { color: colors.parchment100, fontSize: 20, fontWeight: "700", marginBottom: 16 },
   threadList: { gap: 10 },
   threadName: { color: colors.parchment100, fontWeight: "600" },
+  originPreview: { color: colors.parchment300, fontSize: 12, marginTop: 4 },
   threadPreview: { color: colors.parchment500, fontSize: 13, marginTop: 4 },
   reportPill: { marginTop: 10, borderColor: colors.dusk600, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, alignSelf: "flex-start" },
   reportPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
