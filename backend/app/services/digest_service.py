@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from app.utils.config import settings
 from app.models.user import User
 from app.repositories import broadcast_repository, conversation_repository, user_repository
 

@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from geoalchemy2 import Geography
 from geoalchemy2.shape import to_shape
@@ -8,8 +9,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.associationproxy import association_proxy
 
-from app.core.age_utils import calculate_age
+from app.utils.age import calculate_age
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.school import SchoolVerification
 
 
 class User(Base):
@@ -36,9 +40,15 @@ class User(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_digest_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_feed_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     user_tags: Mapped[list["UserTag"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    school_verification: Mapped["SchoolVerification | None"] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     # `tags` resolves through user_tags -> Tag, so `user.tags` gives you
     # Tag objects (id, tag_type, label) directly — matching what TagOut
     # expects. Must be eager-loaded via user_repository.get_by_id_with_tags.

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, TextInput } from "react-native";
 
+import { SchoolVerification } from "../components/SchoolVerification";
 import { apiFetch } from "../helpers/api";
 import {
   EMPTY_SECTION_QUERIES,
   EMPTY_TAG_GROUPS,
+  autosuggestHint,
   filterTagGroupsBySectionQuery,
-  isAutosuggestOnlySection,
   selectedTagsForSection,
   TAG_SECTIONS,
   updateSectionQuery,
@@ -56,39 +57,47 @@ export function FollowTagsScreen() {
       <Text style={styles.subtitle}>Follow tags to power your Opt-in feed.</Text>
 
       {TAG_SECTIONS.map(({ key, title }) => (
-        <View key={key} style={styles.section}>
-          <Text style={styles.sectionTitle}>{title}</Text>
-          {selectedTagsForSection(key, tagGroups, followedTagIds).length > 0 && (
-            <View style={styles.selectedGroup}>
-              <Text style={styles.selectedLabel}>Following</Text>
-              <View style={styles.pillRow}>
-                {selectedTagsForSection(key, tagGroups, followedTagIds).map((tag) => (
-                  <Pressable key={tag.id} onPress={() => toggleFollow(tag.id)} style={[styles.pill, styles.pillActive]}>
-                    <Text style={[styles.pillText, styles.pillTextActive]}>{tag.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
+        <View key={key}>
+          {key === "hobby" && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>School</Text>
+              <SchoolVerification />
             </View>
           )}
-          <TextInput
-            style={styles.searchInput}
-            placeholder={`Search ${title.toLowerCase()} tags`}
-            placeholderTextColor={colors.parchment500}
-            value={sectionQueries[key]}
-            onChangeText={(text) => setSectionQueries((prev) => updateSectionQuery(prev, key, text))}
-          />
-          {isAutosuggestOnlySection(key) && !sectionQueries[key].trim() && (
-            <Text style={styles.hint}>Start typing to search all countries.</Text>
-          )}
-          <View style={styles.pillRow}>
-            {visibleTagsForSection(key, filteredTagGroups, sectionQueries, followedTagIds).map((tag) => {
-              const selected = followedTagIds.includes(tag.id);
-              return (
-                <Pressable key={tag.id} onPress={() => toggleFollow(tag.id)} style={[styles.pill, selected && styles.pillActive]}>
-                  <Text style={[styles.pillText, selected && styles.pillTextActive]}>{tag.label}</Text>
-                </Pressable>
-              );
-            })}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{title}</Text>
+            {selectedTagsForSection(key, tagGroups, followedTagIds).length > 0 && (
+              <View style={styles.selectedGroup}>
+                <Text style={styles.selectedLabel}>Following</Text>
+                <View style={styles.pillRow}>
+                  {selectedTagsForSection(key, tagGroups, followedTagIds).map((tag) => (
+                    <Pressable key={tag.id} onPress={() => toggleFollow(tag.id)} style={[styles.pill, styles.pillActive]}>
+                      <Text style={[styles.pillText, styles.pillTextActive]}>{tag.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+            <TextInput
+              style={styles.searchInput}
+              placeholder={`Search ${title.toLowerCase()} tags`}
+              placeholderTextColor={colors.parchment500}
+              value={sectionQueries[key]}
+              onChangeText={(text) => setSectionQueries((prev) => updateSectionQuery(prev, key, text))}
+            />
+            {autosuggestHint(key) && !sectionQueries[key].trim() && (
+              <Text style={styles.hint}>{autosuggestHint(key)}</Text>
+            )}
+            <View style={styles.pillRow}>
+              {visibleTagsForSection(key, filteredTagGroups, sectionQueries, followedTagIds).map((tag) => {
+                const selected = followedTagIds.includes(tag.id);
+                return (
+                  <Pressable key={tag.id} onPress={() => toggleFollow(tag.id)} style={[styles.pill, selected && styles.pillActive]}>
+                    <Text style={[styles.pillText, selected && styles.pillTextActive]}>{tag.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         </View>
       ))}

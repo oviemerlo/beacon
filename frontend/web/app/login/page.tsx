@@ -4,7 +4,10 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-6">
       <div className="card w-full max-w-sm">
-        <h1 className="font-display text-2xl font-bold text-center">Sign in to Beacon</h1>
+        <div className="flex justify-center mb-4">
+          <img src="/echotocrowd-favicon.png" alt="EchoToCrowd logo" className="h-12 w-12 rounded-md" />
+        </div>
+        <h1 className="font-display text-2xl font-bold text-center">Sign in to EchoToCrowd</h1>
         <p className="text-parchment-500 text-sm text-center mt-2 mb-6">
           We only use this to verify who you are — never to post on your behalf.
         </p>

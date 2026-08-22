@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { View, Text, Pressable, StyleSheet, Platform, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform, ActivityIndicator, Image } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { signInWithApple, signInWithGoogle } from "../helpers/auth";
 import { colors, radii } from "../theme/tokens";
-import { SignalPing } from "../components/Shared";
 
 export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -26,8 +25,8 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
   return (
     <View style={styles.container}>
       <View style={styles.brand}>
-        <SignalPing size={10} />
-        <Text style={styles.brandText}>BEACON</Text>
+        <Image source={require("../assets/echotocrowd-icon.png")} style={styles.brandIcon} resizeMode="cover" />
+        <Text style={styles.brandText}>ECHOTOCROWD</Text>
       </View>
       <Text style={styles.title}>Sign in to continue</Text>
       <Text style={styles.subtitle}>We only use this to verify who you are — never to post on your behalf.</Text>
@@ -45,7 +44,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
           </Pressable>
 
           <Text style={styles.joinPrompt}>
-            New to Beacon? <Text style={styles.joinNow}>Join now</Text>
+            New to EchoToCrowd? <Text style={styles.joinNow}>Join now</Text>
           </Text>
 
           {Platform.OS === "ios" && (
@@ -67,7 +66,8 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950, justifyContent: "center", padding: 24 },
-  brand: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 32 },
+  brand: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 32 },
+  brandIcon: { width: 40, height: 40, borderRadius: 10 },
   brandText: { color: colors.signal400, fontWeight: "700", letterSpacing: 3, fontSize: 12 },
   title: { color: colors.parchment100, fontSize: 24, fontWeight: "700", textAlign: "center" },
   subtitle: { color: colors.parchment500, fontSize: 14, textAlign: "center", marginTop: 8, marginBottom: 28 },

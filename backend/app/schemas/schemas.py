@@ -52,6 +52,19 @@ class PublicProfileOut(BaseModel):
         from_attributes = True
 
 
+class BlockedUserOut(BaseModel):
+    id: uuid.UUID
+    username: str
+    display_name: str
+
+    class Config:
+        from_attributes = True
+
+
+class BlockedUsersListOut(BaseModel):
+    blocked_users: list[BlockedUserOut]
+
+
 class ProfileUpdateIn(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=100)
     date_of_birth: date | None = None
@@ -72,6 +85,7 @@ class BroadcastCreateIn(BaseModel):
     radius_meters: int | None = Field(default=None, gt=0)
     tag_match_mode: str = Field(default="any", pattern="^(any|all)$")
     tag_ids: list[int] = []
+    course_code: str | None = Field(default=None, max_length=30)
     expires_in_days: int | None = Field(default=14, ge=1, le=90)
     reply_to_broadcast_id: uuid.UUID | None = None
 
@@ -84,6 +98,7 @@ class BroadcastOut(BaseModel):
     radius_meters: int | None = None
     distance_m: float | None = None
     shared_tag_count: int | None = None
+    course_code: str | None = None
     created_at: datetime
     tags: list[TagOut] = []
 
@@ -98,6 +113,7 @@ class FeedBroadcastOut(BaseModel):
     tags: list[TagOut] = []
     is_global: bool
     radius_meters: int | None = None
+    course_code: str | None = None
     created_at: datetime
     reply_count: int = 0
 
@@ -110,6 +126,16 @@ class BroadcastThreadOut(BaseModel):
 class ConversationStartIn(BaseModel):
     broadcast_id: uuid.UUID
     first_message: str = Field(min_length=1, max_length=2000)
+
+
+class ConversationContextOut(BaseModel):
+    id: uuid.UUID
+    origin_broadcast_id: uuid.UUID
+    origin_broadcast_preview: str
+    origin_broadcast_sender_id: uuid.UUID | None
+    origin_broadcast_sender_display_name: str
+    other_participant_id: uuid.UUID
+    other_participant_display_name: str
 
 
 class MessageIn(BaseModel):
@@ -184,3 +210,28 @@ class AdminStatsOut(BaseModel):
     total_users: int
     total_suspended_users: int
     new_users_7d: int
+
+
+class SchoolSearchOut(BaseModel):
+    id: int
+    name: str
+    country: str | None
+
+
+class SchoolVerifyStartIn(BaseModel):
+    school_id: int
+    school_email: str = Field(min_length=3, max_length=255)
+
+
+class SchoolVerifyConfirmIn(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
+
+
+class SchoolVerifyStatusOut(BaseModel):
+    school_id: int | None
+    school_name: str | None
+    verified: bool
+
+
+class SchoolCourseIn(BaseModel):
+    course_code: str = Field(min_length=1, max_length=120)

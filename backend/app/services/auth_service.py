@@ -1,7 +1,7 @@
 """
 Identity upsert + token issuance. Called by the OAuth routes after they've
 already verified the provider's token (Google via google-auth, Apple via
-JWKS — see app/core/oauth_verify.py) or completed the Authlib redirect
+JWKS — see app/utils/oauth_verify.py) or completed the Authlib redirect
 flow. This service doesn't verify anything itself — it trusts the caller
 already did, same as any service trusts its route to have validated input
 shape via Pydantic.
@@ -11,8 +11,8 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import decode_token
-from app.core.security import create_access_token, create_refresh_token
+from app.utils.security import decode_token
+from app.utils.security import create_access_token, create_refresh_token
 from app.models.user import User
 from app.repositories import user_repository
 from app.schemas.schemas import TokenPairOut

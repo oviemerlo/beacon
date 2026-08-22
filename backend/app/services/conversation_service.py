@@ -25,7 +25,7 @@ async def _assert_messaging_allowed(db: AsyncSession, user_a: uuid.UUID, user_b:
 
 async def _assert_can_initiate(db: AsyncSession, initiator_id: uuid.UUID, broadcast_id: uuid.UUID) -> Broadcast:
     broadcast = await broadcast_repository.get_by_id(db, broadcast_id)
-    if broadcast is None:
+    if broadcast is None or broadcast.deleted_at is not None:
         raise NotFoundError("Broadcast not found")
     if broadcast.sender_id == initiator_id:
         raise ForbiddenError("Cannot start a conversation with yourself")
@@ -59,8 +59,11 @@ async def _assert_participant(db: AsyncSession, user_id: uuid.UUID, conversation
 
 
 async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> list[Message]:
-    await _assert_participant(db, user_id, conversation_id)
-    return await conversation_repository.list_messages(db, conversation_id)
+    conversation = await _assert_participant(db, user_id, conversation_id)
+    messages = await conversation_repository.list_messages(db, conversation_id)
+    await conversation_repository.mark_read_for_user_in_conversation(db, user_id, conversation.id)
+    await db.commit()
+    return messages
 
 
 async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: str, body: str) -> Message:
@@ -86,12 +89,50 @@ async def list_conversations_for_user(db: AsyncSession, user_id: uuid.UUID) -> l
                 "id": str(conversation.id),
                 "origin_broadcast_id": str(conversation.origin_broadcast_id),
                 "origin_broadcast_preview": origin_preview[:160] if origin_preview else "Original broadcast unavailable.",
+                "origin_broadcast_sender_display_name": (
+                    conversation.origin_broadcast.sender.display_name
+                    if conversation.origin_broadcast is not None and conversation.origin_broadcast.sender is not None
+                    else "Unknown"
+                ),
+                "is_reply_to_you": conversation.recipient_id == user_id,
                 "other_participant": {
                     "id": str(other_user_id),
                     "display_name": other_user.display_name if other_user else "Unknown",
                 },
+                "last_message_sender_id": str(latest.sender_id) if latest else str(other_user_id),
                 "last_message": latest.body if latest else "",
                 "last_message_at": latest.sent_at if latest else conversation.created_at,
+                "unread_count": await conversation_repository.count_unread_in_conversation(db, user_id, conversation.id),
             }
         )
+    items.sort(key=lambda item: item["last_message_at"], reverse=True)
     return items
+
+
+async def get_unread_count(db: AsyncSession, user_id: uuid.UUID) -> int:
+    return await conversation_repository.count_unread_for_user(db, user_id)
+
+
+async def mark_all_seen(db: AsyncSession, user_id: uuid.UUID) -> None:
+    await conversation_repository.mark_all_read_for_user(db, user_id)
+    await db.commit()
+
+
+async def get_conversation_context(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> dict:
+    await _assert_participant(db, user_id, conversation_id)
+    conversation = await conversation_repository.get_by_id_with_origin(db, conversation_id)
+    if conversation is None:
+        raise NotFoundError("Conversation not found")
+    origin_preview = (conversation.origin_broadcast.content if conversation.origin_broadcast is not None else "").strip()
+    origin_sender = conversation.origin_broadcast.sender if conversation.origin_broadcast is not None else None
+    other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
+    other_user = await user_repository.get_by_id(db, other_user_id)
+    return {
+        "id": str(conversation.id),
+        "origin_broadcast_id": str(conversation.origin_broadcast_id),
+        "origin_broadcast_preview": origin_preview[:220] if origin_preview else "Original broadcast unavailable.",
+        "origin_broadcast_sender_id": str(origin_sender.id) if origin_sender is not None else None,
+        "origin_broadcast_sender_display_name": origin_sender.display_name if origin_sender is not None else "Unknown",
+        "other_participant_id": str(other_user_id),
+        "other_participant_display_name": other_user.display_name if other_user is not None else "Unknown",
+    }

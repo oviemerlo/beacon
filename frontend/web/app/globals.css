@@ -40,4 +40,16 @@
   .tag-pill-active {
     @apply border-signal-500 bg-signal-500/10 text-signal-400;
   }
+  .feed-card-action {
+    @apply inline-flex items-center rounded-full border border-dusk-700 bg-transparent
+           px-2 py-0.5 text-[10px] leading-tight font-mono text-parchment-500
+           hover:text-parchment-100 hover:border-dusk-600 transition-colors;
+  }
+  .feed-card-meta {
+    @apply inline-flex items-center rounded-full border border-dusk-600 bg-dusk-800
+           px-2 py-0.5 text-[10px] leading-tight font-mono text-parchment-300;
+  }
+  .feed-card-meta.tag-pill-active {
+    @apply border-signal-500 bg-signal-500/10 text-signal-400;
+  }
 }

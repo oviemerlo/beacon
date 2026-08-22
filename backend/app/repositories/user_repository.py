@@ -83,6 +83,13 @@ async def replace_tags(db: AsyncSession, user_id: uuid.UUID, tag_ids: list[int])
     await db.flush()
 
 
+async def add_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> None:
+    existing = await db.get(UserTag, (user_id, tag_id))
+    if existing is None:
+        db.add(UserTag(user_id=user_id, tag_id=tag_id))
+        await db.flush()
+
+
 async def follow_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int, notifications_enabled: bool) -> None:
     existing = await db.get(UserFollowedTag, (user_id, tag_id))
     if existing:
@@ -138,6 +145,11 @@ async def admin_signup_stats(db: AsyncSession) -> tuple[int, int, int]:
 
 async def set_last_digest_sent(db: AsyncSession, user: User, when: datetime) -> None:
     user.last_digest_sent_at = when
+    await db.flush()
+
+
+async def set_last_feed_seen(db: AsyncSession, user: User, when: datetime) -> None:
+    user.last_feed_seen_at = when
     await db.flush()
 
 

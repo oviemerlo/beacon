@@ -3,7 +3,7 @@ from uuid import UUID
 
 from jose import JWTError, jwt
 
-from app.core.config import settings
+from app.utils.config import settings
 
 
 def create_access_token(user_id: UUID) -> str:

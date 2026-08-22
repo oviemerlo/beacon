@@ -31,6 +31,7 @@ async def for_you_feed(limit: int = 30, offset: int = 0, current_user: User = De
             "tags": _serialize_broadcast_tags(b),
             "is_global": b.is_global,
             "radius_meters": b.radius_meters,
+            "course_code": b.course_code,
             "created_at": b.created_at,
             "reply_count": int(reply_count or 0),
         }
@@ -51,8 +52,21 @@ async def opt_in_feed(limit: int = 30, offset: int = 0, current_user: User = Dep
             "tags": _serialize_broadcast_tags(b),
             "is_global": b.is_global,
             "radius_meters": b.radius_meters,
+            "course_code": b.course_code,
             "created_at": b.created_at,
             "reply_count": int(reply_count or 0),
         }
         for b, distance, reply_count in rows
     ]
+
+
+@router.get("/unread-count")
+async def unread_count(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    count = await feed_service.get_unread_count(db, current_user.id)
+    return {"count": count}
+
+
+@router.post("/mark-seen")
+async def mark_seen(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await feed_service.mark_feed_seen(db, current_user.id)
+    return {"status": "ok"}

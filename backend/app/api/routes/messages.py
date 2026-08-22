@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.schemas import ConversationStartIn, MessageIn, MessageOut
+from app.schemas.schemas import ConversationContextOut, ConversationStartIn, MessageIn, MessageOut
 from app.services import conversation_service
 
 router = APIRouter(prefix="/conversations", tags=["messages"])
@@ -19,6 +19,23 @@ async def start_conversation(payload: ConversationStartIn, current_user: User = 
 @router.get("")
 async def list_conversations(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await conversation_service.list_conversations_for_user(db, current_user.id)
+
+
+@router.get("/unread-count")
+async def unread_count(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    count = await conversation_service.get_unread_count(db, current_user.id)
+    return {"count": count}
+
+
+@router.post("/mark-seen")
+async def mark_seen(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await conversation_service.mark_all_seen(db, current_user.id)
+    return {"status": "ok"}
+
+
+@router.get("/{conversation_id}", response_model=ConversationContextOut)
+async def get_conversation(conversation_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await conversation_service.get_conversation_context(db, current_user.id, conversation_id)
 
 
 @router.get("/{conversation_id}/messages", response_model=list[MessageOut])

@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { AppNav } from "@/components/AppNav";
+import { SchoolVerification } from "@/components/SchoolVerification";
 import { clientFetch } from "@/helpers/client-api";
 import {
   EMPTY_SECTION_QUERIES,
   EMPTY_TAG_GROUPS,
+  autosuggestHint,
   filterTagGroupsBySectionQuery,
-  isAutosuggestOnlySection,
   selectedTagsForSection,
   TAG_SECTIONS,
   updateSectionQuery,
@@ -66,47 +67,55 @@ export default function FollowTagsPage() {
         ) : (
           <div className="card">
             {TAG_SECTIONS.map(({ key, title }) => (
-              <div key={key} className="mb-4 last:mb-0">
-                <p className="text-sm font-medium mb-2">{title}</p>
-                {selectedTagsForSection(key, tagGroups, followedTagIds).length > 0 && (
-                  <div className="mb-2">
-                    <p className="text-parchment-500 text-xs font-mono mb-2">Following</p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedTagsForSection(key, tagGroups, followedTagIds).map((tag) => (
+              <div key={key}>
+                {key === "hobby" && (
+                  <div className="mb-4">
+                    <p className="text-sm font-medium mb-2">School</p>
+                    <SchoolVerification />
+                  </div>
+                )}
+                <div className="mb-4 last:mb-0">
+                  <p className="text-sm font-medium mb-2">{title}</p>
+                  {selectedTagsForSection(key, tagGroups, followedTagIds).length > 0 && (
+                    <div className="mb-2">
+                      <p className="text-parchment-500 text-xs font-mono mb-2">Following</p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedTagsForSection(key, tagGroups, followedTagIds).map((tag) => (
+                          <button
+                            key={tag.id}
+                            onClick={() => toggleFollow(tag.id)}
+                            className="tag-pill tag-pill-active"
+                          >
+                            {tag.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <input
+                    type="text"
+                    className="input-field mb-2 text-sm py-2"
+                    placeholder={`Search ${title.toLowerCase()} tags`}
+                    value={sectionQueries[key]}
+                    onChange={(e) => setSectionQueries((prev) => updateSectionQuery(prev, key, e.target.value))}
+                  />
+                  {autosuggestHint(key) && !sectionQueries[key].trim() && (
+                    <p className="text-parchment-500 text-xs mb-2">{autosuggestHint(key)}</p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {visibleTagsForSection(key, filteredTagGroups, sectionQueries, followedTagIds).map((tag) => {
+                      const selected = followedTagIds.includes(tag.id);
+                      return (
                         <button
                           key={tag.id}
                           onClick={() => toggleFollow(tag.id)}
-                          className="tag-pill tag-pill-active"
+                          className={`tag-pill ${selected ? "tag-pill-active" : ""}`}
                         >
                           {tag.label}
                         </button>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
-                )}
-                <input
-                  type="text"
-                  className="input-field mb-2 text-sm py-2"
-                  placeholder={`Search ${title.toLowerCase()} tags`}
-                  value={sectionQueries[key]}
-                  onChange={(e) => setSectionQueries((prev) => updateSectionQuery(prev, key, e.target.value))}
-                />
-                {isAutosuggestOnlySection(key) && !sectionQueries[key].trim() && (
-                  <p className="text-parchment-500 text-xs mb-2">Start typing to search all countries.</p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  {visibleTagsForSection(key, filteredTagGroups, sectionQueries, followedTagIds).map((tag) => {
-                    const selected = followedTagIds.includes(tag.id);
-                    return (
-                      <button
-                        key={tag.id}
-                        onClick={() => toggleFollow(tag.id)}
-                        className={`tag-pill ${selected ? "tag-pill-active" : ""}`}
-                      >
-                        {tag.label}
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
             ))}

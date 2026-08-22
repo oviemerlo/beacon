@@ -1,4 +1,4 @@
-import type { TagGroups, TagType } from "@/types/api";
+import type { Tag, TagGroups, TagType } from "@/types/api";
 
 export const TAG_SECTIONS: Array<{ key: TagType; title: string }> = [
   { key: "nationality", title: "Nationality" },
@@ -43,7 +43,13 @@ export function filterTagGroupsBySectionQuery(groups: TagGroups, queries: Sectio
 }
 
 export function isAutosuggestOnlySection(section: TagType): boolean {
-  return section === "nationality";
+  return section === "nationality" || section === "hobby";
+}
+
+export function autosuggestHint(section: TagType): string | null {
+  if (section === "nationality") return "Start typing to search all countries.";
+  if (section === "hobby") return "Start typing to search hobbies.";
+  return null;
 }
 
 export function visibleTagsForSection(
@@ -66,4 +72,16 @@ export function selectedTagsForSection(
 ) {
   const selectedSet = new Set(selectedTagIds);
   return groups[section].filter((tag) => selectedSet.has(tag.id));
+}
+
+export function mergeOwnedTags(profileTags: Tag[], catalog: TagGroups, followedIds: number[]): Tag[] {
+  const byId = new Map<number, Tag>();
+  for (const tag of profileTags) byId.set(tag.id, tag);
+  const followed = new Set(followedIds);
+  for (const group of Object.values(catalog)) {
+    for (const tag of group) {
+      if (followed.has(tag.id)) byId.set(tag.id, tag);
+    }
+  }
+  return [...byId.values()];
 }

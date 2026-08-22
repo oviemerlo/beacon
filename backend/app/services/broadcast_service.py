@@ -5,17 +5,26 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from app.utils.config import settings
 from app.models.broadcast import Broadcast
-from app.repositories import broadcast_repository
+from app.repositories import broadcast_repository, school_repository, tag_repository
 from app.schemas.schemas import BroadcastCreateIn
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
+
+
+def _normalize_course_code(course_code: str) -> str:
+    normalized = " ".join(course_code.strip().split()).upper()
+    if not normalized:
+        raise ValidationError("course_code is required")
+    if len(normalized) > 30:
+        raise ValidationError("course_code must be at most 30 characters")
+    return normalized
 
 
 async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: BroadcastCreateIn) -> Broadcast:
     if payload.reply_to_broadcast_id is not None:
         parent_broadcast = await broadcast_repository.get_by_id(db, payload.reply_to_broadcast_id)
-        if parent_broadcast is None:
+        if parent_broadcast is None or parent_broadcast.deleted_at is not None:
             raise NotFoundError("Parent broadcast not found")
 
     if payload.is_global:
@@ -31,6 +40,25 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
             raise ValidationError(f"radius_meters cannot exceed {settings.MAX_BROADCAST_RADIUS_METERS}")
         radius_meters = payload.radius_meters
 
+    course_code: str | None = None
+    school_id: int | None = None
+    if payload.course_code is not None:
+        verification = await school_repository.get_verification(db, sender_id)
+        if verification is None or verification.verified_at is None:
+            raise ValidationError("Verify your school before targeting a course")
+
+        sender_school = await school_repository.get_by_id(db, verification.school_id)
+        if sender_school is None:
+            raise NotFoundError("School not found")
+
+        selected_tags = await tag_repository.get_by_ids(db, payload.tag_ids)
+        has_matching_school_tag = any(tag.tag_type == "school" and tag.label == sender_school.name for tag in selected_tags)
+        if not has_matching_school_tag:
+            raise ValidationError("Course targeting requires your verified school tag")
+
+        course_code = _normalize_course_code(payload.course_code)
+        school_id = verification.school_id
+
     broadcast = await broadcast_repository.create(
         db,
         sender_id=sender_id,
@@ -42,6 +70,8 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
         expires_at=(datetime.now(timezone.utc) + timedelta(days=payload.expires_in_days)) if payload.expires_in_days else None,
         tag_ids=payload.tag_ids,
         parent_broadcast_id=payload.reply_to_broadcast_id,
+        school_id=school_id,
+        course_code=course_code,
     )
     await db.commit()
     await db.refresh(broadcast)
@@ -50,12 +80,23 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
 
 async def delete_broadcast(db: AsyncSession, current_user_id: uuid.UUID, broadcast_id: str) -> None:
     broadcast = await broadcast_repository.get_by_id(db, broadcast_id)
-    if broadcast is None:
+    if broadcast is None or broadcast.deleted_at is not None:
         raise NotFoundError("Broadcast not found")
     if broadcast.sender_id != current_user_id:
         raise ForbiddenError("You can only delete your own broadcasts")
 
-    await broadcast_repository.delete(db, broadcast)
+    await broadcast_repository.soft_delete(db, broadcast)
+    await db.commit()
+
+
+async def hide_broadcast(db: AsyncSession, current_user_id: uuid.UUID, broadcast_id: str) -> None:
+    broadcast = await broadcast_repository.get_by_id(db, broadcast_id)
+    if broadcast is None or broadcast.deleted_at is not None:
+        raise NotFoundError("Broadcast not found")
+    if broadcast.sender_id == current_user_id:
+        raise ValidationError("Delete your own broadcast instead of hiding it")
+
+    await broadcast_repository.hide_for_user(db, current_user_id, broadcast.id)
     await db.commit()
 
 

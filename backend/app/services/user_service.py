@@ -4,12 +4,12 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.age_utils import validate_date_of_birth
-from app.core.config import settings
+from app.utils.age import validate_date_of_birth
+from app.utils.config import settings
 from app.models.user import User
-from app.repositories import user_repository
+from app.repositories import tag_repository, user_repository
 from app.schemas.schemas import ProfileUpdateIn
-from app.services.exceptions import NotFoundError, ValidationError
+from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 
 
 async def update_profile(db: AsyncSession, user: User, payload: ProfileUpdateIn) -> User:
@@ -47,6 +47,11 @@ async def update_profile(db: AsyncSession, user: User, payload: ProfileUpdateIn)
     return hydrated or user
 
 async def follow_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int, notifications_enabled: bool) -> None:
+    tag = await tag_repository.get_by_id(db, tag_id)
+    if tag is None:
+        raise NotFoundError("Tag not found")
+    if tag.tag_type == "school":
+        raise ForbiddenError("School tags can only be added via verification")
     await user_repository.follow_tag(db, user_id, tag_id, notifications_enabled)
     await db.commit()
 

@@ -1,13 +1,23 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
 import { signOut } from "../helpers/auth";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
-import type { UserProfile } from "../types/api";
+import type { BlockedUsersList, UserProfile } from "../types/api";
 
-export function ProfileScreen({ onSignedOut, onOpenFollowTags }: { onSignedOut: () => void; onOpenFollowTags: () => void }) {
+export function ProfileScreen({
+  onSignedOut,
+  onOpenFollowTags,
+  onOpenBlockedUsers,
+}: {
+  onSignedOut: () => void;
+  onOpenFollowTags: () => void;
+  onOpenBlockedUsers: () => void;
+}) {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [blockedCount, setBlockedCount] = useState(0);
   const [displayNameDraft, setDisplayNameDraft] = useState("");
   const [savingDisplayName, setSavingDisplayName] = useState(false);
   const [displayNameError, setDisplayNameError] = useState<string | null>(null);
@@ -18,6 +28,14 @@ export function ProfileScreen({ onSignedOut, onOpenFollowTags }: { onSignedOut: 
       setDisplayNameDraft(me.display_name);
     });
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      apiFetch<BlockedUsersList>("/blocks")
+        .then((data) => setBlockedCount(data.blocked_users.length))
+        .catch(() => setBlockedCount(0));
+    }, [])
+  );
 
   async function saveDisplayName() {
     const trimmed = displayNameDraft.trim();
@@ -87,6 +105,14 @@ export function ProfileScreen({ onSignedOut, onOpenFollowTags }: { onSignedOut: 
             ))}
           </View>
         )}
+      </Card>
+
+      <Card style={{ marginBottom: 12 }}>
+        <Text style={styles.sectionLabel}>Blocked users</Text>
+        <Pressable onPress={onOpenBlockedUsers} style={styles.followTagsButton}>
+          <Text style={styles.followTagsButtonText}>Manage</Text>
+        </Pressable>
+        <Text style={styles.emptyText}>{blockedCount} blocked</Text>
       </Card>
 
       <Card style={{ marginBottom: 24 }}>

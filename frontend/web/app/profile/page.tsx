@@ -3,6 +3,7 @@ import { AppNav } from "@/components/AppNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import type { BlockedUsersList } from "@/types/api";
 
 export default async function ProfilePage() {
   async function updateDisplayName(formData: FormData) {
@@ -19,6 +20,14 @@ export default async function ProfilePage() {
 
   const user = await getCurrentUserOrNull();
   if (!user) redirect("/login");
+
+  let blockedCount = 0;
+  try {
+    const blocked = await apiFetch<BlockedUsersList>("/blocks");
+    blockedCount = blocked.blocked_users.length;
+  } catch {
+    blockedCount = 0;
+  }
 
   return (
     <div className="min-h-screen">
@@ -60,6 +69,14 @@ export default async function ProfilePage() {
               <span key={t.id} className="tag-pill">{t.label}</span>
             ))}
           </div>
+        </div>
+
+        <div className="card mb-4">
+          <p className="font-medium mb-2">Blocked users</p>
+          <Link href="/blocked-users" className="inline-block text-sm text-signal-400 hover:text-signal-300 mb-3">
+            Manage
+          </Link>
+          <p className="text-parchment-500 text-sm">{blockedCount} blocked</p>
         </div>
 
         <div className="card">

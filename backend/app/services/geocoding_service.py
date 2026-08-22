@@ -2,7 +2,7 @@
 
 import httpx
 
-from app.core.config import settings
+from app.utils.config import settings
 
 _GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 _RESULT_TYPES = "locality|postal_town|administrative_area_level_2|administrative_area_level_1"

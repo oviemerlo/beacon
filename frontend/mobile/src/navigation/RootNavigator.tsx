@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavigationContainer, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Image, Text, View } from "react-native";
 
 import { TokenStore } from "../helpers/secureStore";
 import { apiFetch } from "../helpers/api";
@@ -14,9 +14,10 @@ import { BroadcastDetailScreen } from "../screens/BroadcastDetailScreen";
 import { ConversationsScreen } from "../screens/ConversationsScreen";
 import { ConversationDetailScreen } from "../screens/ConversationDetailScreen";
 import { FollowTagsScreen } from "../screens/FollowTagsScreen";
+import { BlockedUsersScreen } from "../screens/BlockedUsersScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { colors } from "../theme/tokens";
-import type { UserProfile } from "../types/api";
+import type { UnreadCount, UserProfile } from "../types/api";
 
 const RootStack = createNativeStackNavigator();
 const FeedStack = createNativeStackNavigator();
@@ -32,7 +33,17 @@ const navTheme = {
 function FeedStackNavigator() {
   return (
     <FeedStack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.dusk900 }, headerTintColor: colors.parchment100 }}>
-      <FeedStack.Screen name="FeedHome" options={{ title: "Beacon" }}>
+      <FeedStack.Screen
+        name="FeedHome"
+        options={{
+          headerTitle: () => (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Image source={require("../assets/echotocrowd-icon.png")} style={{ width: 24, height: 24, borderRadius: 6 }} />
+              <Text style={{ color: colors.parchment100, fontWeight: "700", fontSize: 17 }}>EchoToCrowd</Text>
+            </View>
+          ),
+        }}
+      >
         {({ navigation }: any) => (
           <FeedScreen
             onOpenBroadcast={(id) => navigation.navigate("BroadcastDetail", { broadcastId: id })}
@@ -58,7 +69,7 @@ function ConversationsStackNavigator() {
           <ConversationsScreen onOpenConversation={(conversationId) => navigation.navigate("ConversationDetail", { conversationId })} />
         )}
       </ConversationsStack.Screen>
-      <ConversationsStack.Screen name="ConversationDetail" options={{ title: "Conversation" }}>
+      <ConversationsStack.Screen name="ConversationDetail" options={{ title: "Conversation", headerBackTitle: "Back to messages" }}>
         {({ route }: any) => <ConversationDetailScreen conversationId={route.params.conversationId} />}
       </ConversationsStack.Screen>
     </ConversationsStack.Navigator>
@@ -69,14 +80,54 @@ function ProfileStackNavigator({ onSignOut }: { onSignOut: () => void }) {
   return (
     <ProfileStack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.dusk900 }, headerTintColor: colors.parchment100 }}>
       <ProfileStack.Screen name="ProfileHome" options={{ title: "Profile" }}>
-        {({ navigation }: any) => <ProfileScreen onSignedOut={onSignOut} onOpenFollowTags={() => navigation.navigate("FollowTags")} />}
+        {({ navigation }: any) => (
+          <ProfileScreen
+            onSignedOut={onSignOut}
+            onOpenFollowTags={() => navigation.navigate("FollowTags")}
+            onOpenBlockedUsers={() => navigation.navigate("BlockedUsers")}
+          />
+        )}
       </ProfileStack.Screen>
       <ProfileStack.Screen name="FollowTags" component={FollowTagsScreen} options={{ title: "Follow tags" }} />
+      <ProfileStack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ title: "Blocked users" }} />
     </ProfileStack.Navigator>
   );
 }
 
 function AppTabs({ onSignOut }: { onSignOut: () => void }) {
+  const [feedUnread, setFeedUnread] = useState(0);
+  const [messageUnread, setMessageUnread] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCounts = async () => {
+      try {
+        const [feed, messages] = await Promise.all([
+          apiFetch<UnreadCount>("/feed/unread-count"),
+          apiFetch<UnreadCount>("/conversations/unread-count"),
+        ]);
+        if (!active) return;
+        setFeedUnread(feed.count ?? 0);
+        setMessageUnread(messages.count ?? 0);
+      } catch {
+        if (!active) return;
+        setFeedUnread(0);
+        setMessageUnread(0);
+      }
+    };
+
+    void loadCounts();
+    const interval = setInterval(() => {
+      void loadCounts();
+    }, 5000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
     <Tabs.Navigator
       screenOptions={{
@@ -86,11 +137,15 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
         tabBarInactiveTintColor: colors.parchment500,
       }}
     >
-      <Tabs.Screen name="Feed" component={FeedStackNavigator} />
+      <Tabs.Screen name="Feed" component={FeedStackNavigator} options={{ tabBarBadge: feedUnread > 0 ? feedUnread : undefined }} />
       <Tabs.Screen name="Broadcast">
         {({ navigation }: any) => <NewBroadcastScreen onPosted={() => navigation.navigate("Feed")} />}
       </Tabs.Screen>
-      <Tabs.Screen name="Messages" component={ConversationsStackNavigator} />
+      <Tabs.Screen
+        name="Messages"
+        component={ConversationsStackNavigator}
+        options={{ tabBarBadge: messageUnread > 0 ? messageUnread : undefined }}
+      />
       <Tabs.Screen name="Profile">{() => <ProfileStackNavigator onSignOut={onSignOut} />}</Tabs.Screen>
     </Tabs.Navigator>
   );

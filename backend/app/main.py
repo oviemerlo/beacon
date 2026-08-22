@@ -8,10 +8,10 @@ from starlette.middleware.sessions import SessionMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
-from app.api.routes import admin, auth, blocks, broadcasts, feed, geocode, messages, reports, search, tags, users
+from app.api.routes import admin, auth, blocks, broadcasts, feed, geocode, messages, reports, schools, search, tags, users
 from app.api.routes.search import limiter
 from app.api.error_handlers import register_error_handlers
-from app.core.config import settings
+from app.utils.config import settings
 from app.jobs.digest_job import run_weekly_digest
 
 scheduler = AsyncIOScheduler()
@@ -58,6 +58,7 @@ app.include_router(blocks.router)
 app.include_router(geocode.router)
 app.include_router(tags.router)
 app.include_router(reports.router)
+app.include_router(schools.router)
 
 
 @app.get("/health")

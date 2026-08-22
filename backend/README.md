@@ -20,7 +20,8 @@ cp .env.example .env
 # supports it — Azure Database for PostgreSQL Flexible Server does).
 alembic upgrade head
 
-python -m scripts.seed_tags   # starter nationality/hobby taxonomy
+python -m scripts.seed_tags     # starter nationality/hobby taxonomy
+python -m scripts.seed_schools  # universities + email domains for school verification
 
 uvicorn app.main:app --reload
 ```
@@ -58,14 +59,14 @@ Three layers, each with one job:
   search-by-location-or-tag" has exactly one place to audit instead of
   being an implicit convention a new query could quietly break.
 
-Helper/infrastructure code that isn't really business logic lives in
-`app/core/`: JWT signing (`security.py`), OAuth token verification against
+Shared infrastructure that isn't really business logic lives in
+`app/utils/`: JWT signing (`security.py`), OAuth token verification against
 Google/Apple (`oauth_verify.py`), the one-time exchange-code store used by
 the web OAuth redirect (`oauth_exchange.py`), and settings (`config.py`).
 
 ```
 app/
-  core/            settings, JWT helpers, OAuth verification, exchange-code store
+  utils/           settings, JWT, OAuth verification, exchange-code store, age checks
   db/              async engine/session, declarative base
   models/          SQLAlchemy models (see docs/PRODUCT_BRIEF.md for schema rationale)
   schemas/         Pydantic request/response models
@@ -86,7 +87,7 @@ app/
     deps.py          get_current_user
     error_handlers.py  maps domain exceptions to HTTP responses
 alembic/           migrations (0001 creates the full schema + PostGIS extension)
-scripts/           one-off scripts (tag seeding)
+scripts/           one-off scripts (tag + school seeding)
 docs/              product brief, security fixes changelog
 ```
 
@@ -113,11 +114,11 @@ there's no accidental "forgot to protect this before shipping" state.
   it through on that first call.
 - Both token-exchange routes verify the identity token's signature,
   issuer, and audience before trusting anything in it
-  (`app/core/oauth_verify.py`) — Google via the official `google-auth`
+  (`app/utils/oauth_verify.py`) — Google via the official `google-auth`
   library, Apple via its published JWKS. See `docs/SECURITY_FIXES.md` for
   what this replaced.
 - The web redirect flow never puts tokens in a URL — the callback mints a
-  one-time exchange code (`app/core/oauth_exchange.py`) that the frontend
+  one-time exchange code (`app/utils/oauth_exchange.py`) that the frontend
   trades for real tokens server-side. That store is in-memory and
   process-local; swap for Redis before running more than one backend
   worker, since a code minted on worker A won't be found on worker B.

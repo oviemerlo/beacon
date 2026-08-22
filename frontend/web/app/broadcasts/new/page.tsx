@@ -1,20 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { clientFetch } from "@/helpers/client-api";
-import {
-  EMPTY_SECTION_QUERIES,
-  EMPTY_TAG_GROUPS,
-  filterTagGroupsBySectionQuery,
-  isAutosuggestOnlySection,
-  selectedTagsForSection,
-  TAG_SECTIONS,
-  toggleTagId,
-  updateSectionQuery,
-  visibleTagsForSection,
-} from "@/helpers/tags";
+import { getMyCourses, getVerificationStatus } from "@/helpers/school-verification";
+import { EMPTY_TAG_GROUPS, mergeOwnedTags, toggleTagId } from "@/helpers/tags";
 import {
   buildReachPayload,
   LOCAL_RADIUS_STEPS_M,
@@ -22,7 +14,7 @@ import {
   ReachCategory,
   REGIONAL_RADIUS_STEPS_M,
 } from "@/helpers/broadcast-reach";
-import type { TagGroups } from "@/types/api";
+import type { BroadcastCreatePayload, Tag, TagGroups, UserProfile } from "@/types/api";
 
 export default function NewBroadcastPage() {
   const router = useRouter();
@@ -30,10 +22,11 @@ export default function NewBroadcastPage() {
   const [reach, setReach] = useState<ReachCategory>("regional");
   const [localRadiusIdx, setLocalRadiusIdx] = useState(3); // 1km default
   const [regionalRadiusIdx, setRegionalRadiusIdx] = useState(1); // 8km default
-  const [matchMode, setMatchMode] = useState<"any" | "all">("any");
-  const [tagGroups, setTagGroups] = useState<TagGroups>(EMPTY_TAG_GROUPS);
-  const [sectionQueries, setSectionQueries] = useState(EMPTY_SECTION_QUERIES);
+  const [profileTags, setProfileTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [schoolVerified, setSchoolVerified] = useState(false);
+  const [myCourses, setMyCourses] = useState<string[]>([]);
+  const [selectedCourseCode, setSelectedCourseCode] = useState("");
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,15 +34,31 @@ export default function NewBroadcastPage() {
   const activeRadiusIdx = reach === "local" ? localRadiusIdx : regionalRadiusIdx;
   const activeRadiusMeters = activeRadiusSteps[activeRadiusIdx];
   const activeRadiusLabel = radiusLabel(activeRadiusMeters);
-  const filteredTagGroups = useMemo(
-    () => filterTagGroupsBySectionQuery(tagGroups, sectionQueries),
-    [tagGroups, sectionQueries]
-  );
+  const reachSummary = reach === "global" ? "Global" : `Reach ${activeRadiusLabel}`;
+  const selectedTags = profileTags.filter((tag) => selectedTagIds.includes(tag.id));
+  const availableProfileTags = profileTags.filter((tag) => !selectedTagIds.includes(tag.id));
 
   useEffect(() => {
-    clientFetch<TagGroups>("/tags")
-      .then(setTagGroups)
-      .catch(() => setTagGroups(EMPTY_TAG_GROUPS));
+    Promise.all([
+      clientFetch<UserProfile>("/users/me"),
+      clientFetch<TagGroups>("/tags"),
+      clientFetch<{ tag_ids: number[] }>("/users/me/followed-tags"),
+    ])
+      .then(([me, catalog, followed]) => {
+        setProfileTags(mergeOwnedTags(me.tags ?? [], catalog, followed.tag_ids ?? []));
+      })
+      .catch(() => setProfileTags([]));
+    getVerificationStatus()
+      .then(async (status) => {
+        setSchoolVerified(status.verified);
+        if (!status.verified) return;
+        const courses = await getMyCourses();
+        setMyCourses(courses);
+      })
+      .catch(() => {
+        setSchoolVerified(false);
+        setMyCourses([]);
+      });
   }, []);
 
   async function publish() {
@@ -57,23 +66,21 @@ export default function NewBroadcastPage() {
     setPosting(true);
     setError(null);
     try {
-      // Uses the sender's own registered location as the origin point.
-      // A future "choose a different point" toggle (for businesses
-      // targeting a neighborhood they haven't moved into yet) reuses this
-      // same radius control — just swaps where origin lat/lng comes from.
       const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
         navigator.geolocation.getCurrentPosition(resolve, reject)
       );
+      const payload: BroadcastCreatePayload = {
+        content,
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        ...buildReachPayload(reach, activeRadiusMeters),
+        tag_match_mode: "any",
+        tag_ids: selectedTagIds,
+      };
+      if (selectedCourseCode) payload.course_code = selectedCourseCode;
       await clientFetch("/broadcasts", {
         method: "POST",
-        body: JSON.stringify({
-          content,
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          ...buildReachPayload(reach, activeRadiusMeters),
-          tag_match_mode: matchMode,
-          tag_ids: selectedTagIds,
-        }),
+        body: JSON.stringify(payload),
       });
       router.push("/feed");
     } catch {
@@ -87,120 +94,127 @@ export default function NewBroadcastPage() {
     <div className="min-h-screen">
       <AppNav />
       <main className="max-w-2xl mx-auto px-5 py-6">
-        <h1 className="font-display text-xl font-bold mb-5">New broadcast</h1>
+        <h1 className="font-display text-xl font-bold">New broadcast</h1>
+        <p className="text-parchment-500 text-sm mt-2 mb-8">{reachSummary}</p>
 
-        <div className="card">
-          <textarea
-            className="input-field min-h-[120px] resize-none mb-5"
-            placeholder="What do you want people nearby to know?"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            maxLength={2000}
-          />
+        <textarea
+          className="input-field min-h-[120px] resize-none mb-8"
+          placeholder="What do you want people nearby to know?"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          maxLength={2000}
+        />
 
-          <label className="block text-sm font-medium mb-2">Reach</label>
-          <div className="flex gap-2 mb-4">
-            <button onClick={() => setReach("local")} className={`tag-pill ${reach === "local" ? "tag-pill-active" : ""}`}>
-              Local
-            </button>
-            <button onClick={() => setReach("regional")} className={`tag-pill ${reach === "regional" ? "tag-pill-active" : ""}`}>
-              Regional
-            </button>
-            <button onClick={() => setReach("global")} className={`tag-pill ${reach === "global" ? "tag-pill-active" : ""}`}>
-              Global
-            </button>
-          </div>
-          {reach === "global" ? (
-            <p className="text-parchment-500 text-sm mb-6">Reaches everyone on Beacon, everywhere.</p>
-          ) : (
-            <>
-              <label className="block text-sm font-medium mb-2">
-                Reach people within <span className="text-signal-400 font-mono">{activeRadiusLabel}</span>
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={activeRadiusSteps.length - 1}
-                value={activeRadiusIdx}
-                onChange={(e) =>
-                  reach === "local" ? setLocalRadiusIdx(Number(e.target.value)) : setRegionalRadiusIdx(Number(e.target.value))
-                }
-                className="w-full accent-signal-500 mb-6"
-              />
-            </>
-          )}
-
-          <label className="block text-sm font-medium mb-2">Tag matching</label>
-          <div className="flex gap-2 mb-6">
-            <button
-              onClick={() => setMatchMode("any")}
-              className={`tag-pill ${matchMode === "any" ? "tag-pill-active" : ""}`}
-            >
-              Match any tag
-            </button>
-            <button
-              onClick={() => setMatchMode("all")}
-              className={`tag-pill ${matchMode === "all" ? "tag-pill-active" : ""}`}
-            >
-              Match all tags
-            </button>
-          </div>
-          <div className="mb-6">
-            {TAG_SECTIONS.map(({ key, title }) => (
-              <div key={key} className="mb-4">
-                <p className="text-sm font-medium mb-2">{title}</p>
-                {selectedTagsForSection(key, tagGroups, selectedTagIds).length > 0 && (
-                  <div className="mb-2">
-                    <p className="text-parchment-500 text-xs font-mono mb-2">Selected</p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedTagsForSection(key, tagGroups, selectedTagIds).map((tag) => (
-                        <button
-                          key={tag.id}
-                          onClick={() => setSelectedTagIds((prev) => toggleTagId(prev, tag.id))}
-                          className="tag-pill tag-pill-active"
-                        >
-                          {tag.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <input
-                  type="text"
-                  className="input-field mb-2 text-sm py-2"
-                  placeholder={`Search ${title.toLowerCase()} tags`}
-                  value={sectionQueries[key]}
-                  onChange={(e) => setSectionQueries((prev) => updateSectionQuery(prev, key, e.target.value))}
-                />
-                {isAutosuggestOnlySection(key) && !sectionQueries[key].trim() && (
-                  <p className="text-parchment-500 text-xs mb-2">Start typing to search all countries.</p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  {visibleTagsForSection(key, filteredTagGroups, sectionQueries, selectedTagIds).map((tag) => {
-                    const selected = selectedTagIds.includes(tag.id);
-                    return (
-                      <button
-                        key={tag.id}
-                        onClick={() => setSelectedTagIds((prev) => toggleTagId(prev, tag.id))}
-                        className={`tag-pill ${selected ? "tag-pill-active" : ""}`}
-                      >
-                        {tag.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            <p className="text-parchment-500 text-xs font-mono mt-2">
-              Tags help ranking context within each viewer's feed.
-            </p>
-          </div>
-
-          {error && <p className="text-rust-400 text-sm mb-3">{error}</p>}
-          <button onClick={publish} disabled={posting || !content.trim()} className="btn-primary w-full">
-            {posting ? "Posting…" : "Post broadcast"}
+        <div className="grid grid-cols-3 items-center mb-4">
+          <button onClick={() => setReach("local")} className={`tag-pill justify-self-start ${reach === "local" ? "tag-pill-active" : ""}`}>
+            Local
+          </button>
+          <button onClick={() => setReach("regional")} className={`tag-pill justify-self-center ${reach === "regional" ? "tag-pill-active" : ""}`}>
+            Regional
+          </button>
+          <button onClick={() => setReach("global")} className={`tag-pill justify-self-end ${reach === "global" ? "tag-pill-active" : ""}`}>
+            Global
           </button>
         </div>
+        {reach !== "global" && (
+          <input
+            type="range"
+            min={0}
+            max={activeRadiusSteps.length - 1}
+            value={activeRadiusIdx}
+            onChange={(e) =>
+              reach === "local" ? setLocalRadiusIdx(Number(e.target.value)) : setRegionalRadiusIdx(Number(e.target.value))
+            }
+            className="w-full accent-signal-500 mb-10"
+          />
+        )}
+        {reach === "global" && <div className="mb-10" />}
+
+        <div className="mb-10">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <p className="text-sm font-medium">Selected for this broadcast</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSelectedTagIds([])}
+                disabled={selectedTagIds.length === 0}
+                className="tag-pill disabled:opacity-40"
+              >
+                Clear all tags
+              </button>
+              <button
+                onClick={() => setSelectedTagIds(profileTags.map((tag) => tag.id))}
+                disabled={profileTags.length === 0 || availableProfileTags.length === 0}
+                className="tag-pill disabled:opacity-40"
+              >
+                Select all tags
+              </button>
+            </div>
+          </div>
+          {selectedTags.length === 0 ? (
+            <p className="text-parchment-500 text-sm">No tags selected — broadcast reaches everyone nearby.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {selectedTags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => setSelectedTagIds((prev) => toggleTagId(prev, tag.id))}
+                  className="tag-pill tag-pill-active"
+                >
+                  {tag.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mb-10">
+          <p className="text-sm font-medium mb-4">Your profile tags</p>
+          {profileTags.length === 0 ? (
+            <p className="text-parchment-500 text-sm">
+              No profile tags yet.{" "}
+              <Link href="/follow-tags" className="text-signal-400 hover:text-signal-300">
+                Add tags
+              </Link>
+            </p>
+          ) : availableProfileTags.length === 0 ? (
+            <p className="text-parchment-500 text-sm">All of your profile tags are selected above.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {availableProfileTags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => setSelectedTagIds((prev) => toggleTagId(prev, tag.id))}
+                  className="tag-pill"
+                >
+                  {tag.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {schoolVerified && (
+          <div className="mb-10">
+            <p className="text-sm font-medium mb-4">Course targeting</p>
+            <select
+              className="input-field text-sm py-2"
+              value={selectedCourseCode}
+              onChange={(e) => setSelectedCourseCode(e.target.value)}
+            >
+              <option value="">No course targeting</option>
+              {myCourses.map((course) => (
+                <option key={course} value={course}>
+                  {course}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {error && <p className="text-rust-400 text-sm mb-4">{error}</p>}
+        <button onClick={publish} disabled={posting || !content.trim()} className="btn-primary w-full mt-2">
+          {posting ? "Posting…" : "Send an Echo"}
+        </button>
       </main>
     </div>
   );

@@ -3,11 +3,11 @@ OAuth flow (see docs/SECURITY_FIXES.md for the full history):
 
   Web (browser redirect): GET /auth/google/login -> Google -> GET
   /auth/google/callback -> we mint a one-time exchange code
-  (app/core/oauth_exchange.py) and redirect to the frontend, which trades
+  (app/utils/oauth_exchange.py) and redirect to the frontend, which trades
   it for real tokens via POST /auth/exchange.
 
   Mobile (native SDK): client POSTs a provider identity token to
-  /auth/{provider}/token-exchange, which is verified (app/core/oauth_verify.py)
+  /auth/{provider}/token-exchange, which is verified (app/utils/oauth_verify.py)
   before anything in it is trusted.
 
 Identity upsert and token issuance are auth_service's job, not this file's
@@ -21,9 +21,9 @@ from fastapi.responses import RedirectResponse
 from starlette.requests import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
-from app.core.oauth_exchange import consume_exchange_code, create_exchange_code
-from app.core.oauth_verify import TokenVerificationError, verify_apple_identity_token, verify_google_id_token
+from app.utils.config import settings
+from app.utils.oauth_exchange import consume_exchange_code, create_exchange_code
+from app.utils.oauth_verify import TokenVerificationError, verify_apple_identity_token, verify_google_id_token
 from app.db.session import get_db
 from app.schemas.schemas import TokenPairOut
 from app.services import auth_service

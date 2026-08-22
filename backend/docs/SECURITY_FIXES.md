@@ -12,7 +12,7 @@ quick local test").
 check the signature — a forged JWT with any `sub` claim would have been
 accepted, letting an attacker create or log into arbitrary accounts.
 
-**After**: `app/core/oauth_verify.py` adds real verification —
+**After**: `app/utils/oauth_verify.py` adds real verification —
 `verify_google_id_token` uses the official `google-auth` library, which
 checks signature (against Google's rotating certs), issuer, audience, and
 expiry in one call. `verify_apple_identity_token` fetches Apple's JWKS,
@@ -29,7 +29,7 @@ Neither side matched, so browser login never actually completed.
 **After**: rather than just making the two sides agree (which would have
 meant putting live tokens in a redirect URL — visible in browser history,
 referrer headers, and server logs), the backend now mints a **one-time
-exchange code** (`app/core/oauth_exchange.py`, 60s TTL, single use) and
+exchange code** (`app/utils/oauth_exchange.py`, 60s TTL, single use) and
 redirects to `${FRONTEND_URL}/auth/exchange?code=...`. The frontend's new
 `app/auth/exchange/route.ts` (a Route Handler, not a Client Component)
 trades the code for real tokens server-side via `POST /auth/exchange` and

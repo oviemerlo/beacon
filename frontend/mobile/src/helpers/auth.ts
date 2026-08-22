@@ -101,9 +101,15 @@ export async function signInWithGoogle(): Promise<void> {
   if (!idToken) throw new Error("Google sign-in was cancelled or failed");
   logAuth("google:id-token:received");
 
-  const res = await fetch(`${API_URL}/auth/google/token-exchange?id_token=${encodeURIComponent(idToken)}`, {
-    method: "POST",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/auth/google/token-exchange?id_token=${encodeURIComponent(idToken)}`, {
+      method: "POST",
+    });
+  } catch {
+    logAuth("google:backend-exchange:network-error", { apiUrl: API_URL });
+    throw new Error(`Couldn't reach the API at ${API_URL}. For the iOS simulator use http://127.0.0.1:8000`);
+  }
   logAuth("google:backend-exchange:response", { ok: res.ok, status: res.status, apiUrl: API_URL });
   if (!res.ok) {
     const text = await res.text();

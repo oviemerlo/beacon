@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import BlockedUser
+from app.models.user import User
 
 
 async def block_user(db: AsyncSession, blocker_id: uuid.UUID, blocked_id: uuid.UUID) -> None:
@@ -24,6 +25,16 @@ async def unblock_user(db: AsyncSession, blocker_id: uuid.UUID, blocked_id: uuid
 
 async def list_blocked_user_ids(db: AsyncSession, blocker_id: uuid.UUID) -> list[uuid.UUID]:
     result = await db.execute(select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == blocker_id))
+    return list(result.scalars().all())
+
+
+async def list_blocked_users(db: AsyncSession, blocker_id: uuid.UUID) -> list[User]:
+    result = await db.execute(
+        select(User)
+        .join(BlockedUser, BlockedUser.blocked_id == User.id)
+        .where(BlockedUser.blocker_id == blocker_id)
+        .order_by(User.username)
+    )
     return list(result.scalars().all())
 
 

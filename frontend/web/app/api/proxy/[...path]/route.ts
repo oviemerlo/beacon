@@ -61,7 +61,8 @@ async function proxy(req: NextRequest, path: string[]) {
   }
 
   const responseBody = await res.text();
-  const response = new NextResponse(responseBody, {
+  const hasNoBody = res.status === 204 || res.status === 205 || res.status === 304;
+  const response = new NextResponse(hasNoBody ? null : responseBody, {
     status: res.status,
     headers: { "Content-Type": res.headers.get("Content-Type") ?? "application/json" },
   });

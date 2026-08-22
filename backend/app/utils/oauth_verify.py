@@ -16,7 +16,7 @@ from jose import jwt as jose_jwt
 from jose.exceptions import JWTError
 from google.auth import exceptions as google_exceptions
 
-from app.core.config import settings
+from app.utils.config import settings
 
 _google_request = google_requests.Request()
 

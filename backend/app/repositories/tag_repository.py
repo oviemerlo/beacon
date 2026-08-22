@@ -16,3 +16,19 @@ async def get_by_ids(db: AsyncSession, tag_ids: list[int]) -> list[Tag]:
         return []
     result = await db.execute(select(Tag).where(Tag.id.in_(tag_ids)))
     return list(result.scalars().all())
+
+
+async def get_by_id(db: AsyncSession, tag_id: int) -> Tag | None:
+    return await db.get(Tag, tag_id)
+
+
+async def get_by_type_and_label(db: AsyncSession, tag_type: str, label: str) -> Tag | None:
+    result = await db.execute(select(Tag).where(Tag.tag_type == tag_type, Tag.label == label))
+    return result.scalar_one_or_none()
+
+
+async def create(db: AsyncSession, *, tag_type: str, label: str) -> Tag:
+    tag = Tag(tag_type=tag_type, label=label)
+    db.add(tag)
+    await db.flush()
+    return tag

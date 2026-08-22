@@ -2,7 +2,7 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from app.utils.config import settings
 from app.models.user import User
 from app.repositories import user_repository
 from app.services.exceptions import ValidationError

@@ -10,8 +10,8 @@ export default async function HomePage() {
     <main className="min-h-screen px-6">
       <header className="max-w-6xl mx-auto py-6 flex items-center justify-between">
         <a href="/" className="flex items-center gap-3 text-signal-400">
-          <img src="/icon.svg" alt="Beacon logo" className="h-12 w-12 rounded-md" />
-          <span className="font-display text-2xl font-bold tracking-tight">BEACON</span>
+          <img src="/echotocrowd-favicon.png" alt="EchoToCrowd logo" className="h-12 w-12 rounded-md" />
+          <span className="font-display text-2xl font-bold tracking-tight">ECHOTOCROWD</span>
         </a>
         <div className="flex items-center gap-3">
           <a href="/login" className="px-4 py-2 rounded-beacon text-parchment-300 hover:text-parchment-100 transition-all duration-200 transform hover:scale-105 hover:text-base">
@@ -33,7 +33,7 @@ export default async function HomePage() {
             Find your people, wherever you land.
           </h1>
           <p className="mt-5 max-w-md text-parchment-500 text-lg">
-            Beacon connects newcomers and local businesses with people nearby who
+            EchoToCrowd connects newcomers and local businesses with people nearby who
             share where they&apos;re from.
           </p>
         </div>
@@ -47,7 +47,7 @@ export default async function HomePage() {
               Sign in
             </a>
             <p className="text-parchment-500 text-sm text-center mt-4">
-              New to Beacon?{" "}
+              New to EchoToCrowd?{" "}
               <a href="/login" className="text-signal-400 hover:text-signal-300 font-medium">
                 Join now
               </a>

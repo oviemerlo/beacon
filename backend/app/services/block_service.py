@@ -2,6 +2,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.user import User
 from app.repositories import block_repository, user_repository
 from app.services.exceptions import NotFoundError, ValidationError
 
@@ -23,3 +24,7 @@ async def unblock_user(db: AsyncSession, blocker_id: uuid.UUID, blocked_id: uuid
 
 async def list_blocked_user_ids(db: AsyncSession, blocker_id: uuid.UUID) -> list[uuid.UUID]:
     return await block_repository.list_blocked_user_ids(db, blocker_id)
+
+
+async def list_blocked_users(db: AsyncSession, blocker_id: uuid.UUID) -> list[User]:
+    return await block_repository.list_blocked_users(db, blocker_id)

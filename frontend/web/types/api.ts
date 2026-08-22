@@ -32,6 +32,16 @@ export interface PublicProfile {
   is_verified: boolean;
 }
 
+export interface BlockedUser {
+  id: string;
+  username: string;
+  display_name: string;
+}
+
+export interface BlockedUsersList {
+  blocked_users: BlockedUser[];
+}
+
 export interface FeedBroadcast {
   id: string;
   sender_id: string;
@@ -42,6 +52,7 @@ export interface FeedBroadcast {
   tags: Tag[];
   is_global: boolean;
   radius_meters: number | null;
+  course_code?: string | null;
   created_at: string;
   reply_count?: number;
   replies?: FeedReply[];
@@ -57,8 +68,20 @@ export interface FeedReply {
   tags: Tag[];
   is_global: boolean;
   radius_meters: number | null;
+  course_code?: string | null;
   created_at: string;
   reply_count?: number;
+}
+
+export interface BroadcastCreatePayload {
+  content: string;
+  latitude: number;
+  longitude: number;
+  is_global: boolean;
+  radius_meters?: number;
+  tag_match_mode: "any" | "all";
+  tag_ids: number[];
+  course_code?: string | null;
 }
 
 export interface BroadcastThread {
@@ -73,6 +96,18 @@ export interface TagGroups {
   community: Tag[];
 }
 
+export interface School {
+  id: number;
+  name: string;
+  country: string | null;
+}
+
+export interface SchoolVerificationStatus {
+  school_id: number | null;
+  school_name: string | null;
+  verified: boolean;
+}
+
 export interface Conversation {
   id: string;
   origin_broadcast_id: string;
@@ -82,9 +117,23 @@ export interface ConversationThread {
   id: string;
   origin_broadcast_id: string;
   origin_broadcast_preview: string;
+  origin_broadcast_sender_display_name: string;
+  is_reply_to_you: boolean;
   other_participant: { id: string; display_name: string };
+  last_message_sender_id: string;
   last_message: string;
   last_message_at: string;
+  unread_count: number;
+}
+
+export interface ConversationContext {
+  id: string;
+  origin_broadcast_id: string;
+  origin_broadcast_preview: string;
+  origin_broadcast_sender_id: string | null;
+  origin_broadcast_sender_display_name: string;
+  other_participant_id: string;
+  other_participant_display_name: string;
 }
 
 export interface Message {
@@ -127,4 +176,8 @@ export interface TokenPair {
   access_token: string;
   refresh_token: string;
   token_type: string;
+}
+
+export interface UnreadCount {
+  count: number;
 }

@@ -30,6 +30,7 @@ def _serialize_broadcast_row(row):
         "tags": _serialize_broadcast_tags(broadcast),
         "is_global": broadcast.is_global,
         "radius_meters": broadcast.radius_meters,
+        "course_code": broadcast.course_code,
         "created_at": broadcast.created_at,
         "reply_count": int(reply_count or 0),
     }
@@ -44,6 +45,11 @@ async def create_broadcast(payload: BroadcastCreateIn, current_user: User = Depe
 @router.delete("/{broadcast_id}", status_code=204)
 async def delete_broadcast(broadcast_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await broadcast_service.delete_broadcast(db, current_user.id, broadcast_id)
+
+
+@router.put("/{broadcast_id}/hide", status_code=204)
+async def hide_broadcast(broadcast_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await broadcast_service.hide_broadcast(db, current_user.id, broadcast_id)
 
 
 @router.get("/{broadcast_id}/thread", response_model=BroadcastThreadOut)
