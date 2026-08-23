@@ -35,6 +35,8 @@ class SchoolVerification(Base):
     otp_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     otp_attempts: Mapped[int] = mapped_column(Integer, default=0)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    reverification_reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="school_verification")
     school: Mapped["School"] = relationship(back_populates="verifications")

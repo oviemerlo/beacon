@@ -118,6 +118,7 @@ export interface ConversationThread {
   last_message: string;
   last_message_at: string;
   unread_count: number;
+  has_mention?: boolean;
 }
 
 export interface ConversationContext {
@@ -136,6 +137,28 @@ export interface Message {
   body: string;
   sent_at: string;
   read_at: string | null;
+  mentioned_user_ids?: string[];
+}
+
+export interface MentionCandidate {
+  id: string;
+  username: string;
+  display_name: string;
+  echo_id?: string | null;
+}
+
+export interface MentionNotification {
+  id: string;
+  kind: "mentioned";
+  conversation_id: string;
+  message_id: string;
+  actor_id: string;
+  actor_username: string;
+  actor_display_name: string;
+  body: string;
+  origin_broadcast_preview: string;
+  created_at: string;
+  is_own_conversation: boolean;
 }
 
 export type ReportTargetType = "broadcast" | "message" | "user";
@@ -150,4 +173,42 @@ export interface ReportPayload {
 
 export interface UnreadCount {
   count: number;
+  mention_count?: number;
+}
+
+export type FeedSearchMatchType = "echo" | "message" | "both";
+
+export interface FeedSearchMatch {
+  id: string;
+  body: string;
+  created_at: string;
+  source: "reply" | "message";
+  conversation_id: string | null;
+}
+
+export interface FeedSearchHit {
+  id: string;
+  body: string;
+  created_at: string;
+  match_type: FeedSearchMatchType;
+  sender_id: string;
+  sender_display_name: string;
+  tags: Tag[];
+  matches: FeedSearchMatch[];
+}
+
+export interface ConversationSearchMatch {
+  id: string;
+  body: string;
+  created_at: string;
+}
+
+export interface ConversationSearchHit {
+  id: string;
+  origin_broadcast_id: string;
+  origin_broadcast_preview: string;
+  origin_broadcast_sender_display_name: string;
+  is_reply_to_you: boolean;
+  other_participant: { id: string; display_name: string };
+  matches: ConversationSearchMatch[];
 }

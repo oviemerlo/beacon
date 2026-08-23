@@ -23,14 +23,39 @@ async def list_conversations(current_user: User = Depends(get_current_user), db:
 
 @router.get("/unread-count")
 async def unread_count(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    count = await conversation_service.get_unread_count(db, current_user.id)
-    return {"count": count}
+    return await conversation_service.get_unread_count(db, current_user.id)
 
 
 @router.post("/mark-seen")
 async def mark_seen(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await conversation_service.mark_all_seen(db, current_user.id)
     return {"status": "ok"}
+
+
+@router.get("/search")
+async def search_conversations(q: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await conversation_service.search_messages_for_user(db, current_user.id, q)
+
+
+@router.get("/mentions")
+async def list_mentions(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await conversation_service.list_unread_mentions(db, current_user.id)
+
+
+@router.post("/mentions/{notification_id}/read")
+async def mark_mention_read(notification_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await conversation_service.mark_mention_read(db, current_user.id, notification_id)
+    return {"status": "ok"}
+
+
+@router.get("/{conversation_id}/mention-candidates")
+async def mention_candidates(
+    conversation_id: str,
+    q: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await conversation_service.list_mention_candidates(db, current_user.id, conversation_id, q)
 
 
 @router.get("/{conversation_id}", response_model=ConversationContextOut)

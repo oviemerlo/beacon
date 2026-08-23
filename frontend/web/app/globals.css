@@ -52,4 +52,7 @@
   .feed-card-meta.tag-pill-active {
     @apply border-signal-500 bg-signal-500/10 text-signal-400;
   }
+  .mention-text {
+    @apply text-signal-400 font-medium;
+  }
 }

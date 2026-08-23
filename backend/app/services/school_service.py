@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.config import settings
-from app.utils.email import send_otp_email
+from app.utils.email import send_otp_email, send_reverification_reminder_email
 from app.models.school import School
 from app.repositories import school_repository, tag_repository, user_repository
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
@@ -106,6 +106,9 @@ async def confirm_verification(db: AsyncSession, user_id: uuid.UUID, code: str) 
         raise NotFoundError("School not found")
 
     await school_repository.mark_verified(db, user_id)
+    user = await user_repository.get_by_id(db, user_id)
+    if user is not None:
+        await user_repository.update_fields(db, user, is_verified=True)
 
     school_tag = await tag_repository.get_by_type_and_label(db, "school", school.name)
     if school_tag is None:
@@ -115,15 +118,46 @@ async def confirm_verification(db: AsyncSession, user_id: uuid.UUID, code: str) 
     await db.commit()
 
 
+def _is_currently_verified(verification) -> bool:
+    if verification.verified_at is None:
+        return False
+    if verification.expires_at is None:
+        return True
+    return verification.expires_at > datetime.now(timezone.utc)
+
+
 async def get_verification_status(db: AsyncSession, user_id: uuid.UUID) -> tuple[int | None, str | None, bool]:
     verification = await school_repository.get_verification(db, user_id)
     if verification is None:
         return None, None, False
 
+    verified = _is_currently_verified(verification)
     school = await school_repository.get_by_id(db, verification.school_id)
     if school is None:
-        return verification.school_id, None, verification.verified_at is not None
-    return school.id, school.name, verification.verified_at is not None
+        return verification.school_id, None, verified
+    return school.id, school.name, verified
+
+
+async def send_reverification_reminders(db: AsyncSession) -> int:
+    verifications = await school_repository.list_verifications_needing_reminder(db, timedelta(days=7))
+    for verification in verifications:
+        school_name = verification.school.name if verification.school is not None else "your school"
+        send_reverification_reminder_email(
+            to_email=verification.school_email,
+            school_name=school_name,
+            expires_at=verification.expires_at,
+        )
+        await school_repository.mark_reminder_sent(db, verification.user_id)
+    await db.commit()
+    return len(verifications)
+
+
+async def expire_lapsed_verifications(db: AsyncSession) -> int:
+    verifications = await school_repository.list_verifications_expired(db)
+    for verification in verifications:
+        await user_repository.update_fields(db, verification.user, is_verified=False)
+    await db.commit()
+    return len(verifications)
 
 
 async def enroll_in_course(db: AsyncSession, user_id: uuid.UUID, course_code: str) -> None:

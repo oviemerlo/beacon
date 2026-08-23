@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, union, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -46,8 +46,19 @@ async def get_message_by_id(db: AsyncSession, message_id: uuid.UUID | str) -> Me
     return await db.get(Message, message_id)
 
 
-async def add_message(db: AsyncSession, conversation_id: uuid.UUID, sender_id: uuid.UUID, body: str) -> Message:
-    message = Message(conversation_id=conversation_id, sender_id=sender_id, body=body)
+async def add_message(
+    db: AsyncSession,
+    conversation_id: uuid.UUID,
+    sender_id: uuid.UUID,
+    body: str,
+    mentioned_user_ids: list[uuid.UUID] | None = None,
+) -> Message:
+    message = Message(
+        conversation_id=conversation_id,
+        sender_id=sender_id,
+        body=body,
+        mentioned_user_ids=mentioned_user_ids or [],
+    )
     db.add(message)
     await db.flush()
     return message
@@ -133,3 +144,92 @@ async def latest_message_for_conversation(db: AsyncSession, conversation_id: uui
         select(Message).where(Message.conversation_id == conversation_id).order_by(Message.sent_at.desc()).limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def search_messages_for_user(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    query: str,
+    limit: int = 50,
+) -> list[tuple[Conversation, list[Message]]]:
+    tsquery = func.plainto_tsquery("english", query)
+    ranked_stmt = (
+        select(
+            Message.conversation_id,
+            func.max(Message.sent_at).label("latest_match_at"),
+        )
+        .join(Conversation, Conversation.id == Message.conversation_id)
+        .where(or_(Conversation.initiator_id == user_id, Conversation.recipient_id == user_id))
+        .where(Message.search_vector.op("@@")(tsquery))
+        .group_by(Message.conversation_id)
+        .order_by(func.max(Message.sent_at).desc())
+        .limit(limit)
+    )
+    ranked_rows = (await db.execute(ranked_stmt)).all()
+    if not ranked_rows:
+        return []
+
+    conversation_ids = [row.conversation_id for row in ranked_rows]
+    conversations_stmt = (
+        select(Conversation)
+        .where(Conversation.id.in_(conversation_ids))
+        .options(selectinload(Conversation.origin_broadcast).selectinload(Broadcast.sender))
+    )
+    conversations = {c.id: c for c in (await db.execute(conversations_stmt)).scalars().all()}
+
+    messages_stmt = (
+        select(Message)
+        .where(Message.conversation_id.in_(conversation_ids))
+        .where(Message.search_vector.op("@@")(tsquery))
+        .order_by(Message.sent_at.desc())
+    )
+    nested: dict[uuid.UUID, list[Message]] = {cid: [] for cid in conversation_ids}
+    for message in (await db.execute(messages_stmt)).scalars().all():
+        nested[message.conversation_id].append(message)
+
+    hits: list[tuple[Conversation, list[Message]]] = []
+    for conversation_id in conversation_ids:
+        conversation = conversations.get(conversation_id)
+        if conversation is None:
+            continue
+        hits.append((conversation, nested.get(conversation_id, [])))
+    return hits
+
+
+async def resolve_root_echo_id(db: AsyncSession, broadcast_id: uuid.UUID) -> uuid.UUID | None:
+    broadcast = await db.get(Broadcast, broadcast_id)
+    if broadcast is None:
+        return None
+    return broadcast.parent_broadcast_id or broadcast.id
+
+
+async def list_echo_thread_ids(db: AsyncSession, root_echo_id: uuid.UUID) -> list[uuid.UUID]:
+    reply_ids = (
+        await db.execute(select(Broadcast.id).where(Broadcast.parent_broadcast_id == root_echo_id))
+    ).scalars().all()
+    return [root_echo_id, *reply_ids]
+
+
+async def list_echo_participant_ids(db: AsyncSession, root_echo_id: uuid.UUID) -> list[uuid.UUID]:
+    thread_ids = await list_echo_thread_ids(db, root_echo_id)
+    echo_senders = select(Broadcast.sender_id).where(Broadcast.id.in_(thread_ids))
+    dm_initiators = select(Conversation.initiator_id).where(Conversation.origin_broadcast_id.in_(thread_ids))
+    dm_recipients = select(Conversation.recipient_id).where(Conversation.origin_broadcast_id.in_(thread_ids))
+    result = await db.execute(union(echo_senders, dm_initiators, dm_recipients))
+    return [row[0] for row in result.all()]
+
+
+async def list_mention_candidates(db: AsyncSession, root_echo_id: uuid.UUID, exclude_user_id: uuid.UUID):
+    from app.models.user import User
+
+    participant_ids = await list_echo_participant_ids(db, root_echo_id)
+    if not participant_ids:
+        return []
+    result = await db.execute(
+        select(User)
+        .where(User.id.in_(participant_ids))
+        .where(User.id != exclude_user_id)
+        .where(User.is_suspended.is_(False))
+        .order_by(User.username)
+    )
+    return list(result.scalars().all())

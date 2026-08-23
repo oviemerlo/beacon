@@ -21,7 +21,7 @@ export default function NewBroadcastPage() {
   const [content, setContent] = useState("");
   const [reach, setReach] = useState<ReachCategory>("regional");
   const [localRadiusIdx, setLocalRadiusIdx] = useState(3); // 1km default
-  const [regionalRadiusIdx, setRegionalRadiusIdx] = useState(1); // 8km default
+  const [regionalRadiusIdx, setRegionalRadiusIdx] = useState(1); // 25km default
   const [profileTags, setProfileTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [schoolVerified, setSchoolVerified] = useState(false);
@@ -62,7 +62,7 @@ export default function NewBroadcastPage() {
   }, []);
 
   async function publish() {
-    if (!content.trim()) return;
+    if (!content.trim() || selectedTagIds.length === 0) return;
     setPosting(true);
     setError(null);
     try {
@@ -151,7 +151,7 @@ export default function NewBroadcastPage() {
             </div>
           </div>
           {selectedTags.length === 0 ? (
-            <p className="text-parchment-500 text-sm">No tags selected — broadcast reaches everyone nearby.</p>
+            <p className="text-parchment-500 text-sm">Select at least one tag. Only people who share a selected tag will see this Echo — including Global.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {selectedTags.map((tag) => (
@@ -212,7 +212,7 @@ export default function NewBroadcastPage() {
         )}
 
         {error && <p className="text-rust-400 text-sm mb-4">{error}</p>}
-        <button onClick={publish} disabled={posting || !content.trim()} className="btn-primary w-full mt-2">
+        <button onClick={publish} disabled={posting || !content.trim() || selectedTagIds.length === 0} className="btn-primary w-full mt-2">
           {posting ? "Posting…" : "Send an Echo"}
         </button>
       </main>

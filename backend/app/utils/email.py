@@ -12,3 +12,17 @@ def send_otp_email(to_email: str, code: str) -> None:
 
     # TODO: Wire real email delivery provider (SendGrid/Postmark/SES) before production use.
     raise NotImplementedError("Email delivery is not configured for this environment")
+
+
+def send_reverification_reminder_email(to_email: str, school_name: str, expires_at) -> None:
+    if settings.ENVIRONMENT == "development":
+        logger.info(
+            "School reverification reminder to %s school=%s expires_at=%s",
+            to_email,
+            school_name,
+            expires_at,
+        )
+        return
+
+    # TODO: Wire real email delivery provider (SendGrid/Postmark/SES) before production use.
+    raise NotImplementedError("Email delivery is not configured for this environment")

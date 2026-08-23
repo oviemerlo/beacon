@@ -4,7 +4,7 @@ Seed schools from the Hipo university-domains dataset.
 Run from backend/: python -m scripts.seed_schools
 
 Source (checked into the repo):
-  university-domains-list/world_universities_and_domains.json
+  backend/world_universities_and_domains.json
 
 Each JSON object maps to School(name, country, email_domains). Duplicate
 (name, country) rows are merged so their domains are unioned. Re-running
@@ -24,8 +24,8 @@ from sqlalchemy.dialects.postgresql import insert
 from app.db.session import AsyncSessionLocal
 from app.models.school import School
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SOURCE = REPO_ROOT / "university-domains-list" / "world_universities_and_domains.json"
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_SOURCE = BACKEND_ROOT / "world_universities_and_domains.json"
 CHUNK_SIZE = 500
 
 

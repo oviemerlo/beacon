@@ -17,6 +17,7 @@ export function AppNav() {
   const pathname = usePathname();
   const [feedUnread, setFeedUnread] = useState(0);
   const [messageUnread, setMessageUnread] = useState(0);
+  const [mentionUnread, setMentionUnread] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -30,10 +31,12 @@ export function AppNav() {
         if (!active) return;
         setFeedUnread(feed.count ?? 0);
         setMessageUnread(messages.count ?? 0);
+        setMentionUnread(messages.mention_count ?? 0);
       } catch {
         if (!active) return;
         setFeedUnread(0);
         setMessageUnread(0);
+        setMentionUnread(0);
       }
     };
 
@@ -72,9 +75,9 @@ export function AppNav() {
                     {feedUnread > 99 ? "99+" : feedUnread}
                   </span>
                 )}
-                {item.href === "/conversations" && messageUnread > 0 && (
-                  <span className="inline-flex min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full bg-rust-500 text-dusk-950 text-[10px] font-bold">
-                    {messageUnread > 99 ? "99+" : messageUnread}
+                {item.href === "/conversations" && (messageUnread > 0 || mentionUnread > 0) && (
+                  <span className={`inline-flex min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full text-dusk-950 text-[10px] font-bold ${mentionUnread > 0 ? "bg-signal-500" : "bg-rust-500"}`}>
+                    {mentionUnread > 0 ? "@" : messageUnread > 99 ? "99+" : messageUnread}
                   </span>
                 )}
               </Link>

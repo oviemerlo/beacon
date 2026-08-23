@@ -21,7 +21,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const [content, setContent] = useState("");
   const [reach, setReach] = useState<ReachCategory>("regional");
   const [localRadiusIdx, setLocalRadiusIdx] = useState(3);
-  const [regionalRadiusIdx, setRegionalRadiusIdx] = useState(1);
+  const [regionalRadiusIdx, setRegionalRadiusIdx] = useState(1); // 25km default
   const [profileTags, setProfileTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [schoolVerified, setSchoolVerified] = useState(false);
@@ -62,7 +62,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   }, []);
 
   async function publish() {
-    if (!content.trim()) return;
+    if (!content.trim() || selectedTagIds.length === 0) return;
     setPosting(true);
     setError(null);
     try {
@@ -167,7 +167,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         </View>
       </View>
       {selectedTags.length === 0 ? (
-        <Text style={styles.emptyText}>No tags selected — broadcast reaches everyone nearby.</Text>
+        <Text style={styles.emptyText}>Select at least one tag. Only people who share a selected tag will see this Echo — including Global.</Text>
       ) : (
         <View style={styles.tagPillRow}>
           {selectedTags.map((tag) => (
@@ -226,7 +226,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
 
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <Pressable style={styles.buttonPrimary} onPress={publish} disabled={posting || !content.trim()}>
+      <Pressable style={styles.buttonPrimary} onPress={publish} disabled={posting || !content.trim() || selectedTagIds.length === 0}>
         {posting ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonPrimaryText}>Send an Echo</Text>}
       </Pressable>
     </ScrollView>

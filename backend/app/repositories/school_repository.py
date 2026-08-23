@@ -1,12 +1,16 @@
 """Data access for School and SchoolVerification."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import contains_eager, joinedload
 
 from app.models.school import School, SchoolVerification, UserCourseEnrollment
+from app.models.user import User
+
+REVERIFICATION_PERIOD = timedelta(days=90)
 
 
 async def search_by_name(db: AsyncSession, query: str, limit: int = 10) -> list[School]:
@@ -57,9 +61,49 @@ async def mark_verified(db: AsyncSession, user_id: uuid.UUID) -> SchoolVerificat
     verification = await db.get(SchoolVerification, user_id)
     if verification is None:
         return None
-    verification.verified_at = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    verification.verified_at = now
+    verification.expires_at = now + REVERIFICATION_PERIOD
+    verification.reverification_reminder_sent_at = None
     await db.flush()
     return verification
+
+
+async def list_verifications_needing_reminder(
+    db: AsyncSession, remind_before: timedelta
+) -> list[SchoolVerification]:
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(SchoolVerification)
+        .options(joinedload(SchoolVerification.user), joinedload(SchoolVerification.school))
+        .where(SchoolVerification.verified_at.is_not(None))
+        .where(SchoolVerification.expires_at.is_not(None))
+        .where(SchoolVerification.expires_at >= now)
+        .where(SchoolVerification.expires_at <= now + remind_before)
+        .where(SchoolVerification.reverification_reminder_sent_at.is_(None))
+    )
+    return list(result.unique().scalars().all())
+
+
+async def list_verifications_expired(db: AsyncSession) -> list[SchoolVerification]:
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(SchoolVerification)
+        .join(User, User.id == SchoolVerification.user_id)
+        .options(contains_eager(SchoolVerification.user))
+        .where(SchoolVerification.expires_at.is_not(None))
+        .where(SchoolVerification.expires_at <= now)
+        .where(User.is_verified.is_(True))
+    )
+    return list(result.unique().scalars().all())
+
+
+async def mark_reminder_sent(db: AsyncSession, user_id: uuid.UUID) -> None:
+    verification = await db.get(SchoolVerification, user_id)
+    if verification is None:
+        return
+    verification.reverification_reminder_sent_at = datetime.now(timezone.utc)
+    await db.flush()
 
 
 async def increment_otp_attempts(db: AsyncSession, user_id: uuid.UUID) -> int:

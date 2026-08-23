@@ -22,27 +22,42 @@ def _normalize_course_code(course_code: str) -> str:
 
 
 async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: BroadcastCreateIn) -> Broadcast:
+    tag_ids = list(payload.tag_ids)
+    is_global = payload.is_global
+    radius_meters = payload.radius_meters
+    tag_match_mode = payload.tag_match_mode
+    inherited_school_id: int | None = None
+    inherited_course_code: str | None = None
     if payload.reply_to_broadcast_id is not None:
         parent_broadcast = await broadcast_repository.get_by_id(db, payload.reply_to_broadcast_id)
         if parent_broadcast is None or parent_broadcast.deleted_at is not None:
             raise NotFoundError("Parent broadcast not found")
+        if not tag_ids:
+            tag_ids = await broadcast_repository.list_tag_ids(db, parent_broadcast.id)
+        # Stay in the same delivery envelope as the Echo being answered.
+        is_global = parent_broadcast.is_global
+        radius_meters = parent_broadcast.radius_meters
+        tag_match_mode = parent_broadcast.tag_match_mode
+        inherited_school_id = parent_broadcast.school_id
+        inherited_course_code = parent_broadcast.course_code
+    elif not tag_ids:
+        raise ValidationError("At least one tag is required")
 
-    if payload.is_global:
-        if payload.radius_meters is not None:
+    if is_global:
+        if payload.reply_to_broadcast_id is None and payload.radius_meters is not None:
             raise ValidationError("radius_meters must be omitted when is_global is true")
         radius_meters = None
     else:
-        if payload.radius_meters is None:
+        if radius_meters is None:
             raise ValidationError("radius_meters is required when is_global is false")
-        if payload.radius_meters < settings.MIN_RADIUS_METERS:
+        if radius_meters < settings.MIN_RADIUS_METERS:
             raise ValidationError(f"radius_meters must be at least {settings.MIN_RADIUS_METERS}")
-        if payload.radius_meters > settings.MAX_BROADCAST_RADIUS_METERS:
+        if radius_meters > settings.MAX_BROADCAST_RADIUS_METERS:
             raise ValidationError(f"radius_meters cannot exceed {settings.MAX_BROADCAST_RADIUS_METERS}")
-        radius_meters = payload.radius_meters
 
-    course_code: str | None = None
-    school_id: int | None = None
-    if payload.course_code is not None:
+    course_code: str | None = inherited_course_code
+    school_id: int | None = inherited_school_id
+    if payload.course_code is not None and payload.reply_to_broadcast_id is None:
         verification = await school_repository.get_verification(db, sender_id)
         if verification is None or verification.verified_at is None:
             raise ValidationError("Verify your school before targeting a course")
@@ -64,11 +79,11 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
         sender_id=sender_id,
         content=payload.content,
         origin_point=f"SRID=4326;POINT({payload.longitude} {payload.latitude})",
-        is_global=payload.is_global,
+        is_global=is_global,
         radius_meters=radius_meters,
-        tag_match_mode=payload.tag_match_mode,
+        tag_match_mode=tag_match_mode,
         expires_at=(datetime.now(timezone.utc) + timedelta(days=payload.expires_in_days)) if payload.expires_in_days else None,
-        tag_ids=payload.tag_ids,
+        tag_ids=tag_ids,
         parent_broadcast_id=payload.reply_to_broadcast_id,
         school_id=school_id,
         course_code=course_code,

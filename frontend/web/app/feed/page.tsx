@@ -10,7 +10,7 @@ import { reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
 import { formatBroadcastSentAt } from "@/helpers/time";
 import { usePolling } from "@/helpers/usePolling";
-import type { FeedBroadcast, UserProfile } from "@/types/api";
+import type { FeedBroadcast, FeedSearchHit, Tag, UserProfile } from "@/types/api";
 
 export default function FeedPage() {
   const router = useRouter();
@@ -18,8 +18,17 @@ export default function FeedPage() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [historyTags, setHistoryTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [searchHits, setSearchHits] = useState<FeedSearchHit[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const isSearching = debouncedQuery.trim().length > 0;
 
   const loadFeed = useCallback(async ({ silent }: { silent: boolean }) => {
+    if (debouncedQuery.trim()) return;
     if (!silent) {
       setLoading(true);
       setError(null);
@@ -33,11 +42,45 @@ export default function FeedPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [debouncedQuery]);
 
   useEffect(() => {
     clientFetch<UserProfile>("/users/me").then(setUser).catch(() => setUser(null));
+    clientFetch<Tag[]>("/feed/search-tags").then(setHistoryTags).catch(() => setHistoryTags([]));
   }, []);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!isSearching) {
+      setSearchHits([]);
+      setSearchError(null);
+      return;
+    }
+    let cancelled = false;
+    const params = new URLSearchParams({ q: debouncedQuery.trim() });
+    if (selectedTagIds.length > 0) params.set("tags", selectedTagIds.join(","));
+    setSearching(true);
+    setSearchError(null);
+    clientFetch<FeedSearchHit[]>(`/feed/search?${params.toString()}`)
+      .then((hits) => {
+        if (!cancelled) setSearchHits(hits);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSearchHits([]);
+        setSearchError("Couldn't search your feed history.");
+      })
+      .finally(() => {
+        if (!cancelled) setSearching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, isSearching, selectedTagIds]);
 
   useEffect(() => {
     const markSeen = async () => {
@@ -69,24 +112,125 @@ export default function FeedPage() {
           }}
         />
 
-        {loading && <p className="text-parchment-500 font-mono text-sm">Loading nearby broadcasts…</p>}
-        {error && <p className="text-rust-400 text-sm">{error}</p>}
+        <div className="mb-5">
+          <input
+            className="input-field"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search your feed history"
+            aria-label="Search your feed history"
+          />
+          {historyTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {historyTags.map((tag) => {
+                const selected = selectedTagIds.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() =>
+                      setSelectedTagIds((ids) => (ids.includes(tag.id) ? ids.filter((id) => id !== tag.id) : [...ids, tag.id]))
+                    }
+                    className={selected ? "tag-pill tag-pill-active" : "tag-pill"}
+                  >
+                    {tag.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {selectedTagIds.length > 0 && !isSearching && (
+            <p className="text-parchment-500 text-xs mt-2">Enter a keyword to search. Tags only narrow results.</p>
+          )}
+        </div>
 
-        {!loading && !error && broadcasts.length === 0 && <EmptyState />}
+        {isSearching ? (
+          <>
+            {searching && <p className="text-parchment-500 font-mono text-sm">Searching…</p>}
+            {searchError && <p className="text-rust-400 text-sm">{searchError}</p>}
+            {!searching && !searchError && searchHits.length === 0 && (
+              <div className="card text-center py-10">
+                <p className="font-medium">No matches in your feed history.</p>
+                <p className="text-parchment-500 text-sm mt-1">Try a different keyword or clear a tag filter.</p>
+              </div>
+            )}
+            <div className="flex flex-col gap-3">
+              {searchHits.map((hit) => (
+                <SearchHitCard key={hit.id} hit={hit} onOpenConversation={(id) => router.push(`/conversations/${id}`)} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            {loading && <p className="text-parchment-500 font-mono text-sm">Loading nearby broadcasts…</p>}
+            {error && <p className="text-rust-400 text-sm">{error}</p>}
+            {!loading && !error && broadcasts.length === 0 && <EmptyState />}
+            <div className="flex flex-col gap-3">
+              {broadcasts.map((b) => (
+                <BroadcastCard
+                  key={b.id}
+                  broadcast={b}
+                  currentUserId={user?.id ?? null}
+                  onOpenConversation={(id) => router.push(`/conversations/${id}`)}
+                  onBlocked={(senderId) => setBroadcasts((rows) => rows.filter((row) => row.sender_id !== senderId))}
+                  onRemoved={(broadcastId) => setBroadcasts((rows) => rows.filter((row) => row.id !== broadcastId))}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
 
-        <div className="flex flex-col gap-3">
-          {broadcasts.map((b) => (
-            <BroadcastCard
-              key={b.id}
-              broadcast={b}
-              currentUserId={user?.id ?? null}
-              onOpenConversation={(id) => router.push(`/conversations/${id}`)}
-              onBlocked={(senderId) => setBroadcasts((rows) => rows.filter((row) => row.sender_id !== senderId))}
-              onRemoved={(broadcastId) => setBroadcasts((rows) => rows.filter((row) => row.id !== broadcastId))}
-            />
+function SearchHitCard({
+  hit,
+  onOpenConversation,
+}: {
+  hit: FeedSearchHit;
+  onOpenConversation: (conversationId: string) => void;
+}) {
+  const matchLabel = hit.match_type === "both" ? "Echo + replies" : hit.match_type === "echo" ? "Echo" : "Reply";
+  return (
+    <div className="card">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex items-center flex-wrap gap-2 min-w-0">
+          <p className="text-parchment-500 text-sm">{hit.sender_display_name}</p>
+          {hit.tags.map((tag) => (
+            <span key={tag.id} className="tag-pill">
+              {tag.label}
+            </span>
           ))}
         </div>
-      </main>
+        <span className="feed-card-meta">{matchLabel}</span>
+      </div>
+      <Link href={`/broadcasts/${hit.id}`} className="block">
+        <p className="text-parchment-100">{hit.body}</p>
+      </Link>
+      <p className="text-parchment-500 text-xs font-mono mt-2">{formatBroadcastSentAt(hit.created_at)}</p>
+      {hit.matches.length > 0 && (
+        <div className="mt-3 ml-3 border-l border-dusk-600 pl-3 flex flex-col gap-3">
+          {hit.matches.map((match) => (
+            <div key={match.id}>
+              <p className="text-parchment-300 text-sm">{match.body}</p>
+              <p className="text-parchment-500 text-xs font-mono mt-1">
+                {formatBroadcastSentAt(match.created_at)}
+                {match.source === "message" ? " · private reply" : " · feed reply"}
+              </p>
+              {match.conversation_id ? (
+                <button type="button" className="feed-card-action mt-1.5" onClick={() => onOpenConversation(match.conversation_id!)}>
+                  Open conversation
+                </button>
+              ) : (
+                <Link href={`/broadcasts/${hit.id}`} className="feed-card-action mt-1.5">
+                  View thread
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -227,9 +371,12 @@ function BroadcastCard({
         {typeof broadcast.shared_tag_count === "number" && broadcast.shared_tag_count > 0 && (
           <span className="feed-card-meta tag-pill-active">{broadcast.shared_tag_count} shared tag{broadcast.shared_tag_count > 1 ? "s" : ""}</span>
         )}
-        <span className="feed-card-meta tag-pill-active">
+        <Link
+          href={`/broadcasts/${broadcast.id}`}
+          className="text-parchment-500 hover:text-parchment-100"
+        >
           {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
-        </span>
+        </Link>
       </div>
       <div className="flex flex-wrap gap-1.5 mt-3">
         {!isOwn && (

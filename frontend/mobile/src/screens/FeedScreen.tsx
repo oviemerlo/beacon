@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Alert } from "react-native";
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Alert, TextInput, ScrollView } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
 import { reachBadgeLabel } from "../helpers/broadcastReach";
 import { pickReasonAndSubmitReport } from "../helpers/reportActions";
@@ -8,7 +9,7 @@ import { usePolling } from "../helpers/usePolling";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
 import { LocationDriftBanner } from "../components/LocationDriftBanner";
-import type { FeedBroadcast, UserProfile } from "../types/api";
+import type { FeedBroadcast, FeedSearchHit, Tag, UserProfile } from "../types/api";
 
 export function FeedScreen({
   onOpenBroadcast,
@@ -21,28 +22,88 @@ export function FeedScreen({
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [historyTags, setHistoryTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [searchHits, setSearchHits] = useState<FeedSearchHit[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const isSearching = debouncedQuery.trim().length > 0;
 
   const load = useCallback(async ({ silent }: { silent: boolean }) => {
+    if (debouncedQuery.trim()) return;
     if (!silent) setLoading(true);
-    const data = await apiFetch<FeedBroadcast[]>("/feed/for-you");
-    setBroadcasts(data);
     try {
+      const data = await apiFetch<FeedBroadcast[]>("/feed/for-you");
+      setBroadcasts(data);
       await apiFetch("/feed/mark-seen", { method: "POST" });
     } catch {
       // Keep feed rendering stable on network failures.
     }
     if (!silent) setLoading(false);
-  }, []);
+  }, [debouncedQuery]);
 
   usePolling(load, [load], 5000);
 
+  useFocusEffect(
+    useCallback(() => {
+      void load({ silent: true });
+    }, [load])
+  );
+
   useEffect(() => {
     apiFetch<UserProfile>("/users/me").then(setUser).catch(() => setUser(null));
+    apiFetch<Tag[]>("/feed/search-tags").then(setHistoryTags).catch(() => setHistoryTags([]));
   }, []);
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!isSearching) {
+      setSearchHits([]);
+      setSearchError(null);
+      return;
+    }
+    let cancelled = false;
+    const params = new URLSearchParams({ q: debouncedQuery.trim() });
+    if (selectedTagIds.length > 0) params.set("tags", selectedTagIds.join(","));
+    setSearching(true);
+    setSearchError(null);
+    apiFetch<FeedSearchHit[]>(`/feed/search?${params.toString()}`)
+      .then((hits) => {
+        if (!cancelled) setSearchHits(hits);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSearchHits([]);
+        setSearchError("Couldn't search your feed history.");
+      })
+      .finally(() => {
+        if (!cancelled) setSearching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, isSearching, selectedTagIds]);
 
   async function onRefresh() {
     setRefreshing(true);
-    await load({ silent: true });
+    if (isSearching) {
+      try {
+        const params = new URLSearchParams({ q: debouncedQuery.trim() });
+        if (selectedTagIds.length > 0) params.set("tags", selectedTagIds.join(","));
+        setSearchHits(await apiFetch<FeedSearchHit[]>(`/feed/search?${params.toString()}`));
+        setSearchError(null);
+      } catch {
+        setSearchError("Couldn't search your feed history.");
+      }
+    } else {
+      await load({ silent: true });
+    }
     setRefreshing(false);
   }
 
@@ -76,8 +137,65 @@ export function FeedScreen({
         }}
       />
 
-      {loading ? (
+      <View style={styles.searchWrap}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search your feed history"
+          placeholderTextColor={colors.parchment500}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
+        {historyTags.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {historyTags.map((tag) => {
+              const selected = selectedTagIds.includes(tag.id);
+              return (
+                <Pressable
+                  key={tag.id}
+                  onPress={() =>
+                    setSelectedTagIds((ids) => (ids.includes(tag.id) ? ids.filter((id) => id !== tag.id) : [...ids, tag.id]))
+                  }
+                  style={[styles.filterChip, selected && styles.filterChipActive]}
+                >
+                  <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>{tag.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+        {selectedTagIds.length > 0 && !isSearching && (
+          <Text style={styles.searchHint}>Enter a keyword to search. Tags only narrow results.</Text>
+        )}
+      </View>
+
+      {loading && !isSearching ? (
         <ActivityIndicator color={colors.signal500} style={{ marginTop: 24 }} />
+      ) : isSearching ? (
+        <FlatList
+          data={searchHits}
+          keyExtractor={(hit) => hit.id}
+          removeClippedSubviews={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 16, gap: 12 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.signal500} />}
+          ListHeaderComponent={
+            searching ? <Text style={styles.searchStatus}>Searching…</Text> : searchError ? <Text style={styles.searchError}>{searchError}</Text> : null
+          }
+          ListEmptyComponent={
+            searching ? null : (
+              <Card>
+                <Text style={styles.emptyTitle}>No matches in your feed history.</Text>
+                <Text style={styles.emptySubtitle}>Try a different keyword or clear a tag filter.</Text>
+              </Card>
+            )
+          }
+          renderItem={({ item }) => (
+            <SearchHitCard hit={item} onOpenBroadcast={onOpenBroadcast} onOpenConversation={onOpenConversation} />
+          )}
+        />
       ) : (
         <FlatList
           data={broadcasts}
@@ -106,6 +224,54 @@ export function FeedScreen({
         />
       )}
     </View>
+  );
+}
+
+function SearchHitCard({
+  hit,
+  onOpenBroadcast,
+  onOpenConversation,
+}: {
+  hit: FeedSearchHit;
+  onOpenBroadcast: (id: string) => void;
+  onOpenConversation: (conversationId: string) => void;
+}) {
+  const matchLabel = hit.match_type === "both" ? "Echo + replies" : hit.match_type === "echo" ? "Echo" : "Reply";
+  return (
+    <Card>
+      <View style={styles.headingRow}>
+        <View style={styles.headingCopy}>
+          <Text style={styles.senderName}>{hit.sender_display_name}</Text>
+          {hit.tags.map((tag) => (
+            <View key={tag.id} style={styles.broadcastTagPill}>
+              <Text style={styles.broadcastTagPillText}>{tag.label}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={styles.tagPill}>
+          <Text style={styles.tagPillText}>{matchLabel}</Text>
+        </View>
+      </View>
+      <Pressable onPress={() => onOpenBroadcast(hit.id)}>
+        <Text style={styles.cardText}>{hit.body}</Text>
+      </Pressable>
+      <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(hit.created_at)}</Text>
+      {hit.matches.map((match) => (
+        <View key={match.id} style={styles.nestedMatch}>
+          <Text style={styles.nestedMatchBody}>{match.body}</Text>
+          <Text style={styles.sentAtLabel}>
+            {formatBroadcastSentAt(match.created_at)}
+            {match.source === "message" ? " · private reply" : " · feed reply"}
+          </Text>
+          <Pressable
+            onPress={() => (match.conversation_id ? onOpenConversation(match.conversation_id) : onOpenBroadcast(hit.id))}
+            style={styles.replyPill}
+          >
+            <Text style={styles.replyPillText}>{match.conversation_id ? "Open conversation" : "View thread"}</Text>
+          </Pressable>
+        </View>
+      ))}
+    </Card>
   );
 }
 
@@ -257,11 +423,15 @@ function BroadcastCard({
             </Text>
           </View>
         )}
-        <View style={styles.tagPill}>
-          <Text style={styles.tagPillText}>
+        <Pressable
+          onPress={() => onOpenBroadcast(broadcast.id)}
+          accessibilityRole="link"
+          accessibilityLabel={`View thread, ${broadcast.reply_count ?? 0} replies`}
+        >
+          <Text style={styles.replyCountText}>
             {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
           </Text>
-        </View>
+        </Pressable>
       </View>
       <View style={styles.replyRow}>
         {!isOwn && (
@@ -284,6 +454,33 @@ function BroadcastCard({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950 },
+  searchWrap: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 8 },
+  searchInput: {
+    backgroundColor: colors.dusk800,
+    borderColor: colors.dusk600,
+    borderWidth: 1,
+    borderRadius: radii.beacon,
+    color: colors.parchment100,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  chipRow: { gap: 8, paddingVertical: 2 },
+  filterChip: {
+    borderColor: colors.dusk600,
+    borderWidth: 1,
+    backgroundColor: colors.dusk800,
+    borderRadius: radii.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  filterChipActive: { borderColor: colors.signal500, backgroundColor: `${colors.signal500}1A` },
+  filterChipText: { color: colors.parchment300, fontSize: 11, fontFamily: "monospace" },
+  filterChipTextActive: { color: colors.signal400 },
+  searchHint: { color: colors.parchment500, fontSize: 11 },
+  searchStatus: { color: colors.parchment500, fontSize: 13, fontFamily: "monospace", marginBottom: 8 },
+  searchError: { color: colors.rust400, fontSize: 13, marginBottom: 8 },
+  nestedMatch: { marginTop: 12, marginLeft: 10, paddingLeft: 10, borderLeftWidth: 1, borderLeftColor: colors.dusk600, gap: 6 },
+  nestedMatchBody: { color: colors.parchment300, fontSize: 14 },
   cardText: { color: colors.parchment100, fontSize: 15, marginTop: 6 },
   headingRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
   headingCopy: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
@@ -332,6 +529,7 @@ const styles = StyleSheet.create({
   replyPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
   tagPill: { borderColor: colors.signal500, borderWidth: 1, backgroundColor: `${colors.signal500}1A`, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
   tagPillText: { color: colors.signal400, fontSize: 10, fontFamily: "monospace" },
+  replyCountText: { color: colors.parchment500, fontSize: 11, fontFamily: "monospace" },
   emptyTitle: { color: colors.parchment100, fontWeight: "600", textAlign: "center" },
   emptySubtitle: { color: colors.parchment500, fontSize: 13, textAlign: "center", marginTop: 6 },
 });

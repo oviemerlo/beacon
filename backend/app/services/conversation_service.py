@@ -14,8 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.broadcast import Broadcast
 from app.models.conversation import Conversation, Message
-from app.repositories import block_repository, broadcast_repository, conversation_repository, user_repository
-from app.services.exceptions import ForbiddenError, NotFoundError
+from app.repositories import (
+    block_repository,
+    broadcast_repository,
+    conversation_repository,
+    notification_repository,
+    user_repository,
+)
+from app.services import mention_service
+from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 
 
 async def _assert_messaging_allowed(db: AsyncSession, user_a: uuid.UUID, user_b: uuid.UUID) -> None:
@@ -45,7 +52,12 @@ async def start_conversation(db: AsyncSession, initiator_id: uuid.UUID, broadcas
     if conversation is None:
         conversation = await conversation_repository.create(db, initiator_id, broadcast.sender_id, broadcast.id)
 
-    await conversation_repository.add_message(db, conversation.id, initiator_id, first_message)
+    root_echo_id = broadcast.parent_broadcast_id or broadcast.id
+    mentioned_user_ids = await mention_service.validate_mentions_for_echo(db, first_message, root_echo_id, initiator_id)
+    message = await conversation_repository.add_message(
+        db, conversation.id, initiator_id, first_message, mentioned_user_ids
+    )
+    await _notify_mentions(db, message)
     await db.commit()
     await db.refresh(conversation)
     return conversation
@@ -62,6 +74,7 @@ async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: s
     conversation = await _assert_participant(db, user_id, conversation_id)
     messages = await conversation_repository.list_messages(db, conversation_id)
     await conversation_repository.mark_read_for_user_in_conversation(db, user_id, conversation.id)
+    await notification_repository.mark_read_for_conversation(db, user_id, conversation.id)
     await db.commit()
     return messages
 
@@ -70,14 +83,88 @@ async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: st
     conversation = await _assert_participant(db, user_id, conversation_id)
     other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
     await _assert_messaging_allowed(db, user_id, other_user_id)
-    message = await conversation_repository.add_message(db, conversation_id, user_id, body)
+    root_echo_id = await conversation_repository.resolve_root_echo_id(db, conversation.origin_broadcast_id)
+    if root_echo_id is None:
+        raise NotFoundError("Broadcast not found")
+    mentioned_user_ids = await mention_service.validate_mentions_for_echo(db, body, root_echo_id, user_id)
+    message = await conversation_repository.add_message(db, conversation_id, user_id, body, mentioned_user_ids)
+    await _notify_mentions(db, message)
     await db.commit()
     await db.refresh(message)
     return message
 
 
+async def _notify_mentions(db: AsyncSession, message: Message) -> None:
+    for user_id in message.mentioned_user_ids:
+        await notification_repository.create_mentioned(
+            db,
+            user_id=user_id,
+            message_id=message.id,
+            conversation_id=message.conversation_id,
+            actor_id=message.sender_id,
+        )
+
+
+async def list_mention_candidates(db: AsyncSession, user_id: uuid.UUID, conversation_id: str, query: str | None = None):
+    conversation = await _assert_participant(db, user_id, conversation_id)
+    other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
+    root_echo_id = await conversation_repository.resolve_root_echo_id(db, conversation.origin_broadcast_id)
+    if root_echo_id is None:
+        users = []
+    else:
+        users = await conversation_repository.list_mention_candidates(db, root_echo_id, user_id)
+    seen = {user.id for user in users}
+    if other_user_id != user_id and other_user_id not in seen:
+        other = await user_repository.get_by_id(db, other_user_id)
+        if other is not None and not other.is_suspended:
+            users.append(other)
+    prefix = (query or "").lstrip("@").strip().lower()
+    if prefix:
+        users = [user for user in users if user.username.lower().startswith(prefix) or user.display_name.lower().startswith(prefix)]
+    return [
+        {
+            "id": str(user.id),
+            "username": user.username,
+            "display_name": user.display_name,
+            "echo_id": str(root_echo_id) if root_echo_id is not None else None,
+        }
+        for user in users
+    ]
+
+
+async def list_unread_mentions(db: AsyncSession, user_id: uuid.UUID) -> list[dict]:
+    rows = await notification_repository.list_unread_mentions(db, user_id)
+    items: list[dict] = []
+    for notification, message, conversation, actor in rows:
+        origin_preview = (conversation.origin_broadcast.content if conversation.origin_broadcast is not None else "").strip()
+        items.append(
+            {
+                "id": str(notification.id),
+                "kind": notification.kind,
+                "conversation_id": str(notification.conversation_id),
+                "message_id": str(notification.message_id),
+                "actor_id": str(actor.id),
+                "actor_username": actor.username,
+                "actor_display_name": actor.display_name,
+                "body": message.body,
+                "origin_broadcast_preview": origin_preview[:160] if origin_preview else "Original broadcast unavailable.",
+                "created_at": notification.created_at,
+                "is_own_conversation": user_id in (conversation.initiator_id, conversation.recipient_id),
+            }
+        )
+    return items
+
+
+async def mark_mention_read(db: AsyncSession, user_id: uuid.UUID, notification_id: str) -> None:
+    notification = await notification_repository.mark_read(db, user_id, uuid.UUID(notification_id))
+    if notification is None:
+        raise NotFoundError("Notification not found")
+    await db.commit()
+
+
 async def list_conversations_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[dict]:
     conversations = await conversation_repository.list_for_user(db, user_id)
+    mention_conversation_ids = await notification_repository.unread_mention_conversation_ids(db, user_id)
     items: list[dict] = []
     for conversation in conversations:
         other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
@@ -103,14 +190,56 @@ async def list_conversations_for_user(db: AsyncSession, user_id: uuid.UUID) -> l
                 "last_message": latest.body if latest else "",
                 "last_message_at": latest.sent_at if latest else conversation.created_at,
                 "unread_count": await conversation_repository.count_unread_in_conversation(db, user_id, conversation.id),
+                "has_mention": conversation.id in mention_conversation_ids,
             }
         )
     items.sort(key=lambda item: item["last_message_at"], reverse=True)
     return items
 
 
-async def get_unread_count(db: AsyncSession, user_id: uuid.UUID) -> int:
-    return await conversation_repository.count_unread_for_user(db, user_id)
+async def search_messages_for_user(db: AsyncSession, user_id: uuid.UUID, query: str) -> list[dict]:
+    keyword = query.strip()
+    if not keyword:
+        raise ValidationError("A keyword is required")
+    hits = await conversation_repository.search_messages_for_user(db, user_id, keyword)
+    items: list[dict] = []
+    for conversation, matches in hits:
+        other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
+        other_user = await user_repository.get_by_id(db, other_user_id)
+        origin_preview = (conversation.origin_broadcast.content if conversation.origin_broadcast is not None else "").strip()
+        items.append(
+            {
+                "id": str(conversation.id),
+                "origin_broadcast_id": str(conversation.origin_broadcast_id),
+                "origin_broadcast_preview": origin_preview[:160] if origin_preview else "Original broadcast unavailable.",
+                "origin_broadcast_sender_display_name": (
+                    conversation.origin_broadcast.sender.display_name
+                    if conversation.origin_broadcast is not None and conversation.origin_broadcast.sender is not None
+                    else "Unknown"
+                ),
+                "is_reply_to_you": conversation.recipient_id == user_id,
+                "other_participant": {
+                    "id": str(other_user_id),
+                    "display_name": other_user.display_name if other_user else "Unknown",
+                },
+                "matches": [
+                    {
+                        "id": str(message.id),
+                        "body": message.body,
+                        "created_at": message.sent_at,
+                    }
+                    for message in matches
+                ],
+            }
+        )
+    return items
+
+
+async def get_unread_count(db: AsyncSession, user_id: uuid.UUID) -> dict:
+    return {
+        "count": await conversation_repository.count_unread_for_user(db, user_id),
+        "mention_count": await notification_repository.count_unread_mentions(db, user_id),
+    }
 
 
 async def mark_all_seen(db: AsyncSession, user_id: uuid.UUID) -> None:

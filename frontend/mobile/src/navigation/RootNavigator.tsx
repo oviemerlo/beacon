@@ -97,6 +97,7 @@ function ProfileStackNavigator({ onSignOut }: { onSignOut: () => void }) {
 function AppTabs({ onSignOut }: { onSignOut: () => void }) {
   const [feedUnread, setFeedUnread] = useState(0);
   const [messageUnread, setMessageUnread] = useState(0);
+  const [mentionUnread, setMentionUnread] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -110,10 +111,12 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
         if (!active) return;
         setFeedUnread(feed.count ?? 0);
         setMessageUnread(messages.count ?? 0);
+        setMentionUnread(messages.mention_count ?? 0);
       } catch {
         if (!active) return;
         setFeedUnread(0);
         setMessageUnread(0);
+        setMentionUnread(0);
       }
     };
 
@@ -144,7 +147,7 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
       <Tabs.Screen
         name="Messages"
         component={ConversationsStackNavigator}
-        options={{ tabBarBadge: messageUnread > 0 ? messageUnread : undefined }}
+        options={{ tabBarBadge: mentionUnread > 0 ? "@" : messageUnread > 0 ? messageUnread : undefined }}
       />
       <Tabs.Screen name="Profile">{() => <ProfileStackNavigator onSignOut={onSignOut} />}</Tabs.Screen>
     </Tabs.Navigator>

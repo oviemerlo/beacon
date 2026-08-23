@@ -2,8 +2,8 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Computed, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -38,6 +38,16 @@ class Message(Base):
     body: Mapped[str] = mapped_column(String(2000), nullable=False)
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    mentioned_user_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)),
+        nullable=False,
+        server_default="{}",
+        default=list,
+    )
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', coalesce(body, ''))", persisted=True),
+    )
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 

@@ -148,6 +148,7 @@ class MessageOut(BaseModel):
     body: str
     sent_at: datetime
     read_at: datetime | None
+    mentioned_user_ids: list[uuid.UUID] = []
 
     class Config:
         from_attributes = True
@@ -235,3 +236,38 @@ class SchoolVerifyStatusOut(BaseModel):
 
 class SchoolCourseIn(BaseModel):
     course_code: str = Field(min_length=1, max_length=120)
+
+
+class FeedSearchMatchOut(BaseModel):
+    id: uuid.UUID
+    body: str
+    created_at: datetime
+    source: str
+    conversation_id: uuid.UUID | None = None
+
+
+class FeedSearchHitOut(BaseModel):
+    id: uuid.UUID
+    body: str
+    created_at: datetime
+    match_type: Literal["echo", "message", "both"]
+    sender_id: uuid.UUID
+    sender_display_name: str
+    tags: list[TagOut] = []
+    matches: list[FeedSearchMatchOut] = []
+
+
+class ConversationSearchMatchOut(BaseModel):
+    id: uuid.UUID
+    body: str
+    created_at: datetime
+
+
+class ConversationSearchHitOut(BaseModel):
+    id: uuid.UUID
+    origin_broadcast_id: uuid.UUID
+    origin_broadcast_preview: str
+    origin_broadcast_sender_display_name: str
+    is_reply_to_you: bool
+    other_participant: dict
+    matches: list[ConversationSearchMatchOut] = []

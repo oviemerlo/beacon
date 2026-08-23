@@ -1,21 +1,27 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import * as Location from "expo-location";
 import { apiFetch } from "../helpers/api";
 import { reachBadgeLabel } from "../helpers/broadcastReach";
+import { splitMentionParts } from "../helpers/mentions";
 import { usePolling } from "../helpers/usePolling";
 import { formatBroadcastSentAt } from "../helpers/time";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
-import type { BroadcastThread, FeedBroadcast } from "../types/api";
+import type { BroadcastThread, FeedBroadcast, UserProfile } from "../types/api";
 
 export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) {
   const [thread, setThread] = useState<BroadcastThread | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [loadingThread, setLoadingThread] = useState(true);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch<UserProfile>("/users/me").then(setCurrentUser).catch(() => setCurrentUser(null));
+  }, []);
 
   const loadThread = useCallback(async ({ silent }: { silent: boolean }) => {
     if (!silent) {
@@ -36,6 +42,7 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
 
   async function postReplyInFeed() {
     if (!message.trim() || !thread) return;
+    const body = message.trim();
     setSending(true);
     setError(null);
     try {
@@ -43,20 +50,37 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
       if (status !== "granted") throw new Error("Location permission is required to post a reply");
       const pos = await Location.getCurrentPositionAsync({});
 
-      await apiFetch("/broadcasts", {
+      const created = await apiFetch<{ id: string; created_at: string }>("/broadcasts", {
         method: "POST",
         body: JSON.stringify({
-          content: message.trim(),
+          content: body,
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
-          is_global: false,
-          radius_meters: 8000,
+          is_global: thread.parent.is_global,
+          radius_meters: thread.parent.is_global ? undefined : thread.parent.radius_meters ?? 8000,
           tag_match_mode: "any",
           tag_ids: [],
           reply_to_broadcast_id: thread.parent.id,
         }),
       });
       setMessage("");
+      setThread((current) => {
+        if (!current) return current;
+        if (current.replies.some((reply) => reply.id === created.id)) return current;
+        const optimistic: FeedBroadcast = {
+          id: created.id,
+          sender_id: currentUser?.id ?? "",
+          sender_display_name: currentUser?.display_name ?? "You",
+          content: body,
+          distance_m: 0,
+          tags: current.parent.tags,
+          is_global: current.parent.is_global,
+          radius_meters: current.parent.radius_meters,
+          created_at: created.created_at,
+          reply_count: 0,
+        };
+        return { ...current, replies: [optimistic, ...current.replies] };
+      });
       await loadThread({ silent: true });
     } catch (e: any) {
       setError(e?.message ?? "Couldn't post your reply in feed.");
@@ -110,18 +134,26 @@ function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: 
   return (
     <View style={[isReply && styles.replyItem]}>
       <Text style={styles.senderName}>{item.sender_display_name}</Text>
-      <Text style={styles.threadContent}>{item.content}</Text>
+      <Text style={styles.threadContent}>
+        {splitMentionParts(item.content).map((part, index) => (
+          <Text key={`${item.id}-${index}`} style={part.mention ? styles.mentionInBody : undefined}>
+            {part.text}
+          </Text>
+        ))}
+      </Text>
       <View style={styles.threadMetaRow}>
         <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(item.created_at)}</Text>
-        <View
-          style={[
-            styles.reachPill,
-            isLocalReach && styles.localReachPill,
-            isGlobalReach && styles.globalReachPill,
-          ]}
-        >
-          <Text style={[styles.reachPillText, isGlobalReach && styles.globalReachPillText]}>{reachLabel}</Text>
-        </View>
+        {!isReply && (
+          <View
+            style={[
+              styles.reachPill,
+              isLocalReach && styles.localReachPill,
+              isGlobalReach && styles.globalReachPill,
+            ]}
+          >
+            <Text style={[styles.reachPillText, isGlobalReach && styles.globalReachPillText]}>{reachLabel}</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -135,6 +167,7 @@ const styles = StyleSheet.create({
   replyItem: { borderWidth: 1, borderColor: colors.dusk700, borderRadius: radii.beacon, padding: 10, marginBottom: 8 },
   senderName: { color: colors.parchment500, fontSize: 12 },
   threadContent: { color: colors.parchment100, marginTop: 4 },
+  mentionInBody: { color: colors.signal400, fontWeight: "600" },
   threadMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
   sentAtLabel: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
   reachPill: { borderColor: colors.parchment500, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },

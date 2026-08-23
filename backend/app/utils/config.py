@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     MIN_RADIUS_METERS: int = 100
     DEFAULT_FEED_RADIUS_METERS: int = 8000
     MAX_FEED_RADIUS_METERS: int = 50000
-    MAX_BROADCAST_RADIUS_METERS: int = 50000
+    MAX_BROADCAST_RADIUS_METERS: int = 100_000
     USERNAME_SEARCH_MIN_CHARS: int = 3
     USERNAME_SEARCH_MAX_RESULTS: int = 5
     GROUP_THREAD_DM_THRESHOLD: int = 3  # DMs on one broadcast before "start a group" is offered

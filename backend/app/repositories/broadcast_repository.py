@@ -97,11 +97,50 @@ def _visibility_clause(user_id: uuid.UUID):
         )
     )
 
-    return (Broadcast.sender_id == user_id) | (nationality_gate & continent_gate & school_gate & course_gate)
+    broadcast_tag_count = (
+        select(func.count(BroadcastTag.tag_id))
+        .where(BroadcastTag.broadcast_id == Broadcast.id)
+        .correlate(Broadcast)
+        .scalar_subquery()
+    )
+    matching_tag_count = (
+        select(func.count(BroadcastTag.tag_id))
+        .where(
+            BroadcastTag.broadcast_id == Broadcast.id,
+            BroadcastTag.tag_id.in_(select(viewer_location_tag_ids.c.tag_id)),
+        )
+        .correlate(Broadcast)
+        .scalar_subquery()
+    )
+    any_mode_match = (Broadcast.tag_match_mode != "all") & (matching_tag_count > 0)
+    all_mode_match = (
+        (Broadcast.tag_match_mode == "all")
+        & (broadcast_tag_count > 0)
+        & (matching_tag_count == broadcast_tag_count)
+    )
+    # Untagged in-feed replies stay visible so existing threads don't disappear.
+    untagged_reply = Broadcast.parent_broadcast_id.is_not(None) & (broadcast_tag_count == 0)
+    tag_gate = untagged_reply | any_mode_match | all_mode_match
+
+    return (Broadcast.sender_id == user_id) | (nationality_gate & continent_gate & school_gate & course_gate & tag_gate)
+
+
+def _in_reach(user_id: uuid.UUID, distance_m):
+    """Radius is for delivering to other people. The sender always sees their own echo."""
+    return (
+        (Broadcast.sender_id == user_id)
+        | Broadcast.is_global.is_(True)
+        | (distance_m <= Broadcast.radius_meters)
+    )
 
 
 async def get_by_id(db: AsyncSession, broadcast_id: uuid.UUID | str) -> Broadcast | None:
     return await db.get(Broadcast, broadcast_id)
+
+
+async def list_tag_ids(db: AsyncSession, broadcast_id: uuid.UUID) -> list[int]:
+    result = await db.execute(select(BroadcastTag.tag_id).where(BroadcastTag.broadcast_id == broadcast_id))
+    return [row[0] for row in result.all()]
 
 
 async def create(
@@ -184,7 +223,7 @@ async def for_you_feed(db: AsyncSession, user_id: uuid.UUID, limit: int, offset:
         .where(Broadcast.sender_id.not_in(blocked_sender_ids))
         .where(_not_deleted())
         .where(Broadcast.id.not_in(_hidden_broadcast_ids(user_id)))
-        .where(Broadcast.is_global.is_(True) | (distance_m <= Broadcast.radius_meters))
+        .where(_in_reach(user_id, distance_m))
         .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
         .where(visibility_clause)
         .order_by(Broadcast.created_at.desc(), shared_tags.desc(), distance_m.asc())
@@ -209,7 +248,7 @@ async def count_unread_for_you_roots_since(db: AsyncSession, user_id: uuid.UUID,
         .where(Broadcast.sender_id.not_in(blocked_sender_ids))
         .where(_not_deleted())
         .where(Broadcast.id.not_in(_hidden_broadcast_ids(user_id)))
-        .where(Broadcast.is_global.is_(True) | (distance_m <= Broadcast.radius_meters))
+        .where(_in_reach(user_id, distance_m))
         .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
         .where(visibility_clause)
         .where(Broadcast.created_at > seen_after)
@@ -241,7 +280,7 @@ async def opt_in_feed(db: AsyncSession, user_id: uuid.UUID, limit: int, offset: 
         .where(_not_deleted())
         .where(Broadcast.id.not_in(_hidden_broadcast_ids(user_id)))
         .where(UserFollowedTag.user_id == user_id)
-        .where(Broadcast.is_global.is_(True) | (distance_m <= Broadcast.radius_meters))
+        .where(_in_reach(user_id, distance_m))
         .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
         .distinct()
         .order_by(distance_m.asc(), Broadcast.created_at.desc())
@@ -291,7 +330,7 @@ async def get_visible_with_context(db: AsyncSession, user_id: uuid.UUID, broadca
         .where(Broadcast.sender_id.not_in(blocked_sender_ids))
         .where(_not_deleted())
         .where(Broadcast.id.not_in(_hidden_broadcast_ids(user_id)))
-        .where(Broadcast.is_global.is_(True) | (distance_m <= Broadcast.radius_meters))
+        .where(_in_reach(user_id, distance_m))
         .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
         .where(visibility_clause)
     )
@@ -310,7 +349,6 @@ async def list_visible_replies(db: AsyncSession, user_id: uuid.UUID, parent_broa
     )
     distance_m = func.ST_Distance(Broadcast.origin_point, user_loc)
     blocked_sender_ids = select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == user_id)
-    visibility_clause = _visibility_clause(user_id)
     reply_count = _reply_count_subquery_for_viewer(user_id)
 
     stmt = (
@@ -323,9 +361,7 @@ async def list_visible_replies(db: AsyncSession, user_id: uuid.UUID, parent_broa
         .where(Broadcast.sender_id.not_in(blocked_sender_ids))
         .where(_not_deleted())
         .where(Broadcast.id.not_in(_hidden_broadcast_ids(user_id)))
-        .where(Broadcast.is_global.is_(True) | (distance_m <= Broadcast.radius_meters))
         .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
-        .where(visibility_clause)
         .order_by(Broadcast.created_at.desc())
     )
     result = await db.execute(stmt)

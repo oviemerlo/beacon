@@ -13,6 +13,7 @@ from app.api.routes.search import limiter
 from app.api.error_handlers import register_error_handlers
 from app.utils.config import settings
 from app.jobs.digest_job import run_weekly_digest
+from app.jobs.reverification_job import run_daily_reverification_check
 
 scheduler = AsyncIOScheduler()
 
@@ -22,6 +23,8 @@ async def lifespan(app: FastAPI):
     # Weekly digest — Monday 09:00 UTC. Swap for an Azure Function timer
     # trigger in production if you'd rather not run a scheduler in-process.
     scheduler.add_job(run_weekly_digest, CronTrigger(day_of_week="mon", hour=9))
+    # Daily school reverification — 08:00 UTC. Windows are per-user (verified_at + 3 months).
+    scheduler.add_job(run_daily_reverification_check, CronTrigger(hour=8))
     scheduler.start()
     yield
     scheduler.shutdown()
@@ -79,3 +82,16 @@ async def trigger_digest_manually(x_internal_job_token: str | None = Header(defa
         raise HTTPException(403, "Not authorized to trigger internal jobs")
     await run_weekly_digest()
     return {"status": "digest run triggered"}
+
+
+@app.post("/internal/jobs/run-reverification-now", include_in_schema=False)
+async def trigger_reverification_manually(x_internal_job_token: str | None = Header(default=None)):
+    """
+    Manual trigger for local testing/ops. Same token gate as the digest job:
+    requires x-internal-job-token matching INTERNAL_JOB_TOKEN. With that
+    setting unset, no header value can match and the route always 403s.
+    """
+    if not settings.INTERNAL_JOB_TOKEN or x_internal_job_token != settings.INTERNAL_JOB_TOKEN:
+        raise HTTPException(403, "Not authorized to trigger internal jobs")
+    await run_daily_reverification_check()
+    return {"status": "reverification run triggered"}

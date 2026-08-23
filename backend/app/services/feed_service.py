@@ -12,7 +12,8 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories import broadcast_repository, user_repository
+from app.repositories import broadcast_repository, feed_search_repository, user_repository
+from app.services.exceptions import ValidationError
 
 
 async def get_for_you_feed(db: AsyncSession, user_id: uuid.UUID, limit: int, offset: int):
@@ -45,3 +46,14 @@ async def mark_feed_seen(db: AsyncSession, user_id: uuid.UUID) -> None:
         return
     await user_repository.set_last_feed_seen(db, user, datetime.now(timezone.utc))
     await db.commit()
+
+
+async def search_history(db: AsyncSession, user_id: uuid.UUID, query: str, tag_ids: list[int]):
+    keyword = query.strip()
+    if not keyword:
+        raise ValidationError("A keyword is required")
+    return await feed_search_repository.search_history(db, user_id, keyword, tag_ids)
+
+
+async def list_history_tags(db: AsyncSession, user_id: uuid.UUID):
+    return await feed_search_repository.list_history_tags(db, user_id)
