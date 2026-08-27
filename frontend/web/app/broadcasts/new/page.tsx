@@ -6,24 +6,28 @@ import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { clientFetch } from "@/helpers/client-api";
 import { getMyCourses, getVerificationStatus } from "@/helpers/school-verification";
-import { EMPTY_TAG_GROUPS, mergeOwnedTags, toggleTagId } from "@/helpers/tags";
+import { toggleTagId } from "@/helpers/tags";
 import {
   buildReachPayload,
+  canUseRegionalReach,
   LOCAL_RADIUS_STEPS_M,
   radiusLabel,
   ReachCategory,
+  reachSelectorColors,
   REGIONAL_RADIUS_STEPS_M,
+  REGIONAL_REACH_LOCKED_MESSAGE,
 } from "@/helpers/broadcast-reach";
-import type { BroadcastCreatePayload, Tag, TagGroups, UserProfile } from "@/types/api";
+import type { BroadcastCreatePayload, Tag, UserProfile } from "@/types/api";
 
 export default function NewBroadcastPage() {
   const router = useRouter();
   const [content, setContent] = useState("");
-  const [reach, setReach] = useState<ReachCategory>("regional");
+  const [reach, setReach] = useState<ReachCategory>("local");
   const [localRadiusIdx, setLocalRadiusIdx] = useState(3); // 1km default
   const [regionalRadiusIdx, setRegionalRadiusIdx] = useState(1); // 25km default
   const [profileTags, setProfileTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [canUseRegional, setCanUseRegional] = useState(false);
   const [schoolVerified, setSchoolVerified] = useState(false);
   const [myCourses, setMyCourses] = useState<string[]>([]);
   const [selectedCourseCode, setSelectedCourseCode] = useState("");
@@ -39,13 +43,10 @@ export default function NewBroadcastPage() {
   const availableProfileTags = profileTags.filter((tag) => !selectedTagIds.includes(tag.id));
 
   useEffect(() => {
-    Promise.all([
-      clientFetch<UserProfile>("/users/me"),
-      clientFetch<TagGroups>("/tags"),
-      clientFetch<{ tag_ids: number[] }>("/users/me/followed-tags"),
-    ])
-      .then(([me, catalog, followed]) => {
-        setProfileTags(mergeOwnedTags(me.tags ?? [], catalog, followed.tag_ids ?? []));
+    clientFetch<UserProfile>("/users/me")
+      .then((me) => {
+        setProfileTags(me.tags ?? []);
+        setCanUseRegional(canUseRegionalReach(me.is_verified, me.is_admin));
       })
       .catch(() => setProfileTags([]));
     getVerificationStatus()
@@ -61,8 +62,21 @@ export default function NewBroadcastPage() {
       });
   }, []);
 
+  function selectReach(next: ReachCategory) {
+    if (next === "regional" && !canUseRegional) {
+      setError(REGIONAL_REACH_LOCKED_MESSAGE);
+      return;
+    }
+    setError(null);
+    setReach(next);
+  }
+
   async function publish() {
     if (!content.trim() || selectedTagIds.length === 0) return;
+    if (reach === "regional" && !canUseRegional) {
+      setError(REGIONAL_REACH_LOCKED_MESSAGE);
+      return;
+    }
     setPosting(true);
     setError(null);
     try {
@@ -106,16 +120,22 @@ export default function NewBroadcastPage() {
         />
 
         <div className="grid grid-cols-3 items-center mb-4">
-          <button onClick={() => setReach("local")} className={`tag-pill justify-self-start ${reach === "local" ? "tag-pill-active" : ""}`}>
+          <button type="button" onClick={() => selectReach("local")} className="tag-pill justify-self-start" style={reachSelectorColors("local", reach === "local")}>
             Local
           </button>
-          <button onClick={() => setReach("regional")} className={`tag-pill justify-self-center ${reach === "regional" ? "tag-pill-active" : ""}`}>
+          <button
+            type="button"
+            onClick={() => selectReach("regional")}
+            className="tag-pill justify-self-center"
+            style={reachSelectorColors("regional", reach === "regional", !canUseRegional)}
+          >
             Regional
           </button>
-          <button onClick={() => setReach("global")} className={`tag-pill justify-self-end ${reach === "global" ? "tag-pill-active" : ""}`}>
+          <button type="button" onClick={() => selectReach("global")} className="tag-pill justify-self-end" style={reachSelectorColors("global", reach === "global")}>
             Global
           </button>
         </div>
+        {!canUseRegional && <p className="text-parchment-500 text-xs mb-4">{REGIONAL_REACH_LOCKED_MESSAGE}</p>}
         {reach !== "global" && (
           <input
             type="range"

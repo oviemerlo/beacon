@@ -1,3 +1,9 @@
+export function echoPreview(text: string, max = 72): string {
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  if (collapsed.length <= max) return collapsed;
+  return `${collapsed.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
+}
+
 export function formatBroadcastSentAt(isoTimestamp: string): string {
   return formatMessageSentAt(isoTimestamp);
 }

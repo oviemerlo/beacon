@@ -13,23 +13,32 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories import broadcast_repository, feed_search_repository, user_repository
+from app.services import user_service
+from app.services.broadcast_tags import serialize_echo_rows, serialize_search_hit, tag_payload
 from app.services.exceptions import ValidationError
 
 
-async def get_for_you_feed(db: AsyncSession, user_id: uuid.UUID, limit: int, offset: int):
-    rows = await broadcast_repository.for_you_feed(db, user_id, limit, offset)
-    for broadcast, _distance, _shared, _reply_count in rows:
-        await broadcast_repository.record_impression(db, broadcast.id, user_id)
+async def _serve_feed_rows(db: AsyncSession, user_id: uuid.UUID, rows):
+    for row in rows:
+        await broadcast_repository.record_impression(db, row[0].id, user_id)
     await db.commit()
-    return rows
+    return await serialize_echo_rows(db, user_id, rows)
+
+
+async def get_for_you_feed(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    limit: int,
+    offset: int,
+    tag_ids: list[int] | None = None,
+):
+    rows = await broadcast_repository.for_you_feed(db, user_id, limit, offset, tag_ids)
+    return await _serve_feed_rows(db, user_id, rows)
 
 
 async def get_opt_in_feed(db: AsyncSession, user_id: uuid.UUID, limit: int, offset: int):
     rows = await broadcast_repository.opt_in_feed(db, user_id, limit, offset)
-    for broadcast, _distance, _reply_count in rows:
-        await broadcast_repository.record_impression(db, broadcast.id, user_id)
-    await db.commit()
-    return rows
+    return await _serve_feed_rows(db, user_id, rows)
 
 
 async def get_unread_count(db: AsyncSession, user_id: uuid.UUID) -> int:
@@ -52,8 +61,11 @@ async def search_history(db: AsyncSession, user_id: uuid.UUID, query: str, tag_i
     keyword = query.strip()
     if not keyword:
         raise ValidationError("A keyword is required")
-    return await feed_search_repository.search_history(db, user_id, keyword, tag_ids)
+    hits = await feed_search_repository.search_history(db, user_id, keyword, tag_ids)
+    viewer_tags = await user_service.list_identity_tags(db, user_id)
+    return [serialize_search_hit(hit, user_id, viewer_tags) for hit in hits]
 
 
 async def list_history_tags(db: AsyncSession, user_id: uuid.UUID):
-    return await feed_search_repository.list_history_tags(db, user_id)
+    """Filter chips for history search: current identity tags, not stale echo tags."""
+    return [tag_payload(tag) for tag in await user_service.list_identity_tags(db, user_id)]

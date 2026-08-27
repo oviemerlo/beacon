@@ -1,9 +1,11 @@
-export type TagType = "nationality" | "continent" | "hobby" | "community";
+export type CountedTagType = "nationality" | "region" | "hobby";
+export type TagType = CountedTagType | "school";
 
 export interface Tag {
   id: number;
   tag_type: TagType;
   label: string;
+  countries?: string[];
 }
 
 export interface UserProfile {
@@ -21,6 +23,7 @@ export interface UserProfile {
   feed_radius_meters: number;
   discoverable_in_broadcasts: boolean;
   tags: Tag[];
+  followed_tag_limit: number;
 }
 
 export interface PublicProfile {
@@ -41,10 +44,20 @@ export interface BlockedUsersList {
   blocked_users: BlockedUser[];
 }
 
+export interface LatestFeedReply {
+  id: string;
+  sender_id: string;
+  sender_display_name: string;
+  sender_is_verified?: boolean;
+  content: string;
+  created_at: string;
+}
+
 export interface FeedBroadcast {
   id: string;
   sender_id: string;
   sender_display_name: string;
+  sender_is_verified?: boolean;
   content: string;
   distance_m: number;
   shared_tag_count?: number;
@@ -53,7 +66,9 @@ export interface FeedBroadcast {
   radius_meters: number | null;
   course_code?: string | null;
   created_at: string;
+  last_activity_at?: string;
   reply_count?: number;
+  latest_reply?: LatestFeedReply | null;
   replies?: FeedReply[];
 }
 
@@ -61,6 +76,7 @@ export interface FeedReply {
   id: string;
   sender_id: string;
   sender_display_name: string;
+  sender_is_verified?: boolean;
   content: string;
   distance_m: number;
   shared_tag_count?: number;
@@ -90,9 +106,8 @@ export interface BroadcastThread {
 
 export interface TagGroups {
   nationality: Tag[];
-  continent: Tag[];
+  region: Tag[];
   hobby: Tag[];
-  community: Tag[];
 }
 
 export interface School {
@@ -171,6 +186,24 @@ export interface ReportPayload {
   details?: string;
 }
 
+export interface ReportQueueItem {
+  id: string;
+  status: "pending" | "dismissed" | "actioned";
+  reason: ReportReason;
+  details: string | null;
+  created_at: string;
+  reporter: PublicProfile;
+  target_type: ReportTargetType;
+  target_id: string;
+  target_preview: string;
+}
+
+export interface AdminStats {
+  total_users: number;
+  total_suspended_users: number;
+  new_users_7d: number;
+}
+
 export interface UnreadCount {
   count: number;
   mention_count?: number;
@@ -184,6 +217,8 @@ export interface FeedSearchMatch {
   created_at: string;
   source: "reply" | "message";
   conversation_id: string | null;
+  sender_display_name?: string;
+  sender_id?: string | null;
 }
 
 export interface FeedSearchHit {
@@ -193,6 +228,7 @@ export interface FeedSearchHit {
   match_type: FeedSearchMatchType;
   sender_id: string;
   sender_display_name: string;
+  sender_is_verified?: boolean;
   tags: Tag[];
   matches: FeedSearchMatch[];
 }

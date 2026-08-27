@@ -3,19 +3,16 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import {
   confirmVerification,
-  enrollInCourse,
-  getMyCourses,
   getVerificationStatus,
   searchSchools,
   startVerification,
-  unenrollFromCourse,
 } from "../helpers/schoolVerification";
 import { colors, radii } from "../theme/tokens";
 import type { School } from "../types/api";
 
 type Phase = "idle" | "searching" | "school_selected" | "code_sent" | "verified";
 
-export function SchoolVerification() {
+export function SchoolVerification({ onVerifiedChange }: { onVerifiedChange?: (verified: boolean) => void }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<School[]>([]);
@@ -23,8 +20,6 @@ export function SchoolVerification() {
   const [schoolEmail, setSchoolEmail] = useState("");
   const [code, setCode] = useState("");
   const [verifiedSchoolName, setVerifiedSchoolName] = useState<string | null>(null);
-  const [courses, setCourses] = useState<string[]>([]);
-  const [courseInput, setCourseInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,10 +31,11 @@ export function SchoolVerification() {
       .then((status) => {
         if (status.verified && status.school_name) {
           setVerifiedSchoolName(status.school_name);
-          getMyCourses().then(setCourses).catch(() => setCourses([]));
+          onVerifiedChange?.(true);
           setPhase("verified");
           return;
         }
+        onVerifiedChange?.(false);
         setPhase("idle");
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Couldn't load school verification"))
@@ -91,44 +87,10 @@ export function SchoolVerification() {
     try {
       const result = await confirmVerification(code.trim());
       setVerifiedSchoolName(result.school_name);
-      const enrolled = await getMyCourses();
-      setCourses(enrolled);
+      onVerifiedChange?.(true);
       setPhase("verified");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't verify code");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  function normalizeCourseCode(value: string): string {
-    return value.trim().replace(/\s+/g, " ").toUpperCase();
-  }
-
-  async function addCourse() {
-    const normalized = normalizeCourseCode(courseInput);
-    if (!normalized) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await enrollInCourse(normalized);
-      setCourseInput("");
-      setCourses((prev) => (prev.includes(normalized) ? prev : [...prev, normalized].sort()));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't add course");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function removeCourse(codeToRemove: string) {
-    setSubmitting(true);
-    setError(null);
-    try {
-      await unenrollFromCourse(codeToRemove);
-      setCourses((prev) => prev.filter((item) => item !== codeToRemove));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't remove course");
     } finally {
       setSubmitting(false);
     }
@@ -154,30 +116,6 @@ export function SchoolVerification() {
             <Text style={styles.verifiedText}>Verified</Text>
             <Text style={styles.verifiedText}>{verifiedSchoolName ?? "School"}</Text>
             <Text style={styles.verifiedText}>✓</Text>
-          </View>
-          <View>
-            <Text style={styles.selectedLabel}>My courses</Text>
-            <View style={styles.actionRow}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                placeholder="e.g. CHM123"
-                placeholderTextColor={colors.parchment500}
-                value={courseInput}
-                onChangeText={setCourseInput}
-                autoCapitalize="characters"
-              />
-              <Pressable style={styles.primaryButton} onPress={addCourse} disabled={submitting || !normalizeCourseCode(courseInput)}>
-                <Text style={styles.primaryButtonText}>Add</Text>
-              </Pressable>
-            </View>
-            <View style={styles.pillRow}>
-              {courses.map((course) => (
-                <Pressable key={course} style={styles.pill} onPress={() => removeCourse(course)} disabled={submitting}>
-                  <Text style={styles.pillText}>{course} x</Text>
-                </Pressable>
-              ))}
-              {courses.length === 0 && <Text style={styles.hint}>No courses added yet.</Text>}
-            </View>
           </View>
         </View>
       ) : (

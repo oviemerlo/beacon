@@ -41,3 +41,9 @@ export async function unenrollFromCourse(courseCode: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+export const COURSE_TAG_MAX_LEN = 30;
+
+export function trimCourseTag(value: string): string {
+  return value.trim();
+}

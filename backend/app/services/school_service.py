@@ -1,6 +1,7 @@
 """School verification business logic."""
 
 import hashlib
+import math
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -8,23 +9,38 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.config import settings
-from app.utils.email import send_otp_email, send_reverification_reminder_email
+from app.utils.email import EmailDeliveryError, send_otp_email, send_reverification_reminder_email
 from app.models.school import School
+from app.models.tag import Tag
 from app.repositories import school_repository, tag_repository, user_repository
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
+
+COURSE_TAG_MAX_LEN = 30
+OTP_TTL = timedelta(minutes=10)
+OTP_RESEND_COOLDOWN = timedelta(seconds=60)
+
+
+def school_tag_label(school: School) -> str:
+    if school.country:
+        return f"{school.name} ({school.country})"
+    return school.name
+
+
+def school_tag_matches(tag: Tag, school: School) -> bool:
+    return tag.tag_type == "school" and tag.label in {school.name, school_tag_label(school)}
+
+
+def prepare_course_tag(course_code: str) -> str:
+    trimmed = course_code.strip()
+    if not trimmed:
+        raise ValidationError("course_code is required")
+    if len(trimmed) > COURSE_TAG_MAX_LEN:
+        raise ValidationError(f"course_code must be at most {COURSE_TAG_MAX_LEN} characters")
+    return trimmed
 
 
 def _hash_otp(code: str) -> str:
     return hashlib.sha256(f"{settings.JWT_SECRET}:{code}".encode("utf-8")).hexdigest()
-
-
-def _normalize_course_code(course_code: str) -> str:
-    normalized = " ".join(course_code.strip().split()).upper()
-    if len(normalized) > 30:
-        raise ValidationError("course_code must be at most 30 characters")
-    if not normalized:
-        raise ValidationError("course_code is required")
-    return normalized
 
 
 def _normalize_email_domain(value: str) -> str:
@@ -68,9 +84,20 @@ async def start_verification(db: AsyncSession, user_id: uuid.UUID, school_id: in
     if not _email_domain_matches_school(domain, school.email_domains):
         raise ValidationError("Email domain does not match this school")
 
+    existing = await school_repository.get_verification(db, user_id)
+    if existing is not None:
+        expires_at = existing.otp_expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        issued_at = expires_at - OTP_TTL
+        remaining = (issued_at + OTP_RESEND_COOLDOWN - datetime.now(timezone.utc)).total_seconds()
+        if remaining > 0:
+            seconds = max(1, math.ceil(remaining))
+            raise ValidationError(f"Wait {seconds} seconds before requesting another code.")
+
     otp_code = f"{secrets.randbelow(1_000_000):06d}"
     otp_code_hash = _hash_otp(otp_code)
-    otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    otp_expires_at = datetime.now(timezone.utc) + OTP_TTL
 
     await school_repository.create_or_update_verification(
         db,
@@ -80,7 +107,10 @@ async def start_verification(db: AsyncSession, user_id: uuid.UUID, school_id: in
         otp_code_hash=otp_code_hash,
         otp_expires_at=otp_expires_at,
     )
-    send_otp_email(to_email=school_email, code=otp_code)
+    try:
+        send_otp_email(to_email=school_email, code=otp_code)
+    except EmailDeliveryError:
+        raise ValidationError("Couldn't send the verification email. Try again.")
     await db.commit()
 
 
@@ -110,15 +140,16 @@ async def confirm_verification(db: AsyncSession, user_id: uuid.UUID, code: str) 
     if user is not None:
         await user_repository.update_fields(db, user, is_verified=True)
 
-    school_tag = await tag_repository.get_by_type_and_label(db, "school", school.name)
+    label = school_tag_label(school)
+    school_tag = await tag_repository.get_by_type_and_label(db, "school", label)
     if school_tag is None:
-        school_tag = await tag_repository.create(db, tag_type="school", label=school.name)
-    await user_repository.add_tag(db, user_id, school_tag.id)
+        school_tag = await tag_repository.create(db, tag_type="school", label=label)
+    await user_repository.replace_school_tag(db, user_id, school_tag.id)
 
     await db.commit()
 
 
-def _is_currently_verified(verification) -> bool:
+def is_currently_verified(verification) -> bool:
     if verification.verified_at is None:
         return False
     if verification.expires_at is None:
@@ -131,25 +162,30 @@ async def get_verification_status(db: AsyncSession, user_id: uuid.UUID) -> tuple
     if verification is None:
         return None, None, False
 
-    verified = _is_currently_verified(verification)
+    verified = is_currently_verified(verification)
     school = await school_repository.get_by_id(db, verification.school_id)
     if school is None:
         return verification.school_id, None, verified
-    return school.id, school.name, verified
+    return school.id, school_tag_label(school), verified
 
 
 async def send_reverification_reminders(db: AsyncSession) -> int:
     verifications = await school_repository.list_verifications_needing_reminder(db, timedelta(days=7))
+    sent = 0
     for verification in verifications:
         school_name = verification.school.name if verification.school is not None else "your school"
-        send_reverification_reminder_email(
-            to_email=verification.school_email,
-            school_name=school_name,
-            expires_at=verification.expires_at,
-        )
+        try:
+            send_reverification_reminder_email(
+                to_email=verification.school_email,
+                school_name=school_name,
+                expires_at=verification.expires_at,
+            )
+        except EmailDeliveryError:
+            continue
         await school_repository.mark_reminder_sent(db, verification.user_id)
+        sent += 1
     await db.commit()
-    return len(verifications)
+    return sent
 
 
 async def expire_lapsed_verifications(db: AsyncSession) -> int:
@@ -160,26 +196,28 @@ async def expire_lapsed_verifications(db: AsyncSession) -> int:
     return len(verifications)
 
 
-async def enroll_in_course(db: AsyncSession, user_id: uuid.UUID, course_code: str) -> None:
+async def _require_verified_school(db: AsyncSession, user_id: uuid.UUID):
     verification = await school_repository.get_verification(db, user_id)
-    if verification is None or verification.verified_at is None:
+    if verification is None or not is_currently_verified(verification):
         raise ForbiddenError("Verify your school before adding a course")
+    return verification
 
-    normalized = _normalize_course_code(course_code)
-    await school_repository.add_enrollment(db, user_id, verification.school_id, normalized)
+
+async def enroll_in_course(db: AsyncSession, user_id: uuid.UUID, course_code: str) -> None:
+    verification = await _require_verified_school(db, user_id)
+    await school_repository.add_enrollment(db, user_id, verification.school_id, prepare_course_tag(course_code))
     await db.commit()
 
 
 async def unenroll_from_course(db: AsyncSession, user_id: uuid.UUID, course_code: str) -> None:
-    verification = await school_repository.get_verification(db, user_id)
-    if verification is None or verification.verified_at is None:
-        raise ForbiddenError("Verify your school before adding a course")
-
-    normalized = _normalize_course_code(course_code)
-    await school_repository.remove_enrollment(db, user_id, verification.school_id, normalized)
+    verification = await _require_verified_school(db, user_id)
+    await school_repository.remove_enrollment(db, user_id, verification.school_id, prepare_course_tag(course_code))
     await db.commit()
 
 
 async def get_my_courses(db: AsyncSession, user_id: uuid.UUID) -> list[str]:
-    enrollments = await school_repository.list_enrollments(db, user_id)
+    verification = await school_repository.get_verification(db, user_id)
+    if verification is None or not is_currently_verified(verification):
+        return []
+    enrollments = await school_repository.list_enrollments(db, user_id, verification.school_id)
     return [item.course_code for item in enrollments]

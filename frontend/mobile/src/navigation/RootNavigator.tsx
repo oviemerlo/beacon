@@ -15,6 +15,7 @@ import { ConversationsScreen } from "../screens/ConversationsScreen";
 import { ConversationDetailScreen } from "../screens/ConversationDetailScreen";
 import { FollowTagsScreen } from "../screens/FollowTagsScreen";
 import { BlockedUsersScreen } from "../screens/BlockedUsersScreen";
+import { AdminReportsScreen } from "../screens/AdminReportsScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { colors } from "../theme/tokens";
 import type { UnreadCount, UserProfile } from "../types/api";
@@ -85,11 +86,13 @@ function ProfileStackNavigator({ onSignOut }: { onSignOut: () => void }) {
             onSignedOut={onSignOut}
             onOpenFollowTags={() => navigation.navigate("FollowTags")}
             onOpenBlockedUsers={() => navigation.navigate("BlockedUsers")}
+            onOpenAdminReports={() => navigation.navigate("AdminReports")}
           />
         )}
       </ProfileStack.Screen>
-      <ProfileStack.Screen name="FollowTags" component={FollowTagsScreen} options={{ title: "Follow tags" }} />
+      <ProfileStack.Screen name="FollowTags" component={FollowTagsScreen} options={{ title: "Echo Tags" }} />
       <ProfileStack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ title: "Blocked users" }} />
+      <ProfileStack.Screen name="AdminReports" component={AdminReportsScreen} options={{ title: "Admin reports" }} />
     </ProfileStack.Navigator>
   );
 }

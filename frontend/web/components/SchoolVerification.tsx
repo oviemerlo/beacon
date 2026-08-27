@@ -4,18 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   confirmVerification,
-  enrollInCourse,
-  getMyCourses,
   getVerificationStatus,
   searchSchools,
   startVerification,
-  unenrollFromCourse,
 } from "@/helpers/school-verification";
 import type { School } from "@/types/api";
 
 type Phase = "idle" | "searching" | "school_selected" | "code_sent" | "verified";
 
-export function SchoolVerification() {
+export function SchoolVerification({ onVerifiedChange }: { onVerifiedChange?: (verified: boolean) => void }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<School[]>([]);
@@ -23,8 +20,6 @@ export function SchoolVerification() {
   const [schoolEmail, setSchoolEmail] = useState("");
   const [code, setCode] = useState("");
   const [verifiedSchoolName, setVerifiedSchoolName] = useState<string | null>(null);
-  const [courses, setCourses] = useState<string[]>([]);
-  const [courseInput, setCourseInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,10 +31,11 @@ export function SchoolVerification() {
       .then((status) => {
         if (status.verified && status.school_name) {
           setVerifiedSchoolName(status.school_name);
-          getMyCourses().then(setCourses).catch(() => setCourses([]));
+          onVerifiedChange?.(true);
           setPhase("verified");
           return;
         }
+        onVerifiedChange?.(false);
         setPhase("idle");
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Couldn't load school verification"))
@@ -91,44 +87,10 @@ export function SchoolVerification() {
     try {
       const result = await confirmVerification(code.trim());
       setVerifiedSchoolName(result.school_name);
-      const enrolled = await getMyCourses();
-      setCourses(enrolled);
+      onVerifiedChange?.(true);
       setPhase("verified");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't verify code");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  function normalizeCourseCode(value: string): string {
-    return value.trim().replace(/\s+/g, " ").toUpperCase();
-  }
-
-  async function addCourse() {
-    const normalized = normalizeCourseCode(courseInput);
-    if (!normalized) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await enrollInCourse(normalized);
-      setCourseInput("");
-      setCourses((prev) => (prev.includes(normalized) ? prev : [...prev, normalized].sort()));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't add course");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function removeCourse(codeToRemove: string) {
-    setSubmitting(true);
-    setError(null);
-    try {
-      await unenrollFromCourse(codeToRemove);
-      setCourses((prev) => prev.filter((item) => item !== codeToRemove));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't remove course");
     } finally {
       setSubmitting(false);
     }
@@ -154,30 +116,6 @@ export function SchoolVerification() {
             <span>Verified</span>
             <span>{verifiedSchoolName ?? "School"}</span>
             <span aria-hidden>✓</span>
-          </div>
-          <div>
-            <p className="text-parchment-500 text-xs font-mono mb-2">My courses</p>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                className="input-field text-sm py-2"
-                placeholder="e.g. CHM123"
-                value={courseInput}
-                onChange={(e) => setCourseInput(e.target.value)}
-              />
-              <button className="btn-primary text-sm" onClick={addCourse} disabled={submitting || !normalizeCourseCode(courseInput)}>
-                Add
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {courses.map((course) => (
-                <button key={course} className="tag-pill" onClick={() => removeCourse(course)} disabled={submitting}>
-                  {course}
-                  <span aria-hidden>x</span>
-                </button>
-              ))}
-              {courses.length === 0 && <p className="text-parchment-500 text-xs">No courses added yet.</p>}
-            </div>
           </div>
         </div>
       ) : (

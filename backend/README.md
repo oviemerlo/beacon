@@ -130,3 +130,7 @@ covers most of the UI; wiring up the group-thread routes (models exist in
 `app/models/group.py`, no repository/service/routes yet) and real-time
 chat (message routes are currently request/response only, both frontends
 poll) are the two biggest remaining gaps.
+
+start frontend/web command: npm run dev
+start frontend/mobile command: npx expo run:ios
+backend: uvicorn app.main:app --reload

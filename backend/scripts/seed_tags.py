@@ -1,8 +1,8 @@
 """
 Run once against a fresh database: python -m scripts.seed_tags
 Seeds a starter tag taxonomy. Extend this list as needed — the schema
-supports arbitrary tags of type 'nationality', 'continent', 'hobby', or
-'community'.
+supports arbitrary tags of type 'nationality', 'region', or 'hobby'.
+Region labels come from app.services.regions (region_country.json).
 """
 
 import asyncio
@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.db.session import AsyncSessionLocal
 from app.models.tag import Tag
+from app.services.regions import ALL_REGIONS
 
 NATIONALITIES = [
     "Afghanistan",
@@ -211,15 +212,6 @@ NATIONALITIES = [
     "Zimbabwe",
 ]
 
-CONTINENTS = [
-    "Africa",
-    "Asia",
-    "Europe",
-    "North America",
-    "South America",
-    "Oceania",
-]
-
 HOBBIES = [
     "Basketball",
     "Football",
@@ -249,19 +241,6 @@ HOBBIES = [
     "Reading",
 ]
 
-COMMUNITY = [
-    "LGBT-friendly",
-    "Women's group",
-    "Newcomer meetup",
-    "Family-friendly",
-    "Students",
-    "Professionals",
-    "Parents",
-    "Seniors",
-    "Faith-based",
-    "Disability-friendly",
-]
-
 
 async def seed():
     async with AsyncSessionLocal() as db:
@@ -269,22 +248,18 @@ async def seed():
             exists = await db.execute(select(Tag.id).where(Tag.tag_type == "nationality", Tag.label == label))
             if exists.scalar_one_or_none() is None:
                 db.add(Tag(tag_type="nationality", label=label))
-        for label in CONTINENTS:
-            exists = await db.execute(select(Tag.id).where(Tag.tag_type == "continent", Tag.label == label))
+        for label in ALL_REGIONS:
+            exists = await db.execute(select(Tag.id).where(Tag.tag_type == "region", Tag.label == label))
             if exists.scalar_one_or_none() is None:
-                db.add(Tag(tag_type="continent", label=label))
+                db.add(Tag(tag_type="region", label=label))
         for label in HOBBIES:
             exists = await db.execute(select(Tag.id).where(Tag.tag_type == "hobby", Tag.label == label))
             if exists.scalar_one_or_none() is None:
                 db.add(Tag(tag_type="hobby", label=label))
-        for label in COMMUNITY:
-            exists = await db.execute(select(Tag.id).where(Tag.tag_type == "community", Tag.label == label))
-            if exists.scalar_one_or_none() is None:
-                db.add(Tag(tag_type="community", label=label))
         await db.commit()
     print(
-        f"Seeded {len(NATIONALITIES)} nationality tags, {len(CONTINENTS)} continent tags, "
-        f"{len(HOBBIES)} hobby tags, and {len(COMMUNITY)} community tags."
+        f"Seeded {len(NATIONALITIES)} nationality tags, {len(ALL_REGIONS)} region tags, "
+        f"and {len(HOBBIES)} hobby tags."
     )
 
 

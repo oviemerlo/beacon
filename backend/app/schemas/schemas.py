@@ -31,6 +31,7 @@ class UserProfileOut(BaseModel):
     feed_radius_meters: int
     discoverable_in_broadcasts: bool
     tags: list[TagOut] = []
+    followed_tag_limit: int = 2
 
     class Config:
         from_attributes = True
@@ -77,6 +78,18 @@ class ProfileUpdateIn(BaseModel):
     hobby_tag_ids: list[int] | None = None
 
 
+class FollowedTagsReplaceIn(BaseModel):
+    nationality: list[int] = Field(default_factory=list)
+    region: list[int] = Field(default_factory=list)
+    school: list[int] = Field(default_factory=list)
+    hobby: list[int] = Field(default_factory=list)
+    community: list[int] = Field(default_factory=list)  # ignored; community tags are removed
+
+
+class FollowedTagsOut(BaseModel):
+    tag_ids: list[int]
+
+
 class BroadcastCreateIn(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
     latitude: float
@@ -103,10 +116,20 @@ class BroadcastOut(BaseModel):
     tags: list[TagOut] = []
 
 
+class LatestFeedReplyOut(BaseModel):
+    id: uuid.UUID
+    sender_id: uuid.UUID
+    sender_display_name: str
+    sender_is_verified: bool = False
+    content: str
+    created_at: datetime
+
+
 class FeedBroadcastOut(BaseModel):
     id: uuid.UUID
     sender_id: uuid.UUID
     sender_display_name: str
+    sender_is_verified: bool = False
     content: str
     distance_m: float
     shared_tag_count: int | None = None
@@ -115,7 +138,9 @@ class FeedBroadcastOut(BaseModel):
     radius_meters: int | None = None
     course_code: str | None = None
     created_at: datetime
+    last_activity_at: datetime | None = None
     reply_count: int = 0
+    latest_reply: LatestFeedReplyOut | None = None
 
 
 class BroadcastThreadOut(BaseModel):
@@ -235,7 +260,7 @@ class SchoolVerifyStatusOut(BaseModel):
 
 
 class SchoolCourseIn(BaseModel):
-    course_code: str = Field(min_length=1, max_length=120)
+    course_code: str = Field(min_length=1, max_length=30)
 
 
 class FeedSearchMatchOut(BaseModel):
@@ -244,6 +269,8 @@ class FeedSearchMatchOut(BaseModel):
     created_at: datetime
     source: str
     conversation_id: uuid.UUID | None = None
+    sender_display_name: str | None = None
+    sender_id: uuid.UUID | None = None
 
 
 class FeedSearchHitOut(BaseModel):
@@ -253,6 +280,7 @@ class FeedSearchHitOut(BaseModel):
     match_type: Literal["echo", "message", "both"]
     sender_id: uuid.UUID
     sender_display_name: str
+    sender_is_verified: bool = False
     tags: list[TagOut] = []
     matches: list[FeedSearchMatchOut] = []
 

@@ -129,12 +129,14 @@ async def remove_enrollment(db: AsyncSession, user_id: uuid.UUID, school_id: int
         await db.flush()
 
 
-async def list_enrollments(db: AsyncSession, user_id: uuid.UUID) -> list[UserCourseEnrollment]:
-    result = await db.execute(
-        select(UserCourseEnrollment)
-        .where(UserCourseEnrollment.user_id == user_id)
-        .order_by(UserCourseEnrollment.course_code.asc())
-    )
+async def list_enrollments(
+    db: AsyncSession, user_id: uuid.UUID, school_id: int | None = None
+) -> list[UserCourseEnrollment]:
+    """Active course tags for a user. Pass school_id to hide (archive) tags from a previous school."""
+    stmt = select(UserCourseEnrollment).where(UserCourseEnrollment.user_id == user_id)
+    if school_id is not None:
+        stmt = stmt.where(UserCourseEnrollment.school_id == school_id)
+    result = await db.execute(stmt.order_by(UserCourseEnrollment.course_code.asc()))
     return list(result.scalars().all())
 
 

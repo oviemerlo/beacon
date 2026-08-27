@@ -61,14 +61,22 @@ export default async function ProfilePage() {
         <div className="card mb-4">
           <p className="font-medium mb-2">Tags</p>
           <Link href="/follow-tags" className="inline-block text-sm text-signal-400 hover:text-signal-300 mb-3">
-            Follow tags
+            Echo Tags
           </Link>
-          <div className="flex flex-wrap gap-2">
-            {user.tags.length === 0 && <p className="text-parchment-500 text-sm">No tags yet.</p>}
-            {user.tags.map((t) => (
-              <span key={t.id} className="tag-pill">{t.label}</span>
-            ))}
-          </div>
+          {user.tags.length === 0 ? (
+            <p className="text-parchment-500 text-sm">No tags yet.</p>
+          ) : (
+            <>
+              <p className="text-parchment-500 text-sm mb-2">
+                {user.tags.length} selected
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {user.tags.map((t) => (
+                  <span key={t.id} className="tag-pill">{t.label}</span>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="card mb-4">

@@ -3,7 +3,8 @@
 import { useCallback, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
-import { reachBadgeLabel } from "@/helpers/broadcast-reach";
+import { VerifiedMark } from "@/components/VerifiedMark";
+import { reachBadgeColors, reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
 import { splitMentionParts } from "@/helpers/mentions";
 import { formatBroadcastSentAt } from "@/helpers/time";
@@ -130,12 +131,14 @@ export default function BroadcastDetailPage() {
 
 function ThreadItem({ item, isParent = false }: { item: FeedBroadcast; isParent?: boolean }) {
   const reachLabel = reachBadgeLabel(item.is_global, item.radius_meters);
-  const isLocalReach = reachLabel === "Local";
-  const isGlobalReach = reachLabel === "Global";
+  const reachColors = reachBadgeColors(item.is_global, item.radius_meters);
 
   return (
     <div className={isParent ? "" : "border border-dusk-700 rounded-beacon p-3"}>
-      <p className="text-parchment-500 text-xs">{item.sender_display_name}</p>
+      <p className="text-parchment-500 text-xs inline-flex items-center gap-1">
+        {item.sender_display_name}
+        <VerifiedMark verified={item.sender_is_verified} />
+      </p>
       <p className="text-parchment-100 mt-1">
         {splitMentionParts(item.content).map((part, index) =>
           part.mention ? (
@@ -150,16 +153,7 @@ function ThreadItem({ item, isParent = false }: { item: FeedBroadcast; isParent?
       <div className="flex items-center gap-2 mt-2">
         <span className="text-parchment-500 text-xs font-mono">{formatBroadcastSentAt(item.created_at)}</span>
         {isParent && (
-          <span
-            className="tag-pill"
-            style={
-              isLocalReach
-                ? { backgroundColor: "#7F1D1D", borderColor: "#991B1B", color: "#F5F2EA" }
-                : isGlobalReach
-                  ? { backgroundColor: "#FFFFFF", borderColor: "#D1D5DB", color: "#111827" }
-                  : undefined
-            }
-          >
+          <span className="tag-pill" style={reachColors}>
             {reachLabel}
           </span>
         )}

@@ -15,10 +15,10 @@ repository calls that either all succeed or all roll back together.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.tag import UserFollowedTag, UserTag
+from app.models.tag import Tag, UserFollowedTag, UserTag
 from app.models.user import OAuthAccount, User
 from sqlalchemy.orm import selectinload
 
@@ -32,7 +32,12 @@ async def get_by_id_with_tags(db: AsyncSession, user_id: uuid.UUID) -> User | No
     eager loading, or Pydantic's serialization hits MissingGreenlet.
     """
     result = await db.execute(
-        select(User).where(User.id == user_id).options(selectinload(User.user_tags).selectinload(UserTag.tag))
+        select(User)
+        .where(User.id == user_id)
+        .options(
+            selectinload(User.user_tags).selectinload(UserTag.tag),
+            selectinload(User.followed_tag_rows).selectinload(UserFollowedTag.tag),
+        )
     )
     return result.scalar_one_or_none()
 
@@ -90,6 +95,11 @@ async def add_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> None:
         await db.flush()
 
 
+async def remove_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> None:
+    await db.execute(UserTag.__table__.delete().where(UserTag.user_id == user_id, UserTag.tag_id == tag_id))
+    await db.flush()
+
+
 async def follow_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int, notifications_enabled: bool) -> None:
     existing = await db.get(UserFollowedTag, (user_id, tag_id))
     if existing:
@@ -104,9 +114,74 @@ async def unfollow_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> Non
     await db.flush()
 
 
-async def list_followed_tag_ids(db: AsyncSession, user_id: uuid.UUID) -> list[int]:
-    result = await db.execute(select(UserFollowedTag.tag_id).where(UserFollowedTag.user_id == user_id))
+async def replace_followed_tags(db: AsyncSession, user_id: uuid.UUID, tag_ids: list[int]) -> None:
+    """Replace follows and owned tags together. School verification tags are kept."""
+    existing_result = await db.execute(select(UserFollowedTag).where(UserFollowedTag.user_id == user_id))
+    existing_by_id = {row.tag_id: row for row in existing_result.scalars().all()}
+    desired = set(tag_ids)
+    school_ids = set(await school_tag_ids(db, user_id))
+
+    for tag_id, row in existing_by_id.items():
+        if tag_id in school_ids:
+            continue
+        if tag_id not in desired:
+            await db.delete(row)
+
+    for tag_id in desired:
+        if tag_id not in existing_by_id:
+            db.add(UserFollowedTag(user_id=user_id, tag_id=tag_id, notifications_enabled=False))
+
+    await replace_tags(db, user_id, list(dict.fromkeys([*school_ids, *tag_ids])))
+    await db.flush()
+
+
+async def follow_and_own(db: AsyncSession, user_id: uuid.UUID, tag_id: int, notifications_enabled: bool) -> None:
+    await follow_tag(db, user_id, tag_id, notifications_enabled)
+    await add_tag(db, user_id, tag_id)
+
+
+async def unfollow_and_disown(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> None:
+    await unfollow_tag(db, user_id, tag_id)
+    await remove_tag(db, user_id, tag_id)
+
+
+async def list_followed_tag_ids(
+    db: AsyncSession, user_id: uuid.UUID, tag_types: tuple[str, ...] | None = None
+) -> list[int]:
+    stmt = select(UserFollowedTag.tag_id).where(UserFollowedTag.user_id == user_id)
+    if tag_types is not None:
+        stmt = stmt.join(Tag, Tag.id == UserFollowedTag.tag_id).where(Tag.tag_type.in_(tag_types))
+    result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+async def list_identity_tag_ids_of_types(
+    db: AsyncSession, user_id: uuid.UUID, tag_types: tuple[str, ...]
+) -> list[int]:
+    owned = (
+        select(UserTag.tag_id)
+        .join(Tag, Tag.id == UserTag.tag_id)
+        .where(UserTag.user_id == user_id, Tag.tag_type.in_(tag_types))
+    )
+    followed = (
+        select(UserFollowedTag.tag_id)
+        .join(Tag, Tag.id == UserFollowedTag.tag_id)
+        .where(UserFollowedTag.user_id == user_id, Tag.tag_type.in_(tag_types))
+    )
+    result = await db.execute(union(owned, followed))
+    return list(result.scalars().all())
+
+
+async def school_tag_ids(db: AsyncSession, user_id: uuid.UUID) -> list[int]:
+    return await list_identity_tag_ids_of_types(db, user_id, ("school",))
+
+
+async def replace_school_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> None:
+    """A student has one verified-school tag; changing school replaces it."""
+    for old_id in await school_tag_ids(db, user_id):
+        if old_id != tag_id:
+            await unfollow_and_disown(db, user_id, old_id)
+    await follow_and_own(db, user_id, tag_id, False)
 
 
 async def get_oauth_account(db: AsyncSession, provider: str, provider_user_id: str) -> OAuthAccount | None:

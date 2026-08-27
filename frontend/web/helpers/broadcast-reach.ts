@@ -30,3 +30,28 @@ export function reachCategory(isGlobal: boolean, radiusMeters: number | null): R
   if ((radiusMeters ?? 0) > LOCAL_MAX_RADIUS_M) return "regional";
   return "local";
 }
+
+/** Muted fills for dark cards: Local cool, Regional pale (not brand amber), Global dusk purple. */
+export const REACH_BADGE_COLORS: Record<ReachCategory, { backgroundColor: string; borderColor: string; color: string }> = {
+  local: { backgroundColor: "#C9DFF0", borderColor: "#9EC4DC", color: "#1A2A3A" },
+  regional: { backgroundColor: "#F6D9B5", borderColor: "#E5C08A", color: "#2A1F12" },
+  global: { backgroundColor: "#5B4A82", borderColor: "#6D5B96", color: "#F5F2EA" },
+};
+
+export function reachBadgeColors(isGlobal: boolean, radiusMeters: number | null) {
+  return REACH_BADGE_COLORS[reachCategory(isGlobal, radiusMeters)];
+}
+
+export function reachSelectorColors(category: ReachCategory, selected: boolean, disabled = false) {
+  return {
+    ...REACH_BADGE_COLORS[category],
+    opacity: disabled ? 0.4 : selected ? 1 : 0.5,
+  };
+}
+
+export const REGIONAL_REACH_LOCKED_MESSAGE =
+  "Regional reach is available after verification. Free accounts can send Local echoes.";
+
+export function canUseRegionalReach(isVerified: boolean, isAdmin = false): boolean {
+  return isAdmin || isVerified;
+}

@@ -50,15 +50,24 @@ class Settings(BaseSettings):
     DEFAULT_FEED_RADIUS_METERS: int = 8000
     MAX_FEED_RADIUS_METERS: int = 50000
     MAX_BROADCAST_RADIUS_METERS: int = 100_000
+    LOCAL_MAX_RADIUS_METERS: int = 10_000  # free / local reach; above this is regional
     USERNAME_SEARCH_MIN_CHARS: int = 3
     USERNAME_SEARCH_MAX_RESULTS: int = 5
     GROUP_THREAD_DM_THRESHOLD: int = 3  # DMs on one broadcast before "start a group" is offered
     MIN_AGE_YEARS: int = 13
+    FOLLOWED_TAG_LIMIT_DEFAULT: int = 2  # student / non-student
+    FOLLOWED_TAG_LIMIT_BUSINESS: int = 4
+    FOLLOWED_TAG_LIMIT_ADMIN: int = 10_000
 
     # Guards POST /internal/jobs/run-digest-now — required header value.
     # Leave unset (empty string) to disable the route entirely in an
     # environment, since an empty expected token never matches a real header.
     INTERNAL_JOB_TOKEN: str = ""
+
+    AWS_REGION: str = ""
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    SES_FROM_EMAIL: str = ""
 
 
 settings = Settings()

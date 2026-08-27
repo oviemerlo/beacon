@@ -4,13 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
+import { VerifiedMark } from "@/components/VerifiedMark";
 import { LocationDriftBanner } from "@/components/LocationDriftBanner";
 import { promptAndSubmitReport } from "@/helpers/report-actions";
-import { reachBadgeLabel } from "@/helpers/broadcast-reach";
+import { reachBadgeColors, reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
-import { formatBroadcastSentAt } from "@/helpers/time";
+import { pathWithTagQuery, retainKnownTagIds, toggleTagId } from "@/helpers/tags";
+import { echoPreview, formatBroadcastSentAt } from "@/helpers/time";
 import { usePolling } from "@/helpers/usePolling";
-import type { FeedBroadcast, FeedSearchHit, Tag, UserProfile } from "@/types/api";
+import type { FeedBroadcast, FeedSearchHit, UserProfile } from "@/types/api";
 
 export default function FeedPage() {
   const router = useRouter();
@@ -20,7 +22,6 @@ export default function FeedPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [historyTags, setHistoryTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [searchHits, setSearchHits] = useState<FeedSearchHit[]>([]);
   const [searching, setSearching] = useState(false);
@@ -34,7 +35,7 @@ export default function FeedPage() {
       setError(null);
     }
     try {
-      const rows = await clientFetch<FeedBroadcast[]>("/feed/for-you");
+      const rows = await clientFetch<FeedBroadcast[]>(pathWithTagQuery("/feed/for-you", selectedTagIds));
       setBroadcasts(rows);
       await clientFetch("/feed/mark-seen", { method: "POST" });
     } catch {
@@ -42,12 +43,18 @@ export default function FeedPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [debouncedQuery]);
+  }, [debouncedQuery, selectedTagIds]);
 
   useEffect(() => {
-    clientFetch<UserProfile>("/users/me").then(setUser).catch(() => setUser(null));
-    clientFetch<Tag[]>("/feed/search-tags").then(setHistoryTags).catch(() => setHistoryTags([]));
+    clientFetch<UserProfile>("/users/me")
+      .then((me) => {
+        setUser(me);
+        setSelectedTagIds((ids) => retainKnownTagIds(ids, me.tags.map((tag) => tag.id)));
+      })
+      .catch(() => setUser(null));
   }, []);
+
+  const filterTags = user?.tags ?? [];
 
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
@@ -61,11 +68,9 @@ export default function FeedPage() {
       return;
     }
     let cancelled = false;
-    const params = new URLSearchParams({ q: debouncedQuery.trim() });
-    if (selectedTagIds.length > 0) params.set("tags", selectedTagIds.join(","));
     setSearching(true);
     setSearchError(null);
-    clientFetch<FeedSearchHit[]>(`/feed/search?${params.toString()}`)
+    clientFetch<FeedSearchHit[]>(pathWithTagQuery("/feed/search", selectedTagIds, { q: debouncedQuery.trim() }))
       .then((hits) => {
         if (!cancelled) setSearchHits(hits);
       })
@@ -120,27 +125,25 @@ export default function FeedPage() {
             placeholder="Search your feed history"
             aria-label="Search your feed history"
           />
-          {historyTags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {historyTags.map((tag) => {
-                const selected = selectedTagIds.includes(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() =>
-                      setSelectedTagIds((ids) => (ids.includes(tag.id) ? ids.filter((id) => id !== tag.id) : [...ids, tag.id]))
-                    }
-                    className={selected ? "tag-pill tag-pill-active" : "tag-pill"}
-                  >
-                    {tag.label}
-                  </button>
-                );
-              })}
+          {filterTags.length > 0 && (
+            <div className="mt-3">
+              <p className="text-parchment-500 text-xs mb-1.5">Search by tags</p>
+              <div className="flex flex-wrap gap-1.5">
+                {filterTags.map((tag) => {
+                  const selected = selectedTagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => setSelectedTagIds((ids) => toggleTagId(ids, tag.id))}
+                      className={selected ? "tag-pill tag-pill-active" : "tag-pill"}
+                    >
+                      {tag.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          )}
-          {selectedTagIds.length > 0 && !isSearching && (
-            <p className="text-parchment-500 text-xs mt-2">Enter a keyword to search. Tags only narrow results.</p>
           )}
         </div>
 
@@ -156,7 +159,12 @@ export default function FeedPage() {
             )}
             <div className="flex flex-col gap-3">
               {searchHits.map((hit) => (
-                <SearchHitCard key={hit.id} hit={hit} onOpenConversation={(id) => router.push(`/conversations/${id}`)} />
+                <SearchHitCard
+                  key={hit.id}
+                  hit={hit}
+                  currentUserId={user?.id ?? null}
+                  onOpenConversation={(id) => router.push(`/conversations/${id}`)}
+                />
               ))}
             </div>
           </>
@@ -164,7 +172,9 @@ export default function FeedPage() {
           <>
             {loading && <p className="text-parchment-500 font-mono text-sm">Loading nearby broadcasts…</p>}
             {error && <p className="text-rust-400 text-sm">{error}</p>}
-            {!loading && !error && broadcasts.length === 0 && <EmptyState />}
+            {!loading && !error && broadcasts.length === 0 && (
+              <EmptyState tagFilterActive={selectedTagIds.length > 0} />
+            )}
             <div className="flex flex-col gap-3">
               {broadcasts.map((b) => (
                 <BroadcastCard
@@ -186,17 +196,22 @@ export default function FeedPage() {
 
 function SearchHitCard({
   hit,
+  currentUserId,
   onOpenConversation,
 }: {
   hit: FeedSearchHit;
+  currentUserId: string | null;
   onOpenConversation: (conversationId: string) => void;
 }) {
   const matchLabel = hit.match_type === "both" ? "Echo + replies" : hit.match_type === "echo" ? "Echo" : "Reply";
   return (
     <div className="card">
       <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex items-center flex-wrap gap-2 min-w-0">
-          <p className="text-parchment-500 text-sm">{hit.sender_display_name}</p>
+        <div className="flex items-center flex-wrap gap-x-5 gap-y-2 min-w-0">
+          <p className="text-parchment-500 text-sm inline-flex items-center gap-1 mr-2">
+            {hit.sender_id === currentUserId ? "You" : hit.sender_display_name}
+            <VerifiedMark verified={hit.sender_is_verified} />
+          </p>
           {hit.tags.map((tag) => (
             <span key={tag.id} className="tag-pill">
               {tag.label}
@@ -213,6 +228,9 @@ function SearchHitCard({
         <div className="mt-3 ml-3 border-l border-dusk-600 pl-3 flex flex-col gap-3">
           {hit.matches.map((match) => (
             <div key={match.id}>
+              <p className="text-parchment-500 text-sm mb-1">
+                {match.sender_id && match.sender_id === currentUserId ? "You" : match.sender_display_name || "Unknown"}
+              </p>
               <p className="text-parchment-300 text-sm">{match.body}</p>
               <p className="text-parchment-500 text-xs font-mono mt-1">
                 {formatBroadcastSentAt(match.created_at)}
@@ -250,9 +268,17 @@ function BroadcastCard({
 }) {
   const km = (broadcast.distance_m / 1000).toFixed(1);
   const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
+  const reachColors = reachBadgeColors(broadcast.is_global, broadcast.radius_meters);
   const isOwn = currentUserId === broadcast.sender_id;
-  const isLocalReach = reachLabel === "Local";
-  const isGlobalReach = reachLabel === "Global";
+  const featuredReply = broadcast.latest_reply ?? null;
+  const headerName = featuredReply
+    ? currentUserId === featuredReply.sender_id
+      ? "You"
+      : featuredReply.sender_display_name
+    : isOwn
+      ? "You"
+      : broadcast.sender_display_name;
+  const headerVerified = featuredReply ? featuredReply.sender_is_verified : broadcast.sender_is_verified;
   const [showPrivateComposer, setShowPrivateComposer] = useState(false);
   const [privateMessage, setPrivateMessage] = useState("");
   const [sendingPrivate, setSendingPrivate] = useState(false);
@@ -279,8 +305,11 @@ function BroadcastCard({
   return (
     <div className="card block hover:border-signal-500/50 transition-colors">
       <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex items-center flex-wrap gap-2 min-w-0">
-          <p className="text-parchment-500 text-sm">{isOwn ? "You" : broadcast.sender_display_name}</p>
+        <div className="flex items-center flex-wrap gap-x-5 gap-y-2 min-w-0">
+          <p className="text-parchment-500 text-sm inline-flex items-center gap-1 mr-2">
+            {headerName}
+            <VerifiedMark verified={headerVerified} />
+          </p>
           {broadcast.tags.map((tag) => (
             <span key={tag.id} className="tag-pill">
               {tag.label}
@@ -350,27 +379,18 @@ function BroadcastCard({
           />
         )}
       </div>
-      <p className="text-parchment-100">{broadcast.content}</p>
+      {featuredReply && (
+        <p className="text-parchment-500 text-xs font-mono mb-1">Reply to: {echoPreview(broadcast.content)}</p>
+      )}
+      <p className="text-parchment-100">{featuredReply ? featuredReply.content : broadcast.content}</p>
       <p className="text-parchment-500 text-xs font-mono mt-2">
-        {formatBroadcastSentAt(broadcast.created_at)}
+        {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
       </p>
       <div className="flex items-center flex-wrap gap-1.5 mt-3 text-[10px] leading-tight font-mono text-parchment-500">
         {!isOwn && <span>{km} km away</span>}
-        <span
-          className="feed-card-meta"
-          style={
-            isLocalReach
-              ? { backgroundColor: "#7F1D1D", borderColor: "#991B1B", color: "#F5F2EA" }
-              : isGlobalReach
-                ? { backgroundColor: "#FFFFFF", borderColor: "#D1D5DB", color: "#111827" }
-                : undefined
-          }
-        >
+        <span className="feed-card-meta" style={reachColors}>
           {reachLabel}
         </span>
-        {typeof broadcast.shared_tag_count === "number" && broadcast.shared_tag_count > 0 && (
-          <span className="feed-card-meta tag-pill-active">{broadcast.shared_tag_count} shared tag{broadcast.shared_tag_count > 1 ? "s" : ""}</span>
-        )}
         <Link
           href={`/broadcasts/${broadcast.id}`}
           className="text-parchment-500 hover:text-parchment-100"
@@ -482,12 +502,16 @@ function FeedCardOverflowMenu({
   );
 }
 
-function EmptyState() {
+function EmptyState({ tagFilterActive }: { tagFilterActive: boolean }) {
   return (
     <div className="card text-center py-10">
-      <p className="font-medium">Nothing nearby yet.</p>
+      <p className="font-medium">
+        {tagFilterActive ? "No Echoes targeting these tags nearby." : "Nothing nearby yet."}
+      </p>
       <p className="text-parchment-500 text-sm mt-1">
-        Broadcasts from people and businesses within your radius will show up here.
+        {tagFilterActive
+          ? "Clear a tag to see everything in reach."
+          : "Broadcasts from people and businesses within your radius will show up here."}
       </p>
     </div>
   );

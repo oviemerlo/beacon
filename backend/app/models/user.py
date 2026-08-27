@@ -14,6 +14,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.school import SchoolVerification
+    from app.models.tag import UserFollowedTag, UserTag
 
 
 class User(Base):
@@ -44,14 +45,15 @@ class User(Base):
 
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     user_tags: Mapped[list["UserTag"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    followed_tag_rows: Mapped[list["UserFollowedTag"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     school_verification: Mapped["SchoolVerification | None"] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         uselist=False,
     )
-    # `tags` resolves through user_tags -> Tag, so `user.tags` gives you
-    # Tag objects (id, tag_type, label) directly — matching what TagOut
-    # expects. Must be eager-loaded via user_repository.get_by_id_with_tags.
+    # `tags` is owned identity tags (same set as follows, plus school).
+    # Follows live on followed_tag_rows. Profile serialization unions both.
+    # Must be eager-loaded via user_repository.get_by_id_with_tags.
     tags = association_proxy("user_tags", "tag")
 
     @property

@@ -2,14 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Alert, TextInput, ScrollView } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
-import { reachBadgeLabel } from "../helpers/broadcastReach";
+import { reachBadgeColors, reachBadgeLabel } from "../helpers/broadcastReach";
 import { pickReasonAndSubmitReport } from "../helpers/reportActions";
-import { formatBroadcastSentAt } from "../helpers/time";
+import { pathWithTagQuery, retainKnownTagIds, toggleTagId } from "../helpers/tags";
+import { echoPreview, formatBroadcastSentAt } from "../helpers/time";
 import { usePolling } from "../helpers/usePolling";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
+import { VerifiedMark } from "../components/VerifiedMark";
 import { LocationDriftBanner } from "../components/LocationDriftBanner";
-import type { FeedBroadcast, FeedSearchHit, Tag, UserProfile } from "../types/api";
+import type { FeedBroadcast, FeedSearchHit, UserProfile } from "../types/api";
 
 export function FeedScreen({
   onOpenBroadcast,
@@ -24,7 +26,6 @@ export function FeedScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [historyTags, setHistoryTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [searchHits, setSearchHits] = useState<FeedSearchHit[]>([]);
   const [searching, setSearching] = useState(false);
@@ -35,27 +36,30 @@ export function FeedScreen({
     if (debouncedQuery.trim()) return;
     if (!silent) setLoading(true);
     try {
-      const data = await apiFetch<FeedBroadcast[]>("/feed/for-you");
+      const data = await apiFetch<FeedBroadcast[]>(pathWithTagQuery("/feed/for-you", selectedTagIds));
       setBroadcasts(data);
       await apiFetch("/feed/mark-seen", { method: "POST" });
     } catch {
       // Keep feed rendering stable on network failures.
     }
     if (!silent) setLoading(false);
-  }, [debouncedQuery]);
+  }, [debouncedQuery, selectedTagIds]);
 
   usePolling(load, [load], 5000);
 
   useFocusEffect(
     useCallback(() => {
       void load({ silent: true });
+      apiFetch<UserProfile>("/users/me")
+        .then((me) => {
+          setUser(me);
+          setSelectedTagIds((ids) => retainKnownTagIds(ids, me.tags.map((tag) => tag.id)));
+        })
+        .catch(() => setUser(null));
     }, [load])
   );
 
-  useEffect(() => {
-    apiFetch<UserProfile>("/users/me").then(setUser).catch(() => setUser(null));
-    apiFetch<Tag[]>("/feed/search-tags").then(setHistoryTags).catch(() => setHistoryTags([]));
-  }, []);
+  const filterTags = user?.tags ?? [];
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
@@ -69,11 +73,9 @@ export function FeedScreen({
       return;
     }
     let cancelled = false;
-    const params = new URLSearchParams({ q: debouncedQuery.trim() });
-    if (selectedTagIds.length > 0) params.set("tags", selectedTagIds.join(","));
     setSearching(true);
     setSearchError(null);
-    apiFetch<FeedSearchHit[]>(`/feed/search?${params.toString()}`)
+    apiFetch<FeedSearchHit[]>(pathWithTagQuery("/feed/search", selectedTagIds, { q: debouncedQuery.trim() }))
       .then((hits) => {
         if (!cancelled) setSearchHits(hits);
       })
@@ -94,9 +96,7 @@ export function FeedScreen({
     setRefreshing(true);
     if (isSearching) {
       try {
-        const params = new URLSearchParams({ q: debouncedQuery.trim() });
-        if (selectedTagIds.length > 0) params.set("tags", selectedTagIds.join(","));
-        setSearchHits(await apiFetch<FeedSearchHit[]>(`/feed/search?${params.toString()}`));
+        setSearchHits(await apiFetch<FeedSearchHit[]>(pathWithTagQuery("/feed/search", selectedTagIds, { q: debouncedQuery.trim() })));
         setSearchError(null);
       } catch {
         setSearchError("Couldn't search your feed history.");
@@ -148,26 +148,24 @@ export function FeedScreen({
           autoCapitalize="none"
           returnKeyType="search"
         />
-        {historyTags.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            {historyTags.map((tag) => {
-              const selected = selectedTagIds.includes(tag.id);
-              return (
-                <Pressable
-                  key={tag.id}
-                  onPress={() =>
-                    setSelectedTagIds((ids) => (ids.includes(tag.id) ? ids.filter((id) => id !== tag.id) : [...ids, tag.id]))
-                  }
-                  style={[styles.filterChip, selected && styles.filterChipActive]}
-                >
-                  <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>{tag.label}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        )}
-        {selectedTagIds.length > 0 && !isSearching && (
-          <Text style={styles.searchHint}>Enter a keyword to search. Tags only narrow results.</Text>
+        {filterTags.length > 0 && (
+          <>
+            <Text style={styles.searchByTags}>Search by tags</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+              {filterTags.map((tag) => {
+                const selected = selectedTagIds.includes(tag.id);
+                return (
+                  <Pressable
+                    key={tag.id}
+                    onPress={() => setSelectedTagIds((ids) => toggleTagId(ids, tag.id))}
+                    style={[styles.filterChip, selected && styles.filterChipActive]}
+                  >
+                    <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>{tag.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </>
         )}
       </View>
 
@@ -193,7 +191,12 @@ export function FeedScreen({
             )
           }
           renderItem={({ item }) => (
-            <SearchHitCard hit={item} onOpenBroadcast={onOpenBroadcast} onOpenConversation={onOpenConversation} />
+            <SearchHitCard
+              hit={item}
+              currentUserId={user?.id ?? null}
+              onOpenBroadcast={onOpenBroadcast}
+              onOpenConversation={onOpenConversation}
+            />
           )}
         />
       ) : (
@@ -205,9 +208,13 @@ export function FeedScreen({
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.signal500} />}
           ListEmptyComponent={
             <Card>
-              <Text style={styles.emptyTitle}>Nothing nearby yet.</Text>
+              <Text style={styles.emptyTitle}>
+                {selectedTagIds.length > 0 ? "No Echoes targeting these tags nearby." : "Nothing nearby yet."}
+              </Text>
               <Text style={styles.emptySubtitle}>
-                Broadcasts from people and businesses within your radius will show up here.
+                {selectedTagIds.length > 0
+                  ? "Clear a tag to see everything in reach."
+                  : "Broadcasts from people and businesses within your radius will show up here."}
               </Text>
             </Card>
           }
@@ -229,10 +236,12 @@ export function FeedScreen({
 
 function SearchHitCard({
   hit,
+  currentUserId,
   onOpenBroadcast,
   onOpenConversation,
 }: {
   hit: FeedSearchHit;
+  currentUserId: string | null;
   onOpenBroadcast: (id: string) => void;
   onOpenConversation: (conversationId: string) => void;
 }) {
@@ -241,7 +250,10 @@ function SearchHitCard({
     <Card>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
-          <Text style={styles.senderName}>{hit.sender_display_name}</Text>
+          <View style={styles.senderCluster}>
+            <Text style={styles.senderName}>{hit.sender_id === currentUserId ? "You" : hit.sender_display_name}</Text>
+            <VerifiedMark verified={hit.sender_is_verified} />
+          </View>
           {hit.tags.map((tag) => (
             <View key={tag.id} style={styles.broadcastTagPill}>
               <Text style={styles.broadcastTagPillText}>{tag.label}</Text>
@@ -258,6 +270,9 @@ function SearchHitCard({
       <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(hit.created_at)}</Text>
       {hit.matches.map((match) => (
         <View key={match.id} style={styles.nestedMatch}>
+          <Text style={styles.senderName}>
+            {match.sender_id && match.sender_id === currentUserId ? "You" : match.sender_display_name || "Unknown"}
+          </Text>
           <Text style={styles.nestedMatchBody}>{match.body}</Text>
           <Text style={styles.sentAtLabel}>
             {formatBroadcastSentAt(match.created_at)}
@@ -292,7 +307,17 @@ function BroadcastCard({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const isOwn = currentUserId === broadcast.sender_id;
+  const featuredReply = broadcast.latest_reply ?? null;
+  const headerName = featuredReply
+    ? currentUserId === featuredReply.sender_id
+      ? "You"
+      : featuredReply.sender_display_name
+    : isOwn
+      ? "You"
+      : broadcast.sender_display_name;
+  const headerVerified = featuredReply ? featuredReply.sender_is_verified : broadcast.sender_is_verified;
   const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
+  const reachColors = reachBadgeColors(broadcast.is_global, broadcast.radius_meters);
 
   async function reportBroadcast() {
     setMenuOpen(false);
@@ -363,7 +388,10 @@ function BroadcastCard({
     <Card style={menuOpen ? { ...styles.cardOverflow, ...styles.cardMenuOpen } : styles.cardOverflow}>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
-          <Text style={styles.senderName}>{isOwn ? "You" : broadcast.sender_display_name}</Text>
+          <View style={styles.senderCluster}>
+            <Text style={styles.senderName}>{headerName}</Text>
+            <VerifiedMark verified={headerVerified} />
+          </View>
           {broadcast.tags.map((tag) => (
             <View key={tag.id} style={styles.broadcastTagPill}>
               <Text style={styles.broadcastTagPillText}>{tag.label}</Text>
@@ -403,26 +431,16 @@ function BroadcastCard({
           </View>
         )}
       </View>
-      <Text style={styles.cardText}>{broadcast.content}</Text>
-      <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(broadcast.created_at)}</Text>
+      {featuredReply ? <Text style={styles.replyToLabel}>Reply to: {echoPreview(broadcast.content)}</Text> : null}
+      <Text style={styles.cardText}>{featuredReply ? featuredReply.content : broadcast.content}</Text>
+      <Text style={styles.sentAtLabel}>
+        {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
+      </Text>
       <View style={styles.metaRow}>
         {!isOwn && <Text style={styles.cardMeta}>{(broadcast.distance_m / 1000).toFixed(1)} km away</Text>}
-        <View
-          style={[
-            styles.reachPill,
-            reachLabel === "Local" && styles.localReachPill,
-            reachLabel === "Global" && styles.globalReachPill,
-          ]}
-        >
-          <Text style={[styles.reachPillText, reachLabel === "Global" && styles.globalReachPillText]}>{reachLabel}</Text>
+        <View style={[styles.reachPill, { backgroundColor: reachColors.backgroundColor, borderColor: reachColors.borderColor }]}>
+          <Text style={[styles.reachPillText, { color: reachColors.color }]}>{reachLabel}</Text>
         </View>
-        {!!broadcast.shared_tag_count && (
-          <View style={styles.tagPill}>
-            <Text style={styles.tagPillText}>
-              {broadcast.shared_tag_count} shared tag{broadcast.shared_tag_count > 1 ? "s" : ""}
-            </Text>
-          </View>
-        )}
         <Pressable
           onPress={() => onOpenBroadcast(broadcast.id)}
           accessibilityRole="link"
@@ -476,14 +494,16 @@ const styles = StyleSheet.create({
   filterChipActive: { borderColor: colors.signal500, backgroundColor: `${colors.signal500}1A` },
   filterChipText: { color: colors.parchment300, fontSize: 11, fontFamily: "monospace" },
   filterChipTextActive: { color: colors.signal400 },
-  searchHint: { color: colors.parchment500, fontSize: 11 },
+  searchByTags: { color: colors.parchment500, fontSize: 11 },
   searchStatus: { color: colors.parchment500, fontSize: 13, fontFamily: "monospace", marginBottom: 8 },
   searchError: { color: colors.rust400, fontSize: 13, marginBottom: 8 },
   nestedMatch: { marginTop: 12, marginLeft: 10, paddingLeft: 10, borderLeftWidth: 1, borderLeftColor: colors.dusk600, gap: 6 },
   nestedMatchBody: { color: colors.parchment300, fontSize: 14 },
+  replyToLabel: { color: colors.parchment500, fontSize: 11, fontFamily: "monospace", marginTop: 6 },
   cardText: { color: colors.parchment100, fontSize: 15, marginTop: 6 },
   headingRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
-  headingCopy: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
+  headingCopy: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 20, rowGap: 8 },
+  senderCluster: { flexDirection: "row", alignItems: "center", gap: 4, marginRight: 8 },
   senderName: { color: colors.parchment500, fontSize: 12 },
   sentAtLabel: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace", marginTop: 4 },
   cardOverflow: { overflow: "visible", zIndex: 1 },
@@ -520,10 +540,7 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
   cardMeta: { color: colors.parchment500, fontSize: 11, fontFamily: "monospace" },
   reachPill: { borderColor: colors.parchment500, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
-  localReachPill: { backgroundColor: "#7F1D1D", borderColor: "#991B1B" },
-  globalReachPill: { backgroundColor: "#FFFFFF", borderColor: "#D1D5DB" },
-  reachPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
-  globalReachPillText: { color: "#111827" },
+  reachPillText: { fontSize: 10, fontFamily: "monospace" },
   replyRow: { flexDirection: "row", gap: 8, marginTop: 10 },
   replyPill: { borderColor: colors.dusk600, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
   replyPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },

@@ -15,3 +15,7 @@ export async function submitReport(payload: ReportPayload): Promise<void> {
     body: JSON.stringify(payload),
   });
 }
+
+export function reasonLabel(reason: ReportReason): string {
+  return REPORT_REASONS.find((item) => item.value === reason)?.label ?? reason;
+}

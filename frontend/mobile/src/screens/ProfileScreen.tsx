@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
+import { useCallback, useState } from "react";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput, ScrollView } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { apiFetch } from "../helpers/api";
 import { signOut } from "../helpers/auth";
 import { colors, radii } from "../theme/tokens";
@@ -11,26 +12,28 @@ export function ProfileScreen({
   onSignedOut,
   onOpenFollowTags,
   onOpenBlockedUsers,
+  onOpenAdminReports,
 }: {
   onSignedOut: () => void;
   onOpenFollowTags: () => void;
   onOpenBlockedUsers: () => void;
+  onOpenAdminReports: () => void;
 }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [blockedCount, setBlockedCount] = useState(0);
   const [displayNameDraft, setDisplayNameDraft] = useState("");
   const [savingDisplayName, setSavingDisplayName] = useState(false);
   const [displayNameError, setDisplayNameError] = useState<string | null>(null);
-
-  useEffect(() => {
-    apiFetch<UserProfile>("/users/me").then((me) => {
-      setUser(me);
-      setDisplayNameDraft(me.display_name);
-    });
-  }, []);
+  const tabBarHeight = useBottomTabBarHeight();
 
   useFocusEffect(
     useCallback(() => {
+      apiFetch<UserProfile>("/users/me")
+        .then((me) => {
+          setUser(me);
+          setDisplayNameDraft((current) => current || me.display_name);
+        })
+        .catch(() => {});
       apiFetch<BlockedUsersList>("/blocks")
         .then((data) => setBlockedCount(data.blocked_users.length))
         .catch(() => setBlockedCount(0));
@@ -63,7 +66,12 @@ export function ProfileScreen({
   if (!user) return <ActivityIndicator color={colors.signal500} style={{ marginTop: 40 }} />;
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 32 }]}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
       <Text style={styles.title}>Your profile</Text>
 
       <Card style={{ marginBottom: 12 }}>
@@ -92,18 +100,21 @@ export function ProfileScreen({
       <Card style={{ marginBottom: 12 }}>
         <Text style={styles.sectionLabel}>Tags</Text>
         <Pressable onPress={onOpenFollowTags} style={styles.followTagsButton}>
-          <Text style={styles.followTagsButtonText}>Follow tags</Text>
+          <Text style={styles.followTagsButtonText}>Echo Tags</Text>
         </Pressable>
         {user.tags.length === 0 ? (
           <Text style={styles.emptyText}>No tags yet.</Text>
         ) : (
-          <View style={styles.pillRow}>
-            {user.tags.map((t) => (
-              <View key={t.id} style={styles.pill}>
-                <Text style={styles.pillText}>{t.label}</Text>
-              </View>
-            ))}
-          </View>
+          <>
+            <Text style={styles.emptyText}>{user.tags.length} selected</Text>
+            <View style={styles.pillRow}>
+              {user.tags.map((t) => (
+                <View key={t.id} style={styles.pill}>
+                  <Text style={styles.pillText}>{t.label}</Text>
+                </View>
+              ))}
+            </View>
+          </>
         )}
       </Card>
 
@@ -126,6 +137,15 @@ export function ProfileScreen({
         </Text>
       </Card>
 
+      {user.is_admin ? (
+        <Card style={{ marginBottom: 24 }}>
+          <Text style={styles.sectionLabel}>Moderation</Text>
+          <Pressable onPress={onOpenAdminReports} style={styles.followTagsButton}>
+            <Text style={styles.followTagsButtonText}>Open admin reports queue</Text>
+          </Pressable>
+        </Card>
+      ) : null}
+
       <Pressable
         style={styles.signOutButton}
         onPress={async () => {
@@ -135,12 +155,13 @@ export function ProfileScreen({
       >
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dusk950, padding: 16 },
+  container: { flex: 1, backgroundColor: colors.dusk950 },
+  content: { padding: 16, flexGrow: 1 },
   title: { color: colors.parchment100, fontSize: 20, fontWeight: "700", marginBottom: 16 },
   name: { color: colors.parchment100, fontWeight: "600", fontSize: 16 },
   username: { color: colors.parchment500, fontFamily: "monospace", fontSize: 12, marginTop: 2 },
@@ -163,7 +184,7 @@ const styles = StyleSheet.create({
   saveButtonText: { color: colors.dusk950, fontWeight: "700" },
   errorText: { color: colors.rust400, fontSize: 12, marginTop: 8 },
   sectionLabel: { color: colors.parchment100, fontWeight: "600", marginBottom: 8 },
-  emptyText: { color: colors.parchment500, fontSize: 13 },
+  emptyText: { color: colors.parchment500, fontSize: 13, marginBottom: 8 },
   todo: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace", marginTop: 10 },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },

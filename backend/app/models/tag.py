@@ -12,7 +12,7 @@ class Tag(Base):
     __tablename__ = "tags"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tag_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'nationality' | 'continent' | 'hobby' | 'community'
+    tag_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'nationality' | 'region' | 'hobby' | 'school'
     label: Mapped[str] = mapped_column(String(100), nullable=False)
 
     __table_args__ = (UniqueConstraint("tag_type", "label", name="uq_tag_type_label"),)
@@ -39,3 +39,6 @@ class UserFollowedTag(Base):
     tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="followed_tag_rows")
+    tag: Mapped["Tag"] = relationship()

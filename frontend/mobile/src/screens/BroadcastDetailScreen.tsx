@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import * as Location from "expo-location";
 import { apiFetch } from "../helpers/api";
-import { reachBadgeLabel } from "../helpers/broadcastReach";
+import { reachBadgeColors, reachBadgeLabel } from "../helpers/broadcastReach";
 import { splitMentionParts } from "../helpers/mentions";
 import { usePolling } from "../helpers/usePolling";
 import { formatBroadcastSentAt } from "../helpers/time";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
+import { VerifiedMark } from "../components/VerifiedMark";
 import type { BroadcastThread, FeedBroadcast, UserProfile } from "../types/api";
 
 export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) {
@@ -71,6 +72,7 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
           id: created.id,
           sender_id: currentUser?.id ?? "",
           sender_display_name: currentUser?.display_name ?? "You",
+          sender_is_verified: currentUser?.is_verified ?? false,
           content: body,
           distance_m: 0,
           tags: current.parent.tags,
@@ -129,11 +131,13 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
 
 function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: boolean }) {
   const reachLabel = reachBadgeLabel(item.is_global, item.radius_meters);
-  const isLocalReach = reachLabel === "Local";
-  const isGlobalReach = reachLabel === "Global";
+  const reachColors = reachBadgeColors(item.is_global, item.radius_meters);
   return (
     <View style={[isReply && styles.replyItem]}>
-      <Text style={styles.senderName}>{item.sender_display_name}</Text>
+      <View style={styles.senderRow}>
+        <Text style={styles.senderName}>{item.sender_display_name}</Text>
+        <VerifiedMark verified={item.sender_is_verified} />
+      </View>
       <Text style={styles.threadContent}>
         {splitMentionParts(item.content).map((part, index) => (
           <Text key={`${item.id}-${index}`} style={part.mention ? styles.mentionInBody : undefined}>
@@ -144,14 +148,8 @@ function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: 
       <View style={styles.threadMetaRow}>
         <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(item.created_at)}</Text>
         {!isReply && (
-          <View
-            style={[
-              styles.reachPill,
-              isLocalReach && styles.localReachPill,
-              isGlobalReach && styles.globalReachPill,
-            ]}
-          >
-            <Text style={[styles.reachPillText, isGlobalReach && styles.globalReachPillText]}>{reachLabel}</Text>
+          <View style={[styles.reachPill, { backgroundColor: reachColors.backgroundColor, borderColor: reachColors.borderColor }]}>
+            <Text style={[styles.reachPillText, { color: reachColors.color }]}>{reachLabel}</Text>
           </View>
         )}
       </View>
@@ -165,16 +163,14 @@ const styles = StyleSheet.create({
   repliesHeader: { color: colors.parchment500, fontSize: 11, marginTop: 12, marginBottom: 8, fontFamily: "monospace" },
   repliesList: { maxHeight: 260 },
   replyItem: { borderWidth: 1, borderColor: colors.dusk700, borderRadius: radii.beacon, padding: 10, marginBottom: 8 },
+  senderRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   senderName: { color: colors.parchment500, fontSize: 12 },
   threadContent: { color: colors.parchment100, marginTop: 4 },
   mentionInBody: { color: colors.signal400, fontWeight: "600" },
   threadMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
   sentAtLabel: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
   reachPill: { borderColor: colors.parchment500, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
-  localReachPill: { backgroundColor: "#7F1D1D", borderColor: "#991B1B" },
-  globalReachPill: { backgroundColor: "#FFFFFF", borderColor: "#D1D5DB" },
-  reachPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
-  globalReachPillText: { color: "#111827" },
+  reachPillText: { fontSize: 10, fontFamily: "monospace" },
   textarea: { color: colors.parchment100, minHeight: 100, textAlignVertical: "top" },
   error: { color: colors.rust400, fontSize: 13, marginTop: 8 },
   button: { backgroundColor: colors.signal500, borderRadius: radii.beacon, paddingVertical: 12, alignItems: "center", marginTop: 12 },

@@ -8,7 +8,7 @@ place distance is ever compared against a broadcast's radius.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -17,6 +17,7 @@ from app.models.conversation import BlockedUser
 from app.models.school import UserCourseEnrollment
 from app.models.tag import Tag, UserFollowedTag, UserTag
 from app.models.user import User
+from app.services.regions import COUNTRY_NAME_TO_REGION
 
 
 def _hidden_broadcast_ids(user_id: uuid.UUID):
@@ -46,14 +47,138 @@ def _reply_count_subquery_for_viewer(user_id: uuid.UUID):
     )
 
 
-def _visibility_clause(user_id: uuid.UUID):
-    viewer_profile_tag_ids = select(UserTag.tag_id).where(UserTag.user_id == user_id).subquery()
-    viewer_location_tag_ids = (
-        select(UserTag.tag_id)
-        .where(UserTag.user_id == user_id)
-        .union(select(UserFollowedTag.tag_id).where(UserFollowedTag.user_id == user_id))
+def _latest_visible_reply_at_subquery(user_id: uuid.UUID):
+    reply_broadcast = aliased(Broadcast)
+    reply_sender = aliased(User)
+    blocked_sender_ids = select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == user_id)
+    hidden_ids = _hidden_broadcast_ids(user_id)
+    return (
+        select(func.max(reply_broadcast.created_at))
+        .join(reply_sender, reply_sender.id == reply_broadcast.sender_id)
+        .where(reply_broadcast.parent_broadcast_id == Broadcast.id)
+        .where(reply_sender.is_suspended.is_(False))
+        .where(reply_broadcast.sender_id.not_in(blocked_sender_ids))
+        .where(_not_deleted(reply_broadcast))
+        .where(reply_broadcast.id.not_in(hidden_ids))
+        .where((reply_broadcast.expires_at.is_(None)) | (reply_broadcast.expires_at > func.now()))
+        .correlate(Broadcast)
+        .scalar_subquery()
+    )
+
+
+def _last_activity_at(user_id: uuid.UUID):
+    return func.greatest(
+        Broadcast.created_at,
+        func.coalesce(_latest_visible_reply_at_subquery(user_id), Broadcast.created_at),
+    )
+
+
+def _country_to_region_case(label_column):
+    return case(
+        *((country, region) for country, region in COUNTRY_NAME_TO_REGION.items()),
+        value=label_column,
+    )
+
+
+def _audience_overlap_count(match_ids):
+    return (
+        select(func.count(BroadcastTag.tag_id))
+        .where(
+            BroadcastTag.broadcast_id == Broadcast.id,
+            BroadcastTag.tag_id.in_(select(match_ids.c.tag_id)),
+        )
+        .correlate(Broadcast)
+        .scalar_subquery()
+    )
+
+
+def _viewer_tag_labels(user_id: uuid.UUID, tag_type: str):
+    owned = (
+        select(Tag.label.label("label"))
+        .select_from(UserTag)
+        .join(Tag, Tag.id == UserTag.tag_id)
+        .where(UserTag.user_id == user_id, Tag.tag_type == tag_type)
+    )
+    followed = (
+        select(Tag.label.label("label"))
+        .select_from(UserFollowedTag)
+        .join(Tag, Tag.id == UserFollowedTag.tag_id)
+        .where(UserFollowedTag.user_id == user_id, Tag.tag_type == tag_type)
+    )
+    return union(owned, followed).subquery()
+
+
+def _implied_region_tag_ids(user_id: uuid.UUID):
+    """Region tags covering the viewer's nationality countries (e.g. Nigeria → Sub-Saharan Africa)."""
+    nationality_labels = _viewer_tag_labels(user_id, "nationality")
+    mapped_regions = (
+        select(_country_to_region_case(nationality_labels.c.label).label("region_label"))
+        .select_from(nationality_labels)
         .subquery()
     )
+    region_tag = aliased(Tag)
+    return select(region_tag.id.label("tag_id")).where(
+        region_tag.tag_type == "region",
+        region_tag.label.in_(select(mapped_regions.c.region_label)),
+    )
+
+
+def _implied_country_tag_ids(user_id: uuid.UUID):
+    """Nationality tags inside the viewer's followed regions (e.g. Sub-Saharan Africa → Nigeria)."""
+    region_labels = _viewer_tag_labels(user_id, "region")
+    nationality_tag = aliased(Tag)
+    return select(nationality_tag.id.label("tag_id")).where(
+        nationality_tag.tag_type == "nationality",
+        _country_to_region_case(nationality_tag.label).in_(select(region_labels.c.label)),
+    )
+
+
+def _viewer_match_tag_ids(user_id: uuid.UUID):
+    owned = select(UserTag.tag_id.label("tag_id")).where(UserTag.user_id == user_id)
+    followed = select(UserFollowedTag.tag_id.label("tag_id")).where(UserFollowedTag.user_id == user_id)
+    return union(
+        owned,
+        followed,
+        _implied_region_tag_ids(user_id),
+        _implied_country_tag_ids(user_id),
+    ).subquery()
+
+
+def _shared_tag_count_subquery(user_id: uuid.UUID):
+    return _audience_overlap_count(_viewer_match_tag_ids(user_id))
+
+
+def _broadcast_ids_for_audience_tags(tag_ids: list[int]):
+    """Direct tag hits plus the country↔region audience expansion."""
+    direct = select(BroadcastTag.broadcast_id.label("broadcast_id")).where(BroadcastTag.tag_id.in_(tag_ids))
+    selected = select(Tag.tag_type, Tag.label).where(Tag.id.in_(tag_ids)).subquery()
+    implied_region_labels = select(_country_to_region_case(selected.c.label)).where(selected.c.tag_type == "nationality")
+    via_region = (
+        select(BroadcastTag.broadcast_id.label("broadcast_id"))
+        .join(Tag, Tag.id == BroadcastTag.tag_id)
+        .where(Tag.tag_type == "region", Tag.label.in_(implied_region_labels))
+    )
+    selected_regions = select(selected.c.label).where(selected.c.tag_type == "region")
+    via_country = (
+        select(BroadcastTag.broadcast_id.label("broadcast_id"))
+        .join(Tag, Tag.id == BroadcastTag.tag_id)
+        .where(
+            Tag.tag_type == "nationality",
+            _country_to_region_case(Tag.label).in_(selected_regions),
+        )
+    )
+    return union(direct, via_region, via_country)
+
+
+def selected_audience_matches(echo_id_col, tag_ids: list[int]):
+    if not tag_ids:
+        return None
+    return echo_id_col.in_(_broadcast_ids_for_audience_tags(tag_ids))
+
+
+def _visibility_clause(user_id: uuid.UUID):
+    viewer_profile_tag_ids = select(UserTag.tag_id).where(UserTag.user_id == user_id).subquery()
+    viewer_location_tag_ids = _viewer_match_tag_ids(user_id)
 
     def has_tag_type(tag_type: str):
         return (
@@ -81,7 +206,7 @@ def _visibility_clause(user_id: uuid.UUID):
         )
 
     nationality_gate = (~has_tag_type("nationality")) | (matching_tag_count_for_type("nationality", viewer_location_tag_ids) > 0)
-    continent_gate = (~has_tag_type("continent")) | (matching_tag_count_for_type("continent", viewer_location_tag_ids) > 0)
+    region_gate = (~has_tag_type("region")) | (matching_tag_count_for_type("region", viewer_location_tag_ids) > 0)
     school_gate = (~has_tag_type("school")) | (matching_tag_count_for_type("school", viewer_profile_tag_ids) > 0)
     course_gate = (
         Broadcast.course_code.is_(None)
@@ -103,15 +228,7 @@ def _visibility_clause(user_id: uuid.UUID):
         .correlate(Broadcast)
         .scalar_subquery()
     )
-    matching_tag_count = (
-        select(func.count(BroadcastTag.tag_id))
-        .where(
-            BroadcastTag.broadcast_id == Broadcast.id,
-            BroadcastTag.tag_id.in_(select(viewer_location_tag_ids.c.tag_id)),
-        )
-        .correlate(Broadcast)
-        .scalar_subquery()
-    )
+    matching_tag_count = _audience_overlap_count(viewer_location_tag_ids)
     any_mode_match = (Broadcast.tag_match_mode != "all") & (matching_tag_count > 0)
     all_mode_match = (
         (Broadcast.tag_match_mode == "all")
@@ -122,7 +239,27 @@ def _visibility_clause(user_id: uuid.UUID):
     untagged_reply = Broadcast.parent_broadcast_id.is_not(None) & (broadcast_tag_count == 0)
     tag_gate = untagged_reply | any_mode_match | all_mode_match
 
-    return (Broadcast.sender_id == user_id) | (nationality_gate & continent_gate & school_gate & course_gate & tag_gate)
+    return (Broadcast.sender_id == user_id) | (nationality_gate & region_gate & school_gate & course_gate & tag_gate)
+
+
+def _blocked_sender_ids(user_id: uuid.UUID):
+    return select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == user_id)
+
+
+def _distance_m(user_id: uuid.UUID):
+    user_loc = select(User.location).where(User.id == user_id).scalar_subquery()
+    return func.ST_Distance(Broadcast.origin_point, user_loc)
+
+
+def _echo_load_options():
+    return (
+        selectinload(Broadcast.sender),
+        selectinload(Broadcast.tags).selectinload(BroadcastTag.tag),
+    )
+
+
+def _still_live():
+    return (Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now())
 
 
 def _in_reach(user_id: uuid.UUID, distance_m):
@@ -132,6 +269,34 @@ def _in_reach(user_id: uuid.UUID, distance_m):
         | Broadcast.is_global.is_(True)
         | (distance_m <= Broadcast.radius_meters)
     )
+
+
+def _echo_viewer_filters(user_id: uuid.UUID, distance_m=None, *, in_reach: bool, visibility: bool):
+    filters = [
+        User.is_suspended.is_(False),
+        Broadcast.sender_id.not_in(_blocked_sender_ids(user_id)),
+        _not_deleted(),
+        Broadcast.id.not_in(_hidden_broadcast_ids(user_id)),
+        _still_live(),
+    ]
+    if in_reach:
+        filters.append(_in_reach(user_id, distance_m))
+    if visibility:
+        filters.append(_visibility_clause(user_id))
+    return tuple(filters)
+
+
+def _echo_context_select(user_id: uuid.UUID, *, in_reach: bool, visibility: bool):
+    distance_m = _distance_m(user_id)
+    shared_tags = _shared_tag_count_subquery(user_id)
+    reply_count = _reply_count_subquery_for_viewer(user_id)
+    stmt = (
+        select(Broadcast, distance_m.label("distance_m"), shared_tags.label("shared_tag_count"), reply_count.label("reply_count"))
+        .options(*_echo_load_options())
+        .join(User, User.id == Broadcast.sender_id)
+        .where(*_echo_viewer_filters(user_id, distance_m, in_reach=in_reach, visibility=visibility))
+    )
+    return stmt, distance_m, shared_tags
 
 
 async def get_by_id(db: AsyncSession, broadcast_id: uuid.UUID | str) -> Broadcast | None:
@@ -191,67 +356,37 @@ async def hide_for_user(db: AsyncSession, user_id: uuid.UUID, broadcast_id: uuid
         await db.flush()
 
 
-async def for_you_feed(db: AsyncSession, user_id: uuid.UUID, limit: int, offset: int):
+async def for_you_feed(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    limit: int,
+    offset: int,
+    tag_ids: list[int] | None = None,
+):
     """
-    Ranked by recency first, then shared-tag count, then distance.
-    Nationality/continent tags also gate visibility for targeted posts.
+    Ranked by last activity (echo or latest visible reply), then shared-tag count, then distance.
+    Nationality/region tags also gate visibility for targeted posts.
     Returns
     (Broadcast, distance_m, shared_tag_count) tuples.
     """
-    user_loc = select(User.location).where(User.id == user_id).scalar_subquery()
-
-    shared_tags = (
-        select(func.count(BroadcastTag.tag_id))
-        .join(UserTag, UserTag.tag_id == BroadcastTag.tag_id)
-        .where(BroadcastTag.broadcast_id == Broadcast.id, UserTag.user_id == user_id)
-        .correlate(Broadcast)
-        .scalar_subquery()
-    )
-    distance_m = func.ST_Distance(Broadcast.origin_point, user_loc)
-    blocked_sender_ids = select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == user_id)
-    visibility_clause = _visibility_clause(user_id)
-
-    reply_count = _reply_count_subquery_for_viewer(user_id)
-
-    stmt = (
-        select(Broadcast, distance_m.label("distance_m"), shared_tags.label("shared_tag_count"), reply_count.label("reply_count"))
-        .options(selectinload(Broadcast.sender))
-        .options(selectinload(Broadcast.tags).selectinload(BroadcastTag.tag))
-        .join(User, User.id == Broadcast.sender_id)
-        .where(Broadcast.parent_broadcast_id.is_(None))
-        .where(User.is_suspended.is_(False))
-        .where(Broadcast.sender_id.not_in(blocked_sender_ids))
-        .where(_not_deleted())
-        .where(Broadcast.id.not_in(_hidden_broadcast_ids(user_id)))
-        .where(_in_reach(user_id, distance_m))
-        .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
-        .where(visibility_clause)
-        .order_by(Broadcast.created_at.desc(), shared_tags.desc(), distance_m.asc())
-        .limit(limit)
-        .offset(offset)
-    )
+    stmt, distance_m, shared_tags = _echo_context_select(user_id, in_reach=True, visibility=True)
+    stmt = stmt.where(Broadcast.parent_broadcast_id.is_(None))
+    audience = selected_audience_matches(Broadcast.id, tag_ids or [])
+    if audience is not None:
+        stmt = stmt.where(audience)
+    stmt = stmt.order_by(_last_activity_at(user_id).desc(), shared_tags.desc(), distance_m.asc()).limit(limit).offset(offset)
     result = await db.execute(stmt)
     return result.all()
 
 
 async def count_unread_for_you_roots_since(db: AsyncSession, user_id: uuid.UUID, seen_after: datetime) -> int:
-    user_loc = select(User.location).where(User.id == user_id).scalar_subquery()
-    distance_m = func.ST_Distance(Broadcast.origin_point, user_loc)
-    blocked_sender_ids = select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == user_id)
-    visibility_clause = _visibility_clause(user_id)
-
+    distance_m = _distance_m(user_id)
     stmt = (
         select(func.count(Broadcast.id))
         .join(User, User.id == Broadcast.sender_id)
         .where(Broadcast.parent_broadcast_id.is_(None))
-        .where(User.is_suspended.is_(False))
-        .where(Broadcast.sender_id.not_in(blocked_sender_ids))
-        .where(_not_deleted())
-        .where(Broadcast.id.not_in(_hidden_broadcast_ids(user_id)))
-        .where(_in_reach(user_id, distance_m))
-        .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
-        .where(visibility_clause)
-        .where(Broadcast.created_at > seen_after)
+        .where(*_echo_viewer_filters(user_id, distance_m, in_reach=True, visibility=True))
+        .where(_last_activity_at(user_id) > seen_after)
     )
     result = await db.execute(stmt)
     return int(result.scalar_one() or 0)
@@ -260,35 +395,54 @@ async def count_unread_for_you_roots_since(db: AsyncSession, user_id: uuid.UUID,
 async def opt_in_feed(db: AsyncSession, user_id: uuid.UUID, limit: int, offset: int):
     """Broadcasts tagged with anything the user has explicitly followed —
     the one feed where a tag acts as a hard filter, because the user opted
-    into it themselves. Returns (Broadcast, distance_m) tuples."""
-    user_loc = select(User.location).where(User.id == user_id).scalar_subquery()
-    distance_m = func.ST_Distance(Broadcast.origin_point, user_loc)
-    blocked_sender_ids = select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == user_id)
-
+    into it themselves. Returns (Broadcast, distance_m, reply_count) tuples."""
+    distance_m = _distance_m(user_id)
     reply_count = _reply_count_subquery_for_viewer(user_id)
-
+    match_ids = _viewer_match_tag_ids(user_id)
+    matching_ids = (
+        select(Broadcast.id)
+        .join(User, User.id == Broadcast.sender_id)
+        .join(BroadcastTag, BroadcastTag.broadcast_id == Broadcast.id)
+        .where(Broadcast.parent_broadcast_id.is_(None))
+        .where(*_echo_viewer_filters(user_id, distance_m, in_reach=True, visibility=False))
+        .where(BroadcastTag.tag_id.in_(select(match_ids.c.tag_id)))
+        .distinct()
+    )
     stmt = (
         select(Broadcast, distance_m.label("distance_m"), reply_count.label("reply_count"))
-        .options(selectinload(Broadcast.sender))
-        .options(selectinload(Broadcast.tags).selectinload(BroadcastTag.tag))
+        .options(*_echo_load_options())
         .join(User, User.id == Broadcast.sender_id)
-        .where(Broadcast.parent_broadcast_id.is_(None))
-        .join(BroadcastTag, BroadcastTag.broadcast_id == Broadcast.id)
-        .join(UserFollowedTag, UserFollowedTag.tag_id == BroadcastTag.tag_id)
-        .where(User.is_suspended.is_(False))
-        .where(Broadcast.sender_id.not_in(blocked_sender_ids))
-        .where(_not_deleted())
-        .where(Broadcast.id.not_in(_hidden_broadcast_ids(user_id)))
-        .where(UserFollowedTag.user_id == user_id)
-        .where(_in_reach(user_id, distance_m))
-        .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
-        .distinct()
-        .order_by(distance_m.asc(), Broadcast.created_at.desc())
+        .where(Broadcast.id.in_(matching_ids))
+        .order_by(distance_m.asc(), _last_activity_at(user_id).desc())
         .limit(limit)
         .offset(offset)
     )
     result = await db.execute(stmt)
     return result.all()
+
+
+async def latest_visible_replies_by_parent(
+    db: AsyncSession, user_id: uuid.UUID, parent_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, Broadcast]:
+    if not parent_ids:
+        return {}
+    blocked_sender_ids = select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == user_id)
+    hidden_ids = _hidden_broadcast_ids(user_id)
+    stmt = (
+        select(Broadcast)
+        .options(selectinload(Broadcast.sender))
+        .join(User, User.id == Broadcast.sender_id)
+        .where(Broadcast.parent_broadcast_id.in_(parent_ids))
+        .where(User.is_suspended.is_(False))
+        .where(Broadcast.sender_id.not_in(blocked_sender_ids))
+        .where(_not_deleted())
+        .where(Broadcast.id.not_in(hidden_ids))
+        .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
+        .distinct(Broadcast.parent_broadcast_id)
+        .order_by(Broadcast.parent_broadcast_id, Broadcast.created_at.desc())
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    return {row.parent_broadcast_id: row for row in rows if row.parent_broadcast_id is not None}
 
 
 async def has_impression(db: AsyncSession, broadcast_id: uuid.UUID, viewer_id: uuid.UUID) -> bool:
@@ -307,62 +461,14 @@ async def record_impression(db: AsyncSession, broadcast_id: uuid.UUID, viewer_id
 
 
 async def get_visible_with_context(db: AsyncSession, user_id: uuid.UUID, broadcast_id: uuid.UUID | str):
-    user_loc = select(User.location).where(User.id == user_id).scalar_subquery()
-    shared_tags = (
-        select(func.count(BroadcastTag.tag_id))
-        .join(UserTag, UserTag.tag_id == BroadcastTag.tag_id)
-        .where(BroadcastTag.broadcast_id == Broadcast.id, UserTag.user_id == user_id)
-        .correlate(Broadcast)
-        .scalar_subquery()
-    )
-    distance_m = func.ST_Distance(Broadcast.origin_point, user_loc)
-    blocked_sender_ids = select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == user_id)
-    visibility_clause = _visibility_clause(user_id)
-    reply_count = _reply_count_subquery_for_viewer(user_id)
-
-    stmt = (
-        select(Broadcast, distance_m.label("distance_m"), shared_tags.label("shared_tag_count"), reply_count.label("reply_count"))
-        .options(selectinload(Broadcast.sender))
-        .options(selectinload(Broadcast.tags).selectinload(BroadcastTag.tag))
-        .join(User, User.id == Broadcast.sender_id)
-        .where(Broadcast.id == broadcast_id)
-        .where(User.is_suspended.is_(False))
-        .where(Broadcast.sender_id.not_in(blocked_sender_ids))
-        .where(_not_deleted())
-        .where(Broadcast.id.not_in(_hidden_broadcast_ids(user_id)))
-        .where(_in_reach(user_id, distance_m))
-        .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
-        .where(visibility_clause)
-    )
-    result = await db.execute(stmt)
+    stmt, _distance_m, _shared_tags = _echo_context_select(user_id, in_reach=True, visibility=True)
+    result = await db.execute(stmt.where(Broadcast.id == broadcast_id))
     return result.first()
 
 
 async def list_visible_replies(db: AsyncSession, user_id: uuid.UUID, parent_broadcast_id: uuid.UUID | str):
-    user_loc = select(User.location).where(User.id == user_id).scalar_subquery()
-    shared_tags = (
-        select(func.count(BroadcastTag.tag_id))
-        .join(UserTag, UserTag.tag_id == BroadcastTag.tag_id)
-        .where(BroadcastTag.broadcast_id == Broadcast.id, UserTag.user_id == user_id)
-        .correlate(Broadcast)
-        .scalar_subquery()
+    stmt, _distance_m, _shared_tags = _echo_context_select(user_id, in_reach=False, visibility=True)
+    result = await db.execute(
+        stmt.where(Broadcast.parent_broadcast_id == parent_broadcast_id).order_by(Broadcast.created_at.desc())
     )
-    distance_m = func.ST_Distance(Broadcast.origin_point, user_loc)
-    blocked_sender_ids = select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == user_id)
-    reply_count = _reply_count_subquery_for_viewer(user_id)
-
-    stmt = (
-        select(Broadcast, distance_m.label("distance_m"), shared_tags.label("shared_tag_count"), reply_count.label("reply_count"))
-        .options(selectinload(Broadcast.sender))
-        .options(selectinload(Broadcast.tags).selectinload(BroadcastTag.tag))
-        .join(User, User.id == Broadcast.sender_id)
-        .where(Broadcast.parent_broadcast_id == parent_broadcast_id)
-        .where(User.is_suspended.is_(False))
-        .where(Broadcast.sender_id.not_in(blocked_sender_ids))
-        .where(_not_deleted())
-        .where(Broadcast.id.not_in(_hidden_broadcast_ids(user_id)))
-        .where((Broadcast.expires_at.is_(None)) | (Broadcast.expires_at > func.now()))
-        .order_by(Broadcast.created_at.desc())
-    )
-    result = await db.execute(stmt)
     return result.all()

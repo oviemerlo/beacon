@@ -6,14 +6,14 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import String, any_, func, literal, or_, select, union, union_all
-from sqlalchemy.dialects.postgresql import INTEGER, array
+from sqlalchemy import String, func, literal, or_, select, union, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
 from app.models.broadcast import Broadcast, BroadcastImpression, BroadcastTag, HiddenBroadcast
 from app.models.conversation import BlockedUser, Conversation, Message
-from app.models.tag import Tag
+from app.models.user import User
+from app.repositories.broadcast_repository import selected_audience_matches
 
 
 @dataclass
@@ -23,6 +23,8 @@ class NestedSearchMatch:
     created_at: datetime
     source: str
     conversation_id: uuid.UUID | None = None
+    sender_display_name: str = "Unknown"
+    sender_id: uuid.UUID | None = None
 
 
 @dataclass
@@ -57,38 +59,11 @@ def _received_echo_ids(user_id: uuid.UUID):
 
 def _tag_filter(echo_id_col, tag_ids: list[int]):
     """Optional additive filter: skip entirely when no tags are selected."""
-    if not tag_ids:
-        return None
-    return (
-        select(literal(1))
-        .select_from(BroadcastTag)
-        .where(BroadcastTag.broadcast_id == echo_id_col)
-        .where(BroadcastTag.tag_id == any_(array(tag_ids, type_=INTEGER)))
-        .correlate_except(BroadcastTag)
-        .exists()
-    )
+    return selected_audience_matches(echo_id_col, tag_ids)
 
 
 def _blocked_sender_ids(user_id: uuid.UUID):
     return select(BlockedUser.blocked_id).where(BlockedUser.blocker_id == user_id)
-
-
-async def list_history_tags(db: AsyncSession, user_id: uuid.UUID) -> list[Tag]:
-    received = _received_echo_ids(user_id)
-    blocked = _blocked_sender_ids(user_id)
-    stmt = (
-        select(Tag)
-        .join(BroadcastTag, BroadcastTag.tag_id == Tag.id)
-        .join(Broadcast, Broadcast.id == BroadcastTag.broadcast_id)
-        .where(Broadcast.id.in_(select(received.c.echo_id)))
-        .where(Broadcast.parent_broadcast_id.is_(None))
-        .where(Broadcast.deleted_at.is_(None))
-        .where(Broadcast.sender_id.not_in(blocked))
-        .distinct()
-        .order_by(Tag.label)
-    )
-    result = await db.execute(stmt)
-    return list(result.scalars().all())
 
 
 async def search_history(
@@ -185,6 +160,7 @@ async def search_history(
     reply_rows = (
         await db.execute(
             select(Broadcast)
+            .options(selectinload(Broadcast.sender))
             .where(Broadcast.parent_broadcast_id.in_(echo_ids))
             .where(Broadcast.deleted_at.is_(None))
             .where(Broadcast.sender_id.not_in(blocked))
@@ -196,9 +172,10 @@ async def search_history(
 
     message_rows = (
         await db.execute(
-            select(Message, Conversation, origin)
+            select(Message, Conversation, origin, User)
             .join(Conversation, Conversation.id == Message.conversation_id)
             .join(origin, origin.id == Conversation.origin_broadcast_id)
+            .join(User, User.id == Message.sender_id)
             .where(or_(Conversation.initiator_id == user_id, Conversation.recipient_id == user_id))
             .where(root_id.in_(echo_ids))
             .where(Message.search_vector.op("@@")(tsquery))
@@ -212,9 +189,16 @@ async def search_history(
         if parent_id is None or parent_id not in nested:
             continue
         nested[parent_id].append(
-            NestedSearchMatch(id=reply.id, body=reply.content, created_at=reply.created_at, source="reply")
+            NestedSearchMatch(
+                id=reply.id,
+                body=reply.content,
+                created_at=reply.created_at,
+                source="reply",
+                sender_display_name=reply.sender.display_name if reply.sender is not None else "Unknown",
+                sender_id=reply.sender_id,
+            )
         )
-    for message, conversation, origin_broadcast in message_rows:
+    for message, conversation, origin_broadcast, sender in message_rows:
         echo_id = origin_broadcast.parent_broadcast_id or origin_broadcast.id
         if echo_id not in nested:
             continue
@@ -225,6 +209,8 @@ async def search_history(
                 created_at=message.sent_at,
                 source="message",
                 conversation_id=conversation.id,
+                sender_display_name=sender.display_name if sender is not None else "Unknown",
+                sender_id=message.sender_id,
             )
         )
 

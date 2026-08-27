@@ -7,18 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.config import settings
 from app.models.broadcast import Broadcast
-from app.repositories import broadcast_repository, school_repository, tag_repository
+from app.repositories import broadcast_repository, school_repository, tag_repository, user_repository
 from app.schemas.schemas import BroadcastCreateIn
+from app.services.broadcast_tags import serialize_echo_rows
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
-
-
-def _normalize_course_code(course_code: str) -> str:
-    normalized = " ".join(course_code.strip().split()).upper()
-    if not normalized:
-        raise ValidationError("course_code is required")
-    if len(normalized) > 30:
-        raise ValidationError("course_code must be at most 30 characters")
-    return normalized
+from app.services.school_service import is_currently_verified, prepare_course_tag, school_tag_matches
+from app.services.user_service import REGION_TAGS_LOCKED_MESSAGE, can_follow_region_tags, can_use_regional_reach
 
 
 async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: BroadcastCreateIn) -> Broadcast:
@@ -54,12 +48,25 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
             raise ValidationError(f"radius_meters must be at least {settings.MIN_RADIUS_METERS}")
         if radius_meters > settings.MAX_BROADCAST_RADIUS_METERS:
             raise ValidationError(f"radius_meters cannot exceed {settings.MAX_BROADCAST_RADIUS_METERS}")
+        if payload.reply_to_broadcast_id is None and radius_meters > settings.LOCAL_MAX_RADIUS_METERS:
+            sender = await user_repository.get_by_id(db, sender_id)
+            if sender is None or not can_use_regional_reach(sender):
+                raise ValidationError(
+                    "Regional reach is available after verification. Free accounts can send Local echoes."
+                )
+
+    if payload.reply_to_broadcast_id is None and tag_ids:
+        selected_targeting_tags = await tag_repository.get_by_ids(db, tag_ids)
+        if any(tag.tag_type == "region" for tag in selected_targeting_tags):
+            sender = await user_repository.get_by_id(db, sender_id)
+            if sender is None or not can_follow_region_tags(sender):
+                raise ValidationError(REGION_TAGS_LOCKED_MESSAGE)
 
     course_code: str | None = inherited_course_code
     school_id: int | None = inherited_school_id
     if payload.course_code is not None and payload.reply_to_broadcast_id is None:
         verification = await school_repository.get_verification(db, sender_id)
-        if verification is None or verification.verified_at is None:
+        if verification is None or not is_currently_verified(verification):
             raise ValidationError("Verify your school before targeting a course")
 
         sender_school = await school_repository.get_by_id(db, verification.school_id)
@@ -67,11 +74,10 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
             raise NotFoundError("School not found")
 
         selected_tags = await tag_repository.get_by_ids(db, payload.tag_ids)
-        has_matching_school_tag = any(tag.tag_type == "school" and tag.label == sender_school.name for tag in selected_tags)
-        if not has_matching_school_tag:
+        if not any(school_tag_matches(tag, sender_school) for tag in selected_tags):
             raise ValidationError("Course targeting requires your verified school tag")
 
-        course_code = _normalize_course_code(payload.course_code)
+        course_code = prepare_course_tag(payload.course_code)
         school_id = verification.school_id
 
     broadcast = await broadcast_repository.create(
@@ -126,4 +132,5 @@ async def get_broadcast_thread(db: AsyncSession, user_id: uuid.UUID, broadcast_i
         raise NotFoundError("Broadcast not found")
 
     replies = await broadcast_repository.list_visible_replies(db, user_id, root_id)
-    return parent_row, replies
+    cards = await serialize_echo_rows(db, user_id, [parent_row, *replies])
+    return {"parent": cards[0], "replies": cards[1:]}

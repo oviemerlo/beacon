@@ -1,29 +1,33 @@
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView, Alert } from "react-native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import Slider from "@react-native-community/slider";
 import * as Location from "expo-location";
 import { apiFetch } from "../helpers/api";
 import {
   buildReachPayload,
+  canUseRegionalReach,
   LOCAL_RADIUS_STEPS_M,
   radiusLabel,
   ReachCategory,
+  reachSelectorColors,
   REGIONAL_RADIUS_STEPS_M,
+  REGIONAL_REACH_LOCKED_MESSAGE,
 } from "../helpers/broadcastReach";
-import { EMPTY_TAG_GROUPS, mergeOwnedTags, toggleTagId } from "../helpers/tags";
+import { toggleTagId } from "../helpers/tags";
 import { getMyCourses, getVerificationStatus } from "../helpers/schoolVerification";
 import { colors, radii } from "../theme/tokens";
-import type { BroadcastCreatePayload, Tag, TagGroups, UserProfile } from "../types/api";
+import type { BroadcastCreatePayload, Tag, UserProfile } from "../types/api";
 
 export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const tabBarHeight = useBottomTabBarHeight();
   const [content, setContent] = useState("");
-  const [reach, setReach] = useState<ReachCategory>("regional");
+  const [reach, setReach] = useState<ReachCategory>("local");
   const [localRadiusIdx, setLocalRadiusIdx] = useState(3);
   const [regionalRadiusIdx, setRegionalRadiusIdx] = useState(1); // 25km default
   const [profileTags, setProfileTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [canUseRegional, setCanUseRegional] = useState(false);
   const [schoolVerified, setSchoolVerified] = useState(false);
   const [myCourses, setMyCourses] = useState<string[]>([]);
   const [selectedCourseCode, setSelectedCourseCode] = useState("");
@@ -37,15 +41,15 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const reachSummary = reach === "global" ? "Global" : `Reach ${activeRadiusLabel}`;
   const selectedTags = profileTags.filter((tag) => selectedTagIds.includes(tag.id));
   const availableProfileTags = profileTags.filter((tag) => !selectedTagIds.includes(tag.id));
+  const localReachColors = reachSelectorColors("local", reach === "local");
+  const regionalReachColors = reachSelectorColors("regional", reach === "regional", !canUseRegional);
+  const globalReachColors = reachSelectorColors("global", reach === "global");
 
   useEffect(() => {
-    Promise.all([
-      apiFetch<UserProfile>("/users/me"),
-      apiFetch<TagGroups>("/tags"),
-      apiFetch<{ tag_ids: number[] }>("/users/me/followed-tags"),
-    ])
-      .then(([me, catalog, followed]) => {
-        setProfileTags(mergeOwnedTags(me.tags ?? [], catalog, followed.tag_ids ?? []));
+    apiFetch<UserProfile>("/users/me")
+      .then((me) => {
+        setProfileTags(me.tags ?? []);
+        setCanUseRegional(canUseRegionalReach(me.is_verified, me.is_admin));
       })
       .catch(() => setProfileTags([]));
     getVerificationStatus()
@@ -61,8 +65,23 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
       });
   }, []);
 
+  function selectReach(next: ReachCategory) {
+    if (next === "regional" && !canUseRegional) {
+      setError(REGIONAL_REACH_LOCKED_MESSAGE);
+      Alert.alert("Regional reach locked", REGIONAL_REACH_LOCKED_MESSAGE);
+      return;
+    }
+    setError(null);
+    setReach(next);
+  }
+
   async function publish() {
     if (!content.trim() || selectedTagIds.length === 0) return;
+    if (reach === "regional" && !canUseRegional) {
+      setError(REGIONAL_REACH_LOCKED_MESSAGE);
+      Alert.alert("Regional reach locked", REGIONAL_REACH_LOCKED_MESSAGE);
+      return;
+    }
     setPosting(true);
     setError(null);
     try {
@@ -117,21 +136,22 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
 
       <View style={styles.pillRow}>
         <View style={styles.pillSlotStart}>
-          <Pressable onPress={() => setReach("local")} style={[styles.pill, reach === "local" && styles.pillActive]}>
-            <Text style={[styles.pillText, reach === "local" && styles.pillTextActive]}>Local</Text>
+          <Pressable onPress={() => selectReach("local")} style={[styles.pill, localReachColors]}>
+            <Text style={[styles.pillText, { color: localReachColors.color }]}>Local</Text>
           </Pressable>
         </View>
         <View style={styles.pillSlotCenter}>
-          <Pressable onPress={() => setReach("regional")} style={[styles.pill, reach === "regional" && styles.pillActive]}>
-            <Text style={[styles.pillText, reach === "regional" && styles.pillTextActive]}>Regional</Text>
+          <Pressable onPress={() => selectReach("regional")} style={[styles.pill, regionalReachColors]}>
+            <Text style={[styles.pillText, { color: regionalReachColors.color }]}>Regional</Text>
           </Pressable>
         </View>
         <View style={styles.pillSlotEnd}>
-          <Pressable onPress={() => setReach("global")} style={[styles.pill, reach === "global" && styles.pillActive]}>
-            <Text style={[styles.pillText, reach === "global" && styles.pillTextActive]}>Global</Text>
+          <Pressable onPress={() => selectReach("global")} style={[styles.pill, globalReachColors]}>
+            <Text style={[styles.pillText, { color: globalReachColors.color }]}>Global</Text>
           </Pressable>
         </View>
       </View>
+      {!canUseRegional && <Text style={styles.reachHint}>{REGIONAL_REACH_LOCKED_MESSAGE}</Text>}
       {reach !== "global" && (
         <Slider
           style={styles.slider}
@@ -253,6 +273,7 @@ const styles = StyleSheet.create({
   selectedHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 },
   selectedActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   emptyText: { color: colors.parchment500, fontSize: 13, marginBottom: 8 },
+  reachHint: { color: colors.parchment500, fontSize: 11, marginBottom: 16 },
   pillRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   pillSlotStart: { flex: 1, alignItems: "flex-start" },
   pillSlotCenter: { flex: 1, alignItems: "center" },
