@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
+import hashlib
+import secrets
 
 from jose import JWTError, jwt
 
@@ -23,3 +25,16 @@ def decode_token(token: str) -> dict:
         return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
     except JWTError as e:
         raise ValueError("Invalid or expired token") from e
+
+
+def constant_time_secret_matches(provided: str | None, expected: str) -> bool:
+    """Compare a request header to a configured secret without leaking length.
+
+    An empty expected value never matches, so unset env vars keep internal
+    routes closed.
+    """
+    if not expected:
+        return False
+    provided_digest = hashlib.sha256((provided or "").encode("utf-8")).digest()
+    expected_digest = hashlib.sha256(expected.encode("utf-8")).digest()
+    return secrets.compare_digest(provided_digest, expected_digest)

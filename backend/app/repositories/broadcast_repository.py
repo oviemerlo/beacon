@@ -8,11 +8,12 @@ place distance is ever compared against a broadcast's radius.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import case, func, select, union
+from sqlalchemy import and_, case, func, select, union
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
-from app.models.broadcast import Broadcast, BroadcastImpression, BroadcastTag, HiddenBroadcast
+from app.models.broadcast import Broadcast, BroadcastCourse, BroadcastImpression, BroadcastTag, HiddenBroadcast
 from app.models.conversation import BlockedUser
 from app.models.school import UserCourseEnrollment
 from app.models.tag import Tag, UserFollowedTag, UserTag
@@ -176,6 +177,32 @@ def selected_audience_matches(echo_id_col, tag_ids: list[int]):
     return echo_id_col.in_(_broadcast_ids_for_audience_tags(tag_ids))
 
 
+def selected_course_matches(echo_id_col, course_codes: list[str]):
+    """AND-filter: the echo must target every selected course tag."""
+    if not course_codes:
+        return None
+    parts = []
+    for code in course_codes:
+        in_courses = (
+            select(BroadcastCourse.broadcast_id)
+            .where(BroadcastCourse.broadcast_id == echo_id_col, BroadcastCourse.course_code == code)
+            .exists()
+        )
+        on_echo = select(Broadcast.id).where(Broadcast.id == echo_id_col, Broadcast.course_code == code).exists()
+        parts.append(in_courses | on_echo)
+    return and_(*parts)
+
+
+def apply_audience_filters(stmt, echo_id_col, tag_ids: list[int] | None, course_codes: list[str] | None):
+    tag_clause = selected_audience_matches(echo_id_col, tag_ids or [])
+    if tag_clause is not None:
+        stmt = stmt.where(tag_clause)
+    course_clause = selected_course_matches(echo_id_col, course_codes or [])
+    if course_clause is not None:
+        stmt = stmt.where(course_clause)
+    return stmt
+
+
 def _visibility_clause(user_id: uuid.UUID):
     viewer_profile_tag_ids = select(UserTag.tag_id).where(UserTag.user_id == user_id).subquery()
     viewer_location_tag_ids = _viewer_match_tag_ids(user_id)
@@ -208,9 +235,30 @@ def _visibility_clause(user_id: uuid.UUID):
     nationality_gate = (~has_tag_type("nationality")) | (matching_tag_count_for_type("nationality", viewer_location_tag_ids) > 0)
     region_gate = (~has_tag_type("region")) | (matching_tag_count_for_type("region", viewer_location_tag_ids) > 0)
     school_gate = (~has_tag_type("school")) | (matching_tag_count_for_type("school", viewer_profile_tag_ids) > 0)
-    course_gate = (
-        Broadcast.course_code.is_(None)
-        | (
+    targeted_course_count = (
+        select(func.count())
+        .select_from(BroadcastCourse)
+        .where(BroadcastCourse.broadcast_id == Broadcast.id)
+        .correlate(Broadcast)
+        .scalar_subquery()
+    )
+    matched_course_count = (
+        select(func.count())
+        .select_from(BroadcastCourse)
+        .join(
+            UserCourseEnrollment,
+            (UserCourseEnrollment.user_id == user_id)
+            & (UserCourseEnrollment.school_id == Broadcast.school_id)
+            & (UserCourseEnrollment.course_code == BroadcastCourse.course_code),
+        )
+        .where(BroadcastCourse.broadcast_id == Broadcast.id)
+        .correlate(Broadcast)
+        .scalar_subquery()
+    )
+    legacy_course_match = (
+        Broadcast.course_code.is_not(None)
+        & (targeted_course_count == 0)
+        & (
             select(UserCourseEnrollment.user_id)
             .where(
                 UserCourseEnrollment.user_id == user_id,
@@ -221,6 +269,15 @@ def _visibility_clause(user_id: uuid.UUID):
             .exists()
         )
     )
+    course_gate = (
+        ((targeted_course_count == 0) & Broadcast.course_code.is_(None))
+        | ((targeted_course_count > 0) & (matched_course_count == targeted_course_count))
+        | legacy_course_match
+    )
+
+    hobby_gate = (~has_tag_type("hobby")) | (matching_tag_count_for_type("hobby", viewer_location_tag_ids) > 0)
+    has_course_target = (targeted_course_count > 0) | Broadcast.course_code.is_not(None)
+    uses_school_or_course = has_tag_type("school") | has_course_target
 
     broadcast_tag_count = (
         select(func.count(BroadcastTag.tag_id))
@@ -237,9 +294,13 @@ def _visibility_clause(user_id: uuid.UUID):
     )
     # Untagged in-feed replies stay visible so existing threads don't disappear.
     untagged_reply = Broadcast.parent_broadcast_id.is_not(None) & (broadcast_tag_count == 0)
-    tag_gate = untagged_reply | any_mode_match | all_mode_match
+    has_location_audience_tag = has_tag_type("nationality") | has_tag_type("region") | has_tag_type("hobby")
+    tag_gate = untagged_reply | (~has_location_audience_tag) | any_mode_match | all_mode_match
 
-    return (Broadcast.sender_id == user_id) | (nationality_gate & region_gate & school_gate & course_gate & tag_gate)
+    # School or course targeting ANDs every selected dimension (country, region, school, hobby, course).
+    type_and_gates = nationality_gate & region_gate & school_gate & hobby_gate & course_gate
+    legacy_gates = nationality_gate & region_gate & school_gate & course_gate & tag_gate
+    return (Broadcast.sender_id == user_id) | ((uses_school_or_course & type_and_gates) | (~uses_school_or_course & legacy_gates))
 
 
 def _blocked_sender_ids(user_id: uuid.UUID):
@@ -321,7 +382,8 @@ async def create(
     tag_ids: list[int],
     parent_broadcast_id: uuid.UUID | None,
     school_id: int | None,
-    course_code: str | None,
+    course_codes: list[str],
+    include_sender_avatar: bool = False,
 ) -> Broadcast:
     broadcast = Broadcast(
         sender_id=sender_id,
@@ -331,16 +393,40 @@ async def create(
         is_global=is_global,
         radius_meters=radius_meters,
         school_id=school_id,
-        course_code=course_code,
+        course_code=course_codes[0] if course_codes else None,
         tag_match_mode=tag_match_mode,
         expires_at=expires_at,
+        include_sender_avatar=include_sender_avatar,
     )
     db.add(broadcast)
     await db.flush()
     for tag_id in tag_ids:
         db.add(BroadcastTag(broadcast_id=broadcast.id, tag_id=tag_id))
+    for course_code in course_codes:
+        db.add(BroadcastCourse(broadcast_id=broadcast.id, course_code=course_code))
     await db.flush()
     return broadcast
+
+
+async def list_course_codes(db: AsyncSession, broadcast_id: uuid.UUID) -> list[str]:
+    result = await db.execute(
+        select(BroadcastCourse.course_code).where(BroadcastCourse.broadcast_id == broadcast_id).order_by(BroadcastCourse.course_code)
+    )
+    return [row[0] for row in result.all()]
+
+
+async def list_course_codes_by_broadcast_ids(db: AsyncSession, broadcast_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[str]]:
+    if not broadcast_ids:
+        return {}
+    result = await db.execute(
+        select(BroadcastCourse.broadcast_id, BroadcastCourse.course_code)
+        .where(BroadcastCourse.broadcast_id.in_(broadcast_ids))
+        .order_by(BroadcastCourse.course_code)
+    )
+    by_id: dict[uuid.UUID, list[str]] = {broadcast_id: [] for broadcast_id in broadcast_ids}
+    for broadcast_id, course_code in result.all():
+        by_id.setdefault(broadcast_id, []).append(course_code)
+    return by_id
 
 
 async def soft_delete(db: AsyncSession, broadcast: Broadcast) -> None:
@@ -362,6 +448,7 @@ async def for_you_feed(
     limit: int,
     offset: int,
     tag_ids: list[int] | None = None,
+    course_codes: list[str] | None = None,
 ):
     """
     Ranked by last activity (echo or latest visible reply), then shared-tag count, then distance.
@@ -371,9 +458,7 @@ async def for_you_feed(
     """
     stmt, distance_m, shared_tags = _echo_context_select(user_id, in_reach=True, visibility=True)
     stmt = stmt.where(Broadcast.parent_broadcast_id.is_(None))
-    audience = selected_audience_matches(Broadcast.id, tag_ids or [])
-    if audience is not None:
-        stmt = stmt.where(audience)
+    stmt = apply_audience_filters(stmt, Broadcast.id, tag_ids, course_codes)
     stmt = stmt.order_by(_last_activity_at(user_id).desc(), shared_tags.desc(), distance_m.asc()).limit(limit).offset(offset)
     result = await db.execute(stmt)
     return result.all()
@@ -447,17 +532,20 @@ async def latest_visible_replies_by_parent(
 
 async def has_impression(db: AsyncSession, broadcast_id: uuid.UUID, viewer_id: uuid.UUID) -> bool:
     result = await db.execute(
-        select(BroadcastImpression.id).where(BroadcastImpression.broadcast_id == broadcast_id, BroadcastImpression.viewer_id == viewer_id)
+        select(BroadcastImpression.id)
+        .where(BroadcastImpression.broadcast_id == broadcast_id, BroadcastImpression.viewer_id == viewer_id)
+        .limit(1)
     )
     return result.scalar_one_or_none() is not None
 
 
 async def record_impression(db: AsyncSession, broadcast_id: uuid.UUID, viewer_id: uuid.UUID) -> None:
     """Idempotent — call freely each time a broadcast is served into a feed."""
-    if await has_impression(db, broadcast_id, viewer_id):
-        return
-    db.add(BroadcastImpression(broadcast_id=broadcast_id, viewer_id=viewer_id))
-    await db.flush()
+    await db.execute(
+        pg_insert(BroadcastImpression)
+        .values(id=uuid.uuid4(), broadcast_id=broadcast_id, viewer_id=viewer_id)
+        .on_conflict_do_nothing(constraint="uq_broadcast_impressions_broadcast_viewer")
+    )
 
 
 async def get_visible_with_context(db: AsyncSession, user_id: uuid.UUID, broadcast_id: uuid.UUID | str):

@@ -29,7 +29,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
         <Text style={styles.brandText}>ECHOTOCROWD</Text>
       </View>
       <Text style={styles.title}>Sign in to continue</Text>
-      <Text style={styles.subtitle}>We only use this to verify who you are — never to post on your behalf.</Text>
+      <Text style={styles.subtitle}>Your identity stays private until you choose to connect.</Text>
 
       {busy ? (
         <ActivityIndicator color={colors.signal500} style={{ marginTop: 24 }} />

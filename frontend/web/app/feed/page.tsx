@@ -4,12 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
+import { EchoMediaLayout } from "@/components/EchoAttachments";
+import { SenderAvatar } from "@/components/SenderAvatar";
 import { VerifiedMark } from "@/components/VerifiedMark";
 import { LocationDriftBanner } from "@/components/LocationDriftBanner";
 import { promptAndSubmitReport } from "@/helpers/report-actions";
 import { reachBadgeColors, reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
-import { pathWithTagQuery, retainKnownTagIds, toggleTagId } from "@/helpers/tags";
+import { audienceFilterActive, echoAudienceLabels, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "@/helpers/tags";
 import { echoPreview, formatBroadcastSentAt } from "@/helpers/time";
 import { usePolling } from "@/helpers/usePolling";
 import type { FeedBroadcast, FeedSearchHit, UserProfile } from "@/types/api";
@@ -23,6 +25,7 @@ export default function FeedPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [selectedCourseCodes, setSelectedCourseCodes] = useState<string[]>([]);
   const [searchHits, setSearchHits] = useState<FeedSearchHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -35,7 +38,9 @@ export default function FeedPage() {
       setError(null);
     }
     try {
-      const rows = await clientFetch<FeedBroadcast[]>(pathWithTagQuery("/feed/for-you", selectedTagIds));
+      const rows = await clientFetch<FeedBroadcast[]>(
+        pathWithTagQuery("/feed/for-you", { tagIds: selectedTagIds, courseCodes: selectedCourseCodes })
+      );
       setBroadcasts(rows);
       await clientFetch("/feed/mark-seen", { method: "POST" });
     } catch {
@@ -43,18 +48,20 @@ export default function FeedPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [debouncedQuery, selectedTagIds]);
+  }, [debouncedQuery, selectedTagIds, selectedCourseCodes]);
 
   useEffect(() => {
     clientFetch<UserProfile>("/users/me")
       .then((me) => {
         setUser(me);
-        setSelectedTagIds((ids) => retainKnownTagIds(ids, me.tags.map((tag) => tag.id)));
+        setSelectedTagIds((ids) => retainKnown(ids, me.tags.map((tag) => tag.id)));
+        setSelectedCourseCodes((codes) => retainKnown(codes, me.course_codes ?? []));
       })
       .catch(() => setUser(null));
   }, []);
 
-  const filterTags = user?.tags ?? [];
+  const chips = feedSearchChips(user?.tags ?? [], selectedTagIds, user?.course_codes ?? [], selectedCourseCodes);
+  const filterActive = audienceFilterActive(selectedTagIds, selectedCourseCodes);
 
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
@@ -70,7 +77,9 @@ export default function FeedPage() {
     let cancelled = false;
     setSearching(true);
     setSearchError(null);
-    clientFetch<FeedSearchHit[]>(pathWithTagQuery("/feed/search", selectedTagIds, { q: debouncedQuery.trim() }))
+    clientFetch<FeedSearchHit[]>(
+      pathWithTagQuery("/feed/search", { tagIds: selectedTagIds, courseCodes: selectedCourseCodes, extra: { q: debouncedQuery.trim() } })
+    )
       .then((hits) => {
         if (!cancelled) setSearchHits(hits);
       })
@@ -85,7 +94,7 @@ export default function FeedPage() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, isSearching, selectedTagIds]);
+  }, [debouncedQuery, isSearching, selectedTagIds, selectedCourseCodes]);
 
   useEffect(() => {
     const markSeen = async () => {
@@ -125,23 +134,23 @@ export default function FeedPage() {
             placeholder="Search your feed history"
             aria-label="Search your feed history"
           />
-          {filterTags.length > 0 && (
+          {chips.length > 0 && (
             <div className="mt-3">
               <p className="text-parchment-500 text-xs mb-1.5">Search by tags</p>
               <div className="flex flex-wrap gap-1.5">
-                {filterTags.map((tag) => {
-                  const selected = selectedTagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      onClick={() => setSelectedTagIds((ids) => toggleTagId(ids, tag.id))}
-                      className={selected ? "tag-pill tag-pill-active" : "tag-pill"}
-                    >
-                      {tag.label}
-                    </button>
-                  );
-                })}
+                {chips.map((chip) => (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    onClick={() => {
+                      if (chip.kind === "tag") setSelectedTagIds((ids) => toggleItem(ids, chip.id));
+                      else setSelectedCourseCodes((codes) => toggleItem(codes, chip.code));
+                    }}
+                    className={chip.selected ? "tag-pill tag-pill-active" : "tag-pill"}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -173,7 +182,7 @@ export default function FeedPage() {
             {loading && <p className="text-parchment-500 font-mono text-sm">Loading nearby broadcasts…</p>}
             {error && <p className="text-rust-400 text-sm">{error}</p>}
             {!loading && !error && broadcasts.length === 0 && (
-              <EmptyState tagFilterActive={selectedTagIds.length > 0} />
+              <EmptyState tagFilterActive={filterActive} />
             )}
             <div className="flex flex-col gap-3">
               {broadcasts.map((b) => (
@@ -208,13 +217,14 @@ function SearchHitCard({
     <div className="card">
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex items-center flex-wrap gap-x-5 gap-y-2 min-w-0">
-          <p className="text-parchment-500 text-sm inline-flex items-center gap-1 mr-2">
+          <p className="text-parchment-500 text-sm inline-flex items-center gap-1.5 mr-2">
+            <SenderAvatar fileId={hit.sender_avatar_file_id} name={hit.sender_id === currentUserId ? "You" : hit.sender_display_name} />
             {hit.sender_id === currentUserId ? "You" : hit.sender_display_name}
             <VerifiedMark verified={hit.sender_is_verified} />
           </p>
-          {hit.tags.map((tag) => (
-            <span key={tag.id} className="tag-pill">
-              {tag.label}
+          {echoAudienceLabels(hit.tags, hit.course_codes, hit.course_code).map((label) => (
+            <span key={label} className="tag-pill">
+              {label}
             </span>
           ))}
         </div>
@@ -223,7 +233,7 @@ function SearchHitCard({
       <Link href={`/broadcasts/${hit.id}`} className="block">
         <p className="text-parchment-100">{hit.body}</p>
       </Link>
-      <p className="text-parchment-500 text-xs font-mono mt-2">{formatBroadcastSentAt(hit.created_at)}</p>
+      <p className="feed-card-time mt-2">{formatBroadcastSentAt(hit.created_at)}</p>
       {hit.matches.length > 0 && (
         <div className="mt-3 ml-3 border-l border-dusk-600 pl-3 flex flex-col gap-3">
           {hit.matches.map((match) => (
@@ -232,7 +242,7 @@ function SearchHitCard({
                 {match.sender_id && match.sender_id === currentUserId ? "You" : match.sender_display_name || "Unknown"}
               </p>
               <p className="text-parchment-300 text-sm">{match.body}</p>
-              <p className="text-parchment-500 text-xs font-mono mt-1">
+              <p className="feed-card-time mt-1">
                 {formatBroadcastSentAt(match.created_at)}
                 {match.source === "message" ? " · private reply" : " · feed reply"}
               </p>
@@ -279,6 +289,8 @@ function BroadcastCard({
       ? "You"
       : broadcast.sender_display_name;
   const headerVerified = featuredReply ? featuredReply.sender_is_verified : broadcast.sender_is_verified;
+  const headerAvatarId = featuredReply ? featuredReply.sender_avatar_file_id : broadcast.sender_avatar_file_id;
+  const headerAvatarName = featuredReply ? featuredReply.sender_display_name : broadcast.sender_display_name;
   const [showPrivateComposer, setShowPrivateComposer] = useState(false);
   const [privateMessage, setPrivateMessage] = useState("");
   const [sendingPrivate, setSendingPrivate] = useState(false);
@@ -304,20 +316,22 @@ function BroadcastCard({
 
   return (
     <div className="card block hover:border-signal-500/50 transition-colors">
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex items-center flex-wrap gap-x-5 gap-y-2 min-w-0">
-          <p className="text-parchment-500 text-sm inline-flex items-center gap-1 mr-2">
-            {headerName}
-            <VerifiedMark verified={headerVerified} />
-          </p>
-          {broadcast.tags.map((tag) => (
-            <span key={tag.id} className="tag-pill">
-              {tag.label}
-            </span>
-          ))}
-        </div>
-        {currentUserId && (
-          <FeedCardOverflowMenu
+      <EchoMediaLayout attachments={featuredReply ? undefined : broadcast.attachments}>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="flex items-center flex-wrap gap-x-5 gap-y-2 min-w-0">
+            <p className="text-parchment-500 text-sm inline-flex items-center gap-1.5 mr-2">
+              <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} />
+              {headerName}
+              <VerifiedMark verified={headerVerified} />
+            </p>
+            {echoAudienceLabels(broadcast.tags, broadcast.course_codes, broadcast.course_code).map((label) => (
+              <span key={label} className="tag-pill">
+                {label}
+              </span>
+            ))}
+          </div>
+          {currentUserId && (
+            <FeedCardOverflowMenu
             senderName={isOwn ? "your post" : broadcast.sender_display_name}
             actions={
               isOwn
@@ -383,7 +397,7 @@ function BroadcastCard({
         <p className="text-parchment-500 text-xs font-mono mb-1">Reply to: {echoPreview(broadcast.content)}</p>
       )}
       <p className="text-parchment-100">{featuredReply ? featuredReply.content : broadcast.content}</p>
-      <p className="text-parchment-500 text-xs font-mono mt-2">
+      <p className="feed-card-time mt-2">
         {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
       </p>
       <div className="flex items-center flex-wrap gap-1.5 mt-3 text-[10px] leading-tight font-mono text-parchment-500">
@@ -398,6 +412,7 @@ function BroadcastCard({
           {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
         </Link>
       </div>
+      </EchoMediaLayout>
       <div className="flex flex-wrap gap-1.5 mt-3">
         {!isOwn && (
           <>

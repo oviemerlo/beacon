@@ -13,9 +13,9 @@ from app.utils.email import EmailDeliveryError, send_otp_email, send_reverificat
 from app.models.school import School
 from app.models.tag import Tag
 from app.repositories import school_repository, tag_repository, user_repository
+from app.utils.course_tags import COURSE_TAG_MAX_LEN, canonical_course_tag, compact_course_key
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 
-COURSE_TAG_MAX_LEN = 30
 OTP_TTL = timedelta(minutes=10)
 OTP_RESEND_COOLDOWN = timedelta(seconds=60)
 
@@ -31,12 +31,12 @@ def school_tag_matches(tag: Tag, school: School) -> bool:
 
 
 def prepare_course_tag(course_code: str) -> str:
-    trimmed = course_code.strip()
-    if not trimmed:
+    compact = compact_course_key(course_code)
+    if not compact:
         raise ValidationError("course_code is required")
-    if len(trimmed) > COURSE_TAG_MAX_LEN:
-        raise ValidationError(f"course_code must be at most {COURSE_TAG_MAX_LEN} characters")
-    return trimmed
+    if len(compact) > COURSE_TAG_MAX_LEN:
+        raise ValidationError(f"course_code must be at most {COURSE_TAG_MAX_LEN} letters and digits")
+    return canonical_course_tag(course_code)
 
 
 def _hash_otp(code: str) -> str:
@@ -205,7 +205,12 @@ async def _require_verified_school(db: AsyncSession, user_id: uuid.UUID):
 
 async def enroll_in_course(db: AsyncSession, user_id: uuid.UUID, course_code: str) -> None:
     verification = await _require_verified_school(db, user_id)
-    await school_repository.add_enrollment(db, user_id, verification.school_id, prepare_course_tag(course_code))
+    canonical = prepare_course_tag(course_code)
+    enrollments = await school_repository.list_enrollments(db, user_id, verification.school_id)
+    for item in enrollments:
+        if item.course_code != canonical and canonical_course_tag(item.course_code) == canonical:
+            await school_repository.remove_enrollment(db, user_id, verification.school_id, item.course_code)
+    await school_repository.add_enrollment(db, user_id, verification.school_id, canonical)
     await db.commit()
 
 

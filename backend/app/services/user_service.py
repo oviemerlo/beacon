@@ -8,8 +8,9 @@ from app.utils.age import validate_date_of_birth
 from app.utils.config import settings
 from app.models.tag import Tag
 from app.models.user import User
-from app.repositories import tag_repository, user_repository
+from app.repositories import tag_repository, upload_repository, user_repository
 from app.schemas.schemas import FollowedTagsReplaceIn, ProfileUpdateIn, TagOut, UserProfileOut
+from app.services import school_service
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 
 FOLLOWABLE_TYPES = ("nationality", "region", "hobby")
@@ -25,6 +26,10 @@ def can_follow_region_tags(user: User) -> bool:
 
 
 def can_use_regional_reach(user: User) -> bool:
+    return user.is_admin or user.is_verified
+
+
+def can_attach_files(user: User) -> bool:
     return user.is_admin or user.is_verified
 
 
@@ -81,7 +86,14 @@ async def _load_profile(db: AsyncSession, user_id: uuid.UUID) -> UserProfileOut:
         user = await user_repository.get_by_id_with_tags(db, user_id)
         if user is None:
             raise NotFoundError("User not found")
-    return _profile_out(user)
+    profile = _profile_out(user)
+    course_codes = await school_service.get_my_courses(db, user.id)
+    avatar = await upload_repository.get_latest_avatar_for_user(db, user.id)
+    updates: dict = {"course_codes": course_codes}
+    if avatar is not None:
+        updates["avatar_file_id"] = avatar.id
+        updates["avatar_scan_status"] = avatar.scan_status
+    return profile.model_copy(update=updates)
 
 
 async def _followable_tag(db: AsyncSession, tag_id: int) -> Tag:

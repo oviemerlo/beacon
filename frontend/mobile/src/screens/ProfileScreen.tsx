@@ -4,8 +4,10 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { apiFetch } from "../helpers/api";
 import { signOut } from "../helpers/auth";
+import { echoAudienceLabels } from "../helpers/tags";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
+import { ProfileAvatar } from "../components/ProfileAvatar";
 import type { BlockedUsersList, UserProfile } from "../types/api";
 
 export function ProfileScreen({
@@ -65,6 +67,8 @@ export function ProfileScreen({
 
   if (!user) return <ActivityIndicator color={colors.signal500} style={{ marginTop: 40 }} />;
 
+  const audienceLabels = echoAudienceLabels(user.tags, user.course_codes);
+
   return (
     <ScrollView
       style={styles.container}
@@ -75,10 +79,15 @@ export function ProfileScreen({
       <Text style={styles.title}>Your profile</Text>
 
       <Card style={{ marginBottom: 12 }}>
-        <Text style={styles.name}>{user.display_name}</Text>
-        <Text style={styles.username}>@{user.username}</Text>
-        {typeof user.age === "number" && <Text style={styles.locationLabel}>{user.age} years old</Text>}
-        {user.location_label && <Text style={styles.locationLabel}>{user.location_label}</Text>}
+        <View style={styles.identityRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name}>{user.display_name}</Text>
+            <Text style={styles.username}>@{user.username}</Text>
+            {typeof user.age === "number" && <Text style={styles.locationLabel}>{user.age} years old</Text>}
+            {user.location_label && <Text style={styles.locationLabel}>{user.location_label}</Text>}
+          </View>
+          <ProfileAvatar fileId={user.avatar_file_id} scanStatus={user.avatar_scan_status} />
+        </View>
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
@@ -102,15 +111,15 @@ export function ProfileScreen({
         <Pressable onPress={onOpenFollowTags} style={styles.followTagsButton}>
           <Text style={styles.followTagsButtonText}>Echo Tags</Text>
         </Pressable>
-        {user.tags.length === 0 ? (
+        {audienceLabels.length === 0 ? (
           <Text style={styles.emptyText}>No tags yet.</Text>
         ) : (
           <>
-            <Text style={styles.emptyText}>{user.tags.length} selected</Text>
+            <Text style={styles.emptyText}>{audienceLabels.length} selected</Text>
             <View style={styles.pillRow}>
-              {user.tags.map((t) => (
-                <View key={t.id} style={styles.pill}>
-                  <Text style={styles.pillText}>{t.label}</Text>
+              {audienceLabels.map((label) => (
+                <View key={label} style={styles.pill}>
+                  <Text style={styles.pillText}>{label}</Text>
                 </View>
               ))}
             </View>
@@ -163,6 +172,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950 },
   content: { padding: 16, flexGrow: 1 },
   title: { color: colors.parchment100, fontSize: 20, fontWeight: "700", marginBottom: 16 },
+  identityRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   name: { color: colors.parchment100, fontWeight: "600", fontSize: 16 },
   username: { color: colors.parchment500, fontFamily: "monospace", fontSize: 12, marginTop: 2 },
   locationLabel: { color: colors.parchment500, fontSize: 13, marginTop: 8 },

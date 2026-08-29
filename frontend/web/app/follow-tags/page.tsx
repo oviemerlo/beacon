@@ -23,11 +23,11 @@ import {
   REGIONAL_TAGS_LOCKED_MESSAGE,
   REGIONAL_TAGS_PREMIUM_HINT,
   REGIONAL_TAGS_PREMIUM_LABEL,
-  retainKnownTagIds,
+  retainKnown,
   sameTagIdSet,
   selectedTagsForSection,
   TAG_SECTIONS,
-  toggleTagId,
+  toggleItem,
   UNSAVED_TAG_CHANGES_PROMPT,
   updateSectionQuery,
   visibleTagsForSection,
@@ -72,7 +72,7 @@ export default function FollowTagsPage() {
       .then(([groups, followed, me]) => {
         setTagGroups(groups);
         const ids = followedIdsWithoutLockedRegions(
-          retainKnownTagIds(followed.tag_ids, knownTagIdsFromGroups(groups)),
+          retainKnown(followed.tag_ids, knownTagIdsFromGroups(groups)),
           groups,
           me.is_verified,
           me.is_admin
@@ -139,7 +139,7 @@ export default function FollowTagsPage() {
       setSuccess(null);
       return;
     }
-    setFollowedTagIds((current) => toggleTagId(current, tagId));
+    setFollowedTagIds((current) => toggleItem(current, tagId));
     setError(null);
     setSuccess(null);
   }

@@ -31,7 +31,10 @@ class UserProfileOut(BaseModel):
     feed_radius_meters: int
     discoverable_in_broadcasts: bool
     tags: list[TagOut] = []
+    course_codes: list[str] = []
     followed_tag_limit: int = 2
+    avatar_file_id: uuid.UUID | None = None
+    avatar_scan_status: str | None = None
 
     class Config:
         from_attributes = True
@@ -99,8 +102,10 @@ class BroadcastCreateIn(BaseModel):
     tag_match_mode: str = Field(default="any", pattern="^(any|all)$")
     tag_ids: list[int] = []
     course_code: str | None = Field(default=None, max_length=30)
+    course_codes: list[str] = Field(default_factory=list)
     expires_in_days: int | None = Field(default=14, ge=1, le=90)
     reply_to_broadcast_id: uuid.UUID | None = None
+    include_sender_avatar: bool = False
 
 
 class BroadcastOut(BaseModel):
@@ -112,6 +117,7 @@ class BroadcastOut(BaseModel):
     distance_m: float | None = None
     shared_tag_count: int | None = None
     course_code: str | None = None
+    course_codes: list[str] = []
     created_at: datetime
     tags: list[TagOut] = []
 
@@ -125,11 +131,18 @@ class LatestFeedReplyOut(BaseModel):
     created_at: datetime
 
 
+class BroadcastAttachmentOut(BaseModel):
+    file_id: uuid.UUID
+    original_filename: str
+    content_type: str
+
+
 class FeedBroadcastOut(BaseModel):
     id: uuid.UUID
     sender_id: uuid.UUID
     sender_display_name: str
     sender_is_verified: bool = False
+    sender_avatar_file_id: uuid.UUID | None = None
     content: str
     distance_m: float
     shared_tag_count: int | None = None
@@ -137,10 +150,12 @@ class FeedBroadcastOut(BaseModel):
     is_global: bool
     radius_meters: int | None = None
     course_code: str | None = None
+    course_codes: list[str] = []
     created_at: datetime
     last_activity_at: datetime | None = None
     reply_count: int = 0
     latest_reply: LatestFeedReplyOut | None = None
+    attachments: list[BroadcastAttachmentOut] = []
 
 
 class BroadcastThreadOut(BaseModel):
@@ -281,6 +296,7 @@ class FeedSearchHitOut(BaseModel):
     sender_id: uuid.UUID
     sender_display_name: str
     sender_is_verified: bool = False
+    sender_avatar_file_id: uuid.UUID | None = None
     tags: list[TagOut] = []
     matches: list[FeedSearchMatchOut] = []
 
@@ -299,3 +315,10 @@ class ConversationSearchHitOut(BaseModel):
     is_reply_to_you: bool
     other_participant: dict
     matches: list[ConversationSearchMatchOut] = []
+
+
+class GuardDutyScanResultIn(BaseModel):
+    bucket: str
+    s3_key: str
+    scan_status: str
+    raw_guardduty_status: str | None = None

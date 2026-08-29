@@ -9,9 +9,13 @@ export class ClientApiError extends Error {
 }
 
 export async function clientFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const res = await fetch(`/api/proxy${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...init?.headers,
+    },
   });
 
   if (!res.ok) {

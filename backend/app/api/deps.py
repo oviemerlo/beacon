@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.utils.security import decode_token
+from app.utils.security import constant_time_secret_matches, decode_token
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories import user_repository
@@ -38,3 +38,8 @@ async def get_current_admin_user(current_user: User = Depends(get_current_user))
     if not current_user.is_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin access required")
     return current_user
+
+
+def require_internal_secret(provided: str | None, expected: str) -> None:
+    if not constant_time_secret_matches(provided, expected):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized")

@@ -1,8 +1,10 @@
 import { apiFetch, getCurrentUserOrNull } from "@/helpers/api";
 import { AppNav } from "@/components/AppNav";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { echoAudienceLabels } from "@/helpers/tags";
 import type { BlockedUsersList } from "@/types/api";
 
 export default async function ProfilePage() {
@@ -29,6 +31,8 @@ export default async function ProfilePage() {
     blockedCount = 0;
   }
 
+  const audienceLabels = echoAudienceLabels(user.tags, user.course_codes);
+
   return (
     <div className="min-h-screen">
       <AppNav />
@@ -36,10 +40,15 @@ export default async function ProfilePage() {
         <h1 className="font-display text-xl font-bold mb-5">Your profile</h1>
 
         <div className="card mb-4">
-          <p className="font-semibold">{user.display_name}</p>
-          <p className="text-parchment-500 text-sm font-mono">@{user.username}</p>
-          {typeof user.age === "number" && <p className="text-parchment-500 text-sm mt-2">{user.age} years old</p>}
-          {user.location_label && <p className="text-parchment-500 text-sm mt-2">{user.location_label}</p>}
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="font-semibold">{user.display_name}</p>
+              <p className="text-parchment-500 text-sm font-mono">@{user.username}</p>
+              {typeof user.age === "number" && <p className="text-parchment-500 text-sm mt-2">{user.age} years old</p>}
+              {user.location_label && <p className="text-parchment-500 text-sm mt-2">{user.location_label}</p>}
+            </div>
+            <ProfileAvatar fileId={user.avatar_file_id} scanStatus={user.avatar_scan_status} />
+          </div>
         </div>
 
         <form action={updateDisplayName} className="card mb-4">
@@ -63,16 +72,16 @@ export default async function ProfilePage() {
           <Link href="/follow-tags" className="inline-block text-sm text-signal-400 hover:text-signal-300 mb-3">
             Echo Tags
           </Link>
-          {user.tags.length === 0 ? (
+          {audienceLabels.length === 0 ? (
             <p className="text-parchment-500 text-sm">No tags yet.</p>
           ) : (
             <>
               <p className="text-parchment-500 text-sm mb-2">
-                {user.tags.length} selected
+                {audienceLabels.length} selected
               </p>
               <div className="flex flex-wrap gap-2">
-                {user.tags.map((t) => (
-                  <span key={t.id} className="tag-pill">{t.label}</span>
+                {audienceLabels.map((label) => (
+                  <span key={label} className="tag-pill">{label}</span>
                 ))}
               </div>
             </>

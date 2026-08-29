@@ -9,7 +9,7 @@ export default function LoginPage() {
         </div>
         <h1 className="font-display text-2xl font-bold text-center">Sign in to EchoToCrowd</h1>
         <p className="text-parchment-500 text-sm text-center mt-2 mb-6">
-          We only use this to verify who you are — never to post on your behalf.
+          Your identity stays private until you choose to connect.
         </p>
 
         <a href={`${API_URL}/auth/google/login`} className="btn-secondary w-full flex items-center justify-center gap-2 mb-3">

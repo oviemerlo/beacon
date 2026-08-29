@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator, ScrollView, Alert } from "react-native";
 import * as Location from "expo-location";
 import { apiFetch } from "../helpers/api";
 import { reachBadgeColors, reachBadgeLabel } from "../helpers/broadcastReach";
 import { splitMentionParts } from "../helpers/mentions";
 import { usePolling } from "../helpers/usePolling";
+import { echoAudienceLabels } from "../helpers/tags";
 import { formatBroadcastSentAt } from "../helpers/time";
+import { canAttachFiles, REPLY_MEDIA_LOCKED_MESSAGE, uploadBroadcastAttachment, type PickedUpload } from "../helpers/uploads";
 import { colors, radii } from "../theme/tokens";
+import { BroadcastAttachments } from "../components/BroadcastAttachments";
 import { Card } from "../components/Shared";
+import { EchoMediaLayout } from "../components/EchoAttachments";
+import { SenderAvatar } from "../components/SenderAvatar";
 import { VerifiedMark } from "../components/VerifiedMark";
 import type { BroadcastThread, FeedBroadcast, UserProfile } from "../types/api";
 
@@ -17,8 +22,11 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
   const [loadingThread, setLoadingThread] = useState(true);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [attachments, setAttachments] = useState<PickedUpload[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const canAttach = canAttachFiles(Boolean(currentUser?.is_verified), Boolean(currentUser?.is_admin));
 
   useEffect(() => {
     apiFetch<UserProfile>("/users/me").then(setCurrentUser).catch(() => setCurrentUser(null));
@@ -64,7 +72,15 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
           reply_to_broadcast_id: thread.parent.id,
         }),
       });
+      try {
+        for (const file of attachments) {
+          await uploadBroadcastAttachment(created.id, file);
+        }
+      } catch {
+        // Reply is already live.
+      }
       setMessage("");
+      setAttachments([]);
       setThread((current) => {
         if (!current) return current;
         if (current.replies.some((reply) => reply.id === created.id)) return current;
@@ -73,6 +89,7 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
           sender_id: currentUser?.id ?? "",
           sender_display_name: currentUser?.display_name ?? "You",
           sender_is_verified: currentUser?.is_verified ?? false,
+          sender_avatar_file_id: currentUser?.avatar_file_id ?? null,
           content: body,
           distance_m: 0,
           tags: current.parent.tags,
@@ -119,6 +136,18 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
           onChangeText={setMessage}
           multiline
         />
+        <View style={styles.composerTools}>
+          <BroadcastAttachments
+            files={attachments}
+            onChange={setAttachments}
+            canAttach={canAttach}
+            compact
+            onLocked={() => {
+              setError(REPLY_MEDIA_LOCKED_MESSAGE);
+              Alert.alert("Attachments locked", REPLY_MEDIA_LOCKED_MESSAGE);
+            }}
+          />
+        </View>
         {error && <Text style={styles.error}>{error}</Text>}
         <Pressable style={styles.button} onPress={postReplyInFeed} disabled={sending || !thread}>
           {sending ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonText}>Reply in feed</Text>}
@@ -132,27 +161,38 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
 function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: boolean }) {
   const reachLabel = reachBadgeLabel(item.is_global, item.radius_meters);
   const reachColors = reachBadgeColors(item.is_global, item.radius_meters);
+  const audienceLabels = echoAudienceLabels(item.tags, item.course_codes, item.course_code);
   return (
     <View style={[isReply && styles.replyItem]}>
-      <View style={styles.senderRow}>
-        <Text style={styles.senderName}>{item.sender_display_name}</Text>
-        <VerifiedMark verified={item.sender_is_verified} />
-      </View>
-      <Text style={styles.threadContent}>
-        {splitMentionParts(item.content).map((part, index) => (
-          <Text key={`${item.id}-${index}`} style={part.mention ? styles.mentionInBody : undefined}>
-            {part.text}
-          </Text>
-        ))}
-      </Text>
-      <View style={styles.threadMetaRow}>
-        <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(item.created_at)}</Text>
-        {!isReply && (
-          <View style={[styles.reachPill, { backgroundColor: reachColors.backgroundColor, borderColor: reachColors.borderColor }]}>
-            <Text style={[styles.reachPillText, { color: reachColors.color }]}>{reachLabel}</Text>
-          </View>
-        )}
-      </View>
+      <EchoMediaLayout attachments={item.attachments}>
+        <View style={styles.senderRow}>
+          <SenderAvatar fileId={item.sender_avatar_file_id} name={item.sender_display_name} />
+          <Text style={styles.senderName}>{item.sender_display_name}</Text>
+          <VerifiedMark verified={item.sender_is_verified} />
+          {!isReply
+            ? audienceLabels.map((label) => (
+                <View key={label} style={styles.broadcastTagPill}>
+                  <Text style={styles.broadcastTagPillText}>{label}</Text>
+                </View>
+              ))
+            : null}
+        </View>
+        <Text style={styles.threadContent}>
+          {splitMentionParts(item.content).map((part, index) => (
+            <Text key={`${item.id}-${index}`} style={part.mention ? styles.mentionInBody : undefined}>
+              {part.text}
+            </Text>
+          ))}
+        </Text>
+        <View style={styles.threadMetaRow}>
+          <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(item.created_at)}</Text>
+          {!isReply && (
+            <View style={[styles.reachPill, { backgroundColor: reachColors.backgroundColor, borderColor: reachColors.borderColor }]}>
+              <Text style={[styles.reachPillText, { color: reachColors.color }]}>{reachLabel}</Text>
+            </View>
+          )}
+        </View>
+      </EchoMediaLayout>
     </View>
   );
 }
@@ -163,8 +203,10 @@ const styles = StyleSheet.create({
   repliesHeader: { color: colors.parchment500, fontSize: 11, marginTop: 12, marginBottom: 8, fontFamily: "monospace" },
   repliesList: { maxHeight: 260 },
   replyItem: { borderWidth: 1, borderColor: colors.dusk700, borderRadius: radii.beacon, padding: 10, marginBottom: 8 },
-  senderRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  senderRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   senderName: { color: colors.parchment500, fontSize: 12 },
+  broadcastTagPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
+  broadcastTagPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
   threadContent: { color: colors.parchment100, marginTop: 4 },
   mentionInBody: { color: colors.signal400, fontWeight: "600" },
   threadMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
@@ -172,6 +214,7 @@ const styles = StyleSheet.create({
   reachPill: { borderColor: colors.parchment500, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
   reachPillText: { fontSize: 10, fontFamily: "monospace" },
   textarea: { color: colors.parchment100, minHeight: 100, textAlignVertical: "top" },
+  composerTools: { marginTop: 12 },
   error: { color: colors.rust400, fontSize: 13, marginTop: 8 },
   button: { backgroundColor: colors.signal500, borderRadius: radii.beacon, paddingVertical: 12, alignItems: "center", marginTop: 12 },
   buttonText: { color: colors.dusk950, fontWeight: "700" },

@@ -33,14 +33,25 @@ async function proxy(req: NextRequest, path: string[]) {
 
   const search = req.nextUrl.search;
   const target = `${API_URL}/${path.join("/")}${search}`;
-  const body = ["GET", "HEAD"].includes(req.method) ? undefined : await req.text();
+  const incomingType = req.headers.get("content-type") ?? "";
+  const isMultipart = incomingType.includes("multipart/form-data");
+  const body = ["GET", "HEAD"].includes(req.method)
+    ? undefined
+    : isMultipart
+      ? await req.arrayBuffer()
+      : await req.text();
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  if (isMultipart) {
+    headers["Content-Type"] = incomingType;
+  } else if (!["GET", "HEAD"].includes(req.method)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   let res = await fetch(target, {
     method: req.method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers,
     body,
     cache: "no-store",
   });
@@ -53,7 +64,10 @@ async function proxy(req: NextRequest, path: string[]) {
     if (refreshedTokens) {
       res = await fetch(target, {
         method: req.method,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${refreshedTokens.access_token}` },
+        headers: {
+          ...headers,
+          Authorization: `Bearer ${refreshedTokens.access_token}`,
+        },
         body,
         cache: "no-store",
       });

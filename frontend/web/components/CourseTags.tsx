@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import {
   COURSE_TAG_MAX_LEN,
+  compactCourseKey,
   enrollInCourse,
   getMyCourses,
   trimCourseTag,
@@ -16,7 +17,8 @@ export function CourseTags() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nextCourse = trimCourseTag(courseInput);
-  const canAdd = nextCourse.length > 0 && nextCourse.length <= COURSE_TAG_MAX_LEN && !submitting;
+  const compact = compactCourseKey(courseInput);
+  const canAdd = compact.length > 0 && compact.length <= COURSE_TAG_MAX_LEN && !submitting;
 
   useEffect(() => {
     getMyCourses()
@@ -60,7 +62,7 @@ export function CourseTags() {
           className="input-field text-sm py-2"
           placeholder="e.g. CS101"
           value={courseInput}
-          maxLength={COURSE_TAG_MAX_LEN}
+          maxLength={COURSE_TAG_MAX_LEN * 2}
           onChange={(e) => setCourseInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {

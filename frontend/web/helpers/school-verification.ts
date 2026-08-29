@@ -42,8 +42,20 @@ export async function unenrollFromCourse(courseCode: string): Promise<void> {
   });
 }
 
-export const COURSE_TAG_MAX_LEN = 30;
+export const COURSE_TAG_MAX_LEN = 8;
+
+export function compactCourseKey(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+export function normalizeCourseTag(value: string): string {
+  const compact = compactCourseKey(value);
+  if (!compact) return "";
+  const prefix = compact.match(/^[A-Z]+/)?.[0] ?? "";
+  const rest = compact.slice(prefix.length);
+  return prefix && rest ? `${prefix} ${rest}` : compact;
+}
 
 export function trimCourseTag(value: string): string {
-  return value.trim();
+  return normalizeCourseTag(value);
 }

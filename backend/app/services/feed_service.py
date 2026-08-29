@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories import broadcast_repository, feed_search_repository, user_repository
 from app.services import user_service
-from app.services.broadcast_tags import serialize_echo_rows, serialize_search_hit, tag_payload
+from app.services.broadcast_tags import attach_course_codes, attach_sender_avatars, serialize_echo_rows, serialize_search_hit, tag_payload
 from app.services.exceptions import ValidationError
 
 
@@ -31,8 +31,9 @@ async def get_for_you_feed(
     limit: int,
     offset: int,
     tag_ids: list[int] | None = None,
+    course_codes: list[str] | None = None,
 ):
-    rows = await broadcast_repository.for_you_feed(db, user_id, limit, offset, tag_ids)
+    rows = await broadcast_repository.for_you_feed(db, user_id, limit, offset, tag_ids, course_codes)
     return await _serve_feed_rows(db, user_id, rows)
 
 
@@ -57,13 +58,16 @@ async def mark_feed_seen(db: AsyncSession, user_id: uuid.UUID) -> None:
     await db.commit()
 
 
-async def search_history(db: AsyncSession, user_id: uuid.UUID, query: str, tag_ids: list[int]):
+async def search_history(db: AsyncSession, user_id: uuid.UUID, query: str, tag_ids: list[int], course_codes: list[str] | None = None):
     keyword = query.strip()
     if not keyword:
         raise ValidationError("A keyword is required")
-    hits = await feed_search_repository.search_history(db, user_id, keyword, tag_ids)
+    hits = await feed_search_repository.search_history(db, user_id, keyword, tag_ids, course_codes)
     viewer_tags = await user_service.list_identity_tags(db, user_id)
-    return [serialize_search_hit(hit, user_id, viewer_tags) for hit in hits]
+    payloads = [serialize_search_hit(hit, user_id, viewer_tags) for hit in hits]
+    await attach_sender_avatars(db, payloads, [hit.broadcast for hit in hits])
+    await attach_course_codes(db, payloads, [hit.broadcast for hit in hits])
+    return payloads
 
 
 async def list_history_tags(db: AsyncSession, user_id: uuid.UUID):

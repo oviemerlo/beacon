@@ -23,7 +23,10 @@ export interface UserProfile {
   feed_radius_meters: number;
   discoverable_in_broadcasts: boolean;
   tags: Tag[];
+  course_codes?: string[];
   followed_tag_limit: number;
+  avatar_file_id?: string | null;
+  avatar_scan_status?: string | null;
 }
 
 /** What's ever visible about ANOTHER user — deliberately narrow. */
@@ -50,6 +53,7 @@ export interface LatestFeedReply {
   sender_id: string;
   sender_display_name: string;
   sender_is_verified?: boolean;
+  sender_avatar_file_id?: string | null;
   content: string;
   created_at: string;
 }
@@ -59,6 +63,7 @@ export interface FeedBroadcast {
   sender_id: string;
   sender_display_name: string;
   sender_is_verified?: boolean;
+  sender_avatar_file_id?: string | null;
   content: string;
   distance_m: number;
   shared_tag_count?: number;
@@ -66,11 +71,19 @@ export interface FeedBroadcast {
   is_global: boolean;
   radius_meters: number | null;
   course_code?: string | null;
+  course_codes?: string[];
   created_at: string;
   last_activity_at?: string;
   reply_count?: number;
   latest_reply?: LatestFeedReply | null;
   replies?: FeedReply[];
+  attachments?: BroadcastAttachment[];
+}
+
+export interface BroadcastAttachment {
+  file_id: string;
+  original_filename: string;
+  content_type: string;
 }
 
 export interface FeedReply {
@@ -98,6 +111,8 @@ export interface BroadcastCreatePayload {
   tag_match_mode: "any" | "all";
   tag_ids: number[];
   course_code?: string | null;
+  course_codes?: string[];
+  include_sender_avatar?: boolean;
 }
 
 export interface BroadcastThread {
@@ -241,7 +256,10 @@ export interface FeedSearchHit {
   sender_id: string;
   sender_display_name: string;
   sender_is_verified?: boolean;
+  sender_avatar_file_id?: string | null;
   tags: Tag[];
+  course_code?: string | null;
+  course_codes?: string[];
   matches: FeedSearchMatch[];
 }
 

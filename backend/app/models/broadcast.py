@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from geoalchemy2 import Geography
-from sqlalchemy import Boolean, Computed, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Computed, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
@@ -35,6 +35,7 @@ class Broadcast(Base):
     school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True)
     course_code: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
+    include_sender_avatar: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     tag_match_mode: Mapped[str] = mapped_column(String(10), default="any")  # 'any' | 'all'
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -53,6 +54,15 @@ class Broadcast(Base):
         back_populates="replies",
     )
     replies: Mapped[list["Broadcast"]] = relationship("Broadcast", back_populates="parent_broadcast")
+
+
+class BroadcastCourse(Base):
+    """Course codes this Echo is AND-gated on — classmates must be enrolled in every selected course."""
+
+    __tablename__ = "broadcast_courses"
+
+    broadcast_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("broadcasts.id", ondelete="CASCADE"), primary_key=True)
+    course_code: Mapped[str] = mapped_column(String(30), primary_key=True)
 
 
 class HiddenBroadcast(Base):
@@ -92,3 +102,5 @@ class BroadcastImpression(Base):
     broadcast_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("broadcasts.id", ondelete="CASCADE"), nullable=False)
     viewer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     shown_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("broadcast_id", "viewer_id", name="uq_broadcast_impressions_broadcast_viewer"),)

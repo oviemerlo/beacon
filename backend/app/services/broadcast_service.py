@@ -11,7 +11,8 @@ from app.repositories import broadcast_repository, school_repository, tag_reposi
 from app.schemas.schemas import BroadcastCreateIn
 from app.services.broadcast_tags import serialize_echo_rows
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
-from app.services.school_service import is_currently_verified, prepare_course_tag, school_tag_matches
+from app.services import school_service
+from app.services.school_service import is_currently_verified, prepare_course_tag
 from app.services.user_service import REGION_TAGS_LOCKED_MESSAGE, can_follow_region_tags, can_use_regional_reach
 
 
@@ -21,7 +22,7 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
     radius_meters = payload.radius_meters
     tag_match_mode = payload.tag_match_mode
     inherited_school_id: int | None = None
-    inherited_course_code: str | None = None
+    inherited_course_codes: list[str] = []
     if payload.reply_to_broadcast_id is not None:
         parent_broadcast = await broadcast_repository.get_by_id(db, payload.reply_to_broadcast_id)
         if parent_broadcast is None or parent_broadcast.deleted_at is not None:
@@ -33,7 +34,9 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
         radius_meters = parent_broadcast.radius_meters
         tag_match_mode = parent_broadcast.tag_match_mode
         inherited_school_id = parent_broadcast.school_id
-        inherited_course_code = parent_broadcast.course_code
+        inherited_course_codes = await broadcast_repository.list_course_codes(db, parent_broadcast.id)
+        if not inherited_course_codes and parent_broadcast.course_code:
+            inherited_course_codes = [parent_broadcast.course_code]
     elif not tag_ids:
         raise ValidationError("At least one tag is required")
 
@@ -62,22 +65,23 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
             if sender is None or not can_follow_region_tags(sender):
                 raise ValidationError(REGION_TAGS_LOCKED_MESSAGE)
 
-    course_code: str | None = inherited_course_code
+    course_codes: list[str] = list(inherited_course_codes)
     school_id: int | None = inherited_school_id
-    if payload.course_code is not None and payload.reply_to_broadcast_id is None:
+    requested_courses = [prepare_course_tag(code) for code in payload.course_codes if code and str(code).strip()]
+    if payload.course_code and payload.course_code.strip():
+        requested_courses.append(prepare_course_tag(payload.course_code))
+    requested_courses = list(dict.fromkeys(requested_courses))
+    if requested_courses and payload.reply_to_broadcast_id is None:
         verification = await school_repository.get_verification(db, sender_id)
         if verification is None or not is_currently_verified(verification):
             raise ValidationError("Verify your school before targeting a course")
 
-        sender_school = await school_repository.get_by_id(db, verification.school_id)
-        if sender_school is None:
-            raise NotFoundError("School not found")
+        enrolled = set(await school_service.get_my_courses(db, sender_id))
+        missing = [code for code in requested_courses if code not in enrolled]
+        if missing:
+            raise ValidationError("You can only target course tags you are enrolled in")
 
-        selected_tags = await tag_repository.get_by_ids(db, payload.tag_ids)
-        if not any(school_tag_matches(tag, sender_school) for tag in selected_tags):
-            raise ValidationError("Course targeting requires your verified school tag")
-
-        course_code = prepare_course_tag(payload.course_code)
+        course_codes = requested_courses
         school_id = verification.school_id
 
     broadcast = await broadcast_repository.create(
@@ -92,7 +96,8 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
         tag_ids=tag_ids,
         parent_broadcast_id=payload.reply_to_broadcast_id,
         school_id=school_id,
-        course_code=course_code,
+        course_codes=course_codes,
+        include_sender_avatar=bool(payload.include_sender_avatar),
     )
     await db.commit()
     await db.refresh(broadcast)

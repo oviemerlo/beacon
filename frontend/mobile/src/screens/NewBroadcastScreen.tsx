@@ -3,7 +3,9 @@ import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, Scroll
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import Slider from "@react-native-community/slider";
 import * as Location from "expo-location";
+import { BroadcastAttachments } from "../components/BroadcastAttachments";
 import { apiFetch } from "../helpers/api";
+import { ATTACHMENT_LOCKED_MESSAGE, canAttachFiles, uploadBroadcastAttachment, type PickedUpload } from "../helpers/uploads";
 import {
   buildReachPayload,
   canUseRegionalReach,
@@ -14,7 +16,7 @@ import {
   REGIONAL_RADIUS_STEPS_M,
   REGIONAL_REACH_LOCKED_MESSAGE,
 } from "../helpers/broadcastReach";
-import { toggleTagId } from "../helpers/tags";
+import { toggleItem } from "../helpers/tags";
 import { getMyCourses, getVerificationStatus } from "../helpers/schoolVerification";
 import { colors, radii } from "../theme/tokens";
 import type { BroadcastCreatePayload, Tag, UserProfile } from "../types/api";
@@ -30,7 +32,9 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const [canUseRegional, setCanUseRegional] = useState(false);
   const [schoolVerified, setSchoolVerified] = useState(false);
   const [myCourses, setMyCourses] = useState<string[]>([]);
-  const [selectedCourseCode, setSelectedCourseCode] = useState("");
+  const [selectedCourseCodes, setSelectedCourseCodes] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<PickedUpload[]>([]);
+  const [canAttach, setCanAttach] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +45,11 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const reachSummary = reach === "global" ? "Global" : `Reach ${activeRadiusLabel}`;
   const selectedTags = profileTags.filter((tag) => selectedTagIds.includes(tag.id));
   const availableProfileTags = profileTags.filter((tag) => !selectedTagIds.includes(tag.id));
+  const availableCourses = myCourses.filter((course) => !selectedCourseCodes.includes(course));
+  const allProfileTagsSelected = profileTags.length > 0 && availableProfileTags.length === 0;
+  const allCoursesSelected = myCourses.length === 0 || availableCourses.length === 0;
+  const canSelectAll = (profileTags.length > 0 || myCourses.length > 0) && (!allProfileTagsSelected || !allCoursesSelected);
+  const canClearAll = selectedTagIds.length > 0 || selectedCourseCodes.length > 0;
   const localReachColors = reachSelectorColors("local", reach === "local");
   const regionalReachColors = reachSelectorColors("regional", reach === "regional", !canUseRegional);
   const globalReachColors = reachSelectorColors("global", reach === "global");
@@ -50,6 +59,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
       .then((me) => {
         setProfileTags(me.tags ?? []);
         setCanUseRegional(canUseRegionalReach(me.is_verified, me.is_admin));
+        setCanAttach(canAttachFiles(me.is_verified, me.is_admin));
       })
       .catch(() => setProfileTags([]));
     getVerificationStatus()
@@ -64,6 +74,20 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         setMyCourses([]);
       });
   }, []);
+
+  function selectAllTargeting() {
+    setSelectedTagIds(profileTags.map((tag) => tag.id));
+    setSelectedCourseCodes([...myCourses]);
+  }
+
+  function clearAllTargeting() {
+    setSelectedTagIds([]);
+    setSelectedCourseCodes([]);
+  }
+
+  function toggleCourse(course: string) {
+    setSelectedCourseCodes((current) => toggleItem(current, course));
+  }
 
   function selectReach(next: ReachCategory) {
     if (next === "regional" && !canUseRegional) {
@@ -97,13 +121,24 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         tag_match_mode: "any",
         tag_ids: selectedTagIds,
       };
-      if (selectedCourseCode) payload.course_code = selectedCourseCode;
+      if (selectedCourseCodes.length) {
+        payload.course_codes = selectedCourseCodes;
+        payload.course_code = selectedCourseCodes[0];
+      }
 
-      await apiFetch("/broadcasts", {
+      const created = await apiFetch<{ id: string }>("/broadcasts", {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      try {
+        for (const file of attachments) {
+          await uploadBroadcastAttachment(created.id, file);
+        }
+      } catch {
+        // Echo is already live — don't block leaving compose.
+      }
       setContent("");
+      setAttachments([]);
       onPosted();
     } catch (e: any) {
       setError(e.message ?? "Couldn't post your broadcast — check location permissions and try again.");
@@ -116,7 +151,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.contentContainer, { paddingBottom: tabBarHeight + 32 }]}
-      keyboardShouldPersistTaps="handled"
+      keyboardShouldPersistTaps="always"
       keyboardDismissMode="on-drag"
       nestedScrollEnabled
       scrollEnabled
@@ -132,6 +167,16 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         onChangeText={setContent}
         multiline
         maxLength={2000}
+      />
+
+      <BroadcastAttachments
+        files={attachments}
+        onChange={setAttachments}
+        canAttach={canAttach}
+        onLocked={() => {
+          setError(ATTACHMENT_LOCKED_MESSAGE);
+          Alert.alert("Attachments locked", ATTACHMENT_LOCKED_MESSAGE);
+        }}
       />
 
       <View style={styles.pillRow}>
@@ -171,32 +216,37 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         <Text style={styles.label}>Selected for this broadcast</Text>
         <View style={styles.selectedActions}>
           <Pressable
-            onPress={() => setSelectedTagIds([])}
-            disabled={selectedTagIds.length === 0}
-            style={[styles.pill, selectedTagIds.length === 0 && styles.pillDisabled]}
+            onPress={clearAllTargeting}
+            disabled={!canClearAll}
+            style={[styles.pill, !canClearAll && styles.pillDisabled]}
           >
             <Text style={styles.pillText}>Clear all tags</Text>
           </Pressable>
           <Pressable
-            onPress={() => setSelectedTagIds(profileTags.map((tag) => tag.id))}
-            disabled={profileTags.length === 0 || availableProfileTags.length === 0}
-            style={[styles.pill, (profileTags.length === 0 || availableProfileTags.length === 0) && styles.pillDisabled]}
+            onPress={selectAllTargeting}
+            disabled={!canSelectAll}
+            style={[styles.pill, !canSelectAll && styles.pillDisabled]}
           >
             <Text style={styles.pillText}>Select all tags</Text>
           </Pressable>
         </View>
       </View>
-      {selectedTags.length === 0 ? (
-        <Text style={styles.emptyText}>Select at least one tag. Only people who share a selected tag will see this Echo — including Global.</Text>
+      {selectedTags.length === 0 && selectedCourseCodes.length === 0 ? (
+        <Text style={styles.emptyText}>Select at least one tag. School and course tags AND with every other selected tag.</Text>
       ) : (
         <View style={styles.tagPillRow}>
           {selectedTags.map((tag) => (
             <Pressable
               key={tag.id}
-              onPress={() => setSelectedTagIds((prev) => toggleTagId(prev, tag.id))}
+              onPress={() => setSelectedTagIds((prev) => toggleItem(prev, tag.id))}
               style={[styles.pill, styles.pillActive]}
             >
               <Text style={[styles.pillText, styles.pillTextActive]}>{tag.label}</Text>
+            </Pressable>
+          ))}
+          {selectedCourseCodes.map((course) => (
+            <Pressable key={course} onPress={() => toggleCourse(course)} style={[styles.pill, styles.pillActive]}>
+              <Text style={[styles.pillText, styles.pillTextActive]}>{course}</Text>
             </Pressable>
           ))}
         </View>
@@ -212,7 +262,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
           {availableProfileTags.map((tag) => (
             <Pressable
               key={tag.id}
-              onPress={() => setSelectedTagIds((prev) => toggleTagId(prev, tag.id))}
+              onPress={() => setSelectedTagIds((prev) => toggleItem(prev, tag.id))}
               style={styles.pill}
             >
               <Text style={styles.pillText}>{tag.label}</Text>
@@ -223,24 +273,23 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
 
       {schoolVerified && (
         <View style={styles.courseWrap}>
-          <Text style={[styles.label, { marginBottom: 8 }]}>Course targeting</Text>
-          <View style={styles.tagPillRow}>
-            <Pressable
-              onPress={() => setSelectedCourseCode("")}
-              style={[styles.pill, selectedCourseCode === "" && styles.pillActive]}
-            >
-              <Text style={[styles.pillText, selectedCourseCode === "" && styles.pillTextActive]}>No course targeting</Text>
-            </Pressable>
-            {myCourses.map((course) => (
-              <Pressable
-                key={course}
-                onPress={() => setSelectedCourseCode(course)}
-                style={[styles.pill, selectedCourseCode === course && styles.pillActive]}
-              >
-                <Text style={[styles.pillText, selectedCourseCode === course && styles.pillTextActive]}>{course}</Text>
-              </Pressable>
-            ))}
-          </View>
+          <Text style={[styles.label, { marginBottom: 8 }]}>Your course tags</Text>
+          <Text style={styles.emptyText}>
+            Course and school tags AND with every other selected tag. Receivers must match all of them.
+          </Text>
+          {myCourses.length === 0 ? (
+            <Text style={styles.emptyText}>Add course tags from Echo Tags to target classmates in a class.</Text>
+          ) : availableCourses.length === 0 ? (
+            <Text style={styles.emptyText}>All of your course tags are selected above.</Text>
+          ) : (
+            <View style={styles.tagPillRow}>
+              {availableCourses.map((course) => (
+                <Pressable key={course} onPress={() => toggleCourse(course)} hitSlop={8} style={styles.pill}>
+                  <Text style={styles.pillText}>{course}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
       )}
 
@@ -267,7 +316,7 @@ const styles = StyleSheet.create({
     color: colors.parchment100,
     minHeight: 110,
     textAlignVertical: "top",
-    marginBottom: 24,
+    marginBottom: 12,
   },
   label: { color: colors.parchment100, fontSize: 14, fontWeight: "600" },
   selectedHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 },

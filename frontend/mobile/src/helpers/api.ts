@@ -32,11 +32,12 @@ async function refreshAccessToken(): Promise<string | null> {
  */
 export async function apiFetch<T>(path: string, init?: RequestInit, _retried = false): Promise<T> {
   const token = await TokenStore.getAccessToken();
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
 
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },

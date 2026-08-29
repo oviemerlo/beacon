@@ -69,5 +69,16 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str = ""
     SES_FROM_EMAIL: str = ""
 
+    # Distinct IAM user from SES — scoped to echo2crowd/* only.
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
+    S3_BUCKET_NAME: str = "echo2crowd"
+    S3_REGION: str = "us-east-1"
+    # Shared secret for the GuardDuty scan-result Lambda callback.
+    # Leave unset to disable the webhook (empty never matches a real header).
+    INTERNAL_WEBHOOK_SECRET: str = ""
+    MAX_IMAGE_UPLOAD_BYTES: int = 10 * 1024 * 1024
+    MAX_DOCUMENT_UPLOAD_BYTES: int = 20 * 1024 * 1024
+
 
 settings = Settings()

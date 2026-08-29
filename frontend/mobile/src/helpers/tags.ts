@@ -1,4 +1,4 @@
-import type { CountedTagType, TagGroups } from "../types/api";
+import type { CountedTagType, Tag, TagGroups } from "../types/api";
 
 export const TAG_SECTIONS: Array<{ key: CountedTagType; title: string }> = [
   { key: "nationality", title: "Nationality" },
@@ -29,8 +29,20 @@ export type FollowedTagsPayload = {
   hobby: number[];
 };
 
-export function toggleTagId(selectedIds: number[], tagId: number): number[] {
-  return selectedIds.includes(tagId) ? selectedIds.filter((id) => id !== tagId) : [...selectedIds, tagId];
+export function toggleItem<T>(selected: T[], value: T): T[] {
+  return selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value];
+}
+
+export function echoAudienceLabels(tags: Tag[], courseCodes?: string[] | null, courseCode?: string | null): string[] {
+  const courses = courseCodes?.length ? courseCodes : courseCode ? [courseCode] : [];
+  const labels: string[] = [];
+  const seen = new Set<string>();
+  for (const label of [...tags.map((tag) => tag.label), ...courses]) {
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    labels.push(label);
+  }
+  return labels;
 }
 
 export function updateSectionQuery(queries: SectionQueries, section: CountedTagType, value: string): SectionQueries {
@@ -134,15 +146,51 @@ export function followedIdsWithoutLockedRegions(
   return selectedIds.filter((id) => !regionIds.has(id));
 }
 
-export function retainKnownTagIds(selectedIds: number[], knownIds: number[]): number[] {
-  const valid = new Set(knownIds);
-  const next = selectedIds.filter((id) => valid.has(id));
-  return next.length === selectedIds.length ? selectedIds : next;
+export function retainKnown<T>(selected: T[], known: T[]): T[] {
+  const valid = new Set(known);
+  const next = selected.filter((item) => valid.has(item));
+  return next.length === selected.length ? selected : next;
 }
 
-export function pathWithTagQuery(path: string, tagIds: number[], extra: Record<string, string> = {}): string {
-  const params = new URLSearchParams(extra);
-  if (tagIds.length > 0) params.set("tags", tagIds.join(","));
+export type FeedSearchChip =
+  | { key: string; label: string; selected: boolean; kind: "tag"; id: number }
+  | { key: string; label: string; selected: boolean; kind: "course"; code: string };
+
+export function feedSearchChips(
+  tags: Tag[],
+  selectedTagIds: number[],
+  courseCodes: string[],
+  selectedCourseCodes: string[]
+): FeedSearchChip[] {
+  return [
+    ...tags.map((tag) => ({
+      key: `tag:${tag.id}`,
+      label: tag.label,
+      selected: selectedTagIds.includes(tag.id),
+      kind: "tag" as const,
+      id: tag.id,
+    })),
+    ...courseCodes.map((code) => ({
+      key: `course:${code}`,
+      label: code,
+      selected: selectedCourseCodes.includes(code),
+      kind: "course" as const,
+      code,
+    })),
+  ];
+}
+
+export function audienceFilterActive(tagIds: number[], courseCodes: string[]): boolean {
+  return tagIds.length > 0 || courseCodes.length > 0;
+}
+
+export function pathWithTagQuery(
+  path: string,
+  filters: { tagIds?: number[]; courseCodes?: string[]; extra?: Record<string, string> } = {}
+): string {
+  const params = new URLSearchParams(filters.extra);
+  if (filters.tagIds?.length) params.set("tags", filters.tagIds.join(","));
+  if (filters.courseCodes?.length) params.set("courses", filters.courseCodes.join(","));
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }

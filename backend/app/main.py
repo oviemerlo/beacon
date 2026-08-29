@@ -2,13 +2,13 @@ from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
-from app.api.routes import admin, auth, blocks, broadcasts, feed, geocode, messages, reports, schools, search, tags, users
+from app.api.routes import admin, auth, blocks, broadcasts, feed, geocode, internal, messages, reports, schools, search, tags, uploads, users
 from app.api.routes.search import limiter
 from app.api.error_handlers import register_error_handlers
 from app.utils.config import settings
@@ -62,36 +62,10 @@ app.include_router(geocode.router)
 app.include_router(tags.router)
 app.include_router(reports.router)
 app.include_router(schools.router)
+app.include_router(uploads.router)
+app.include_router(internal.router)
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
-
-@app.post("/internal/jobs/run-digest-now", include_in_schema=False)
-async def trigger_digest_manually(x_internal_job_token: str | None = Header(default=None)):
-    """
-    Manual trigger for local testing/ops. Previously had no auth at all —
-    anyone who could reach the API could force a full digest run (email
-    volume / cost abuse, or just repeated spam to every user). Now requires
-    a header matching INTERNAL_JOB_TOKEN; with that setting unset (the
-    default), no header value can match and the route always 403s.
-    """
-    if not settings.INTERNAL_JOB_TOKEN or x_internal_job_token != settings.INTERNAL_JOB_TOKEN:
-        raise HTTPException(403, "Not authorized to trigger internal jobs")
-    await run_weekly_digest()
-    return {"status": "digest run triggered"}
-
-
-@app.post("/internal/jobs/run-reverification-now", include_in_schema=False)
-async def trigger_reverification_manually(x_internal_job_token: str | None = Header(default=None)):
-    """
-    Manual trigger for local testing/ops. Same token gate as the digest job:
-    requires x-internal-job-token matching INTERNAL_JOB_TOKEN. With that
-    setting unset, no header value can match and the route always 403s.
-    """
-    if not settings.INTERNAL_JOB_TOKEN or x_internal_job_token != settings.INTERNAL_JOB_TOKEN:
-        raise HTTPException(403, "Not authorized to trigger internal jobs")
-    await run_daily_reverification_check()
-    return {"status": "reverification run triggered"}

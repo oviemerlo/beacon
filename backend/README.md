@@ -14,6 +14,8 @@ pip install -r requirements.txt
 cp .env.example .env
 # edit .env: DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_ID/SECRET, Apple keys,
 # INTERNAL_JOB_TOKEN if you want to use the manual digest trigger
+# S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY for echo2crowd uploads (separate from SES)
+# INTERNAL_WEBHOOK_SECRET for the GuardDuty scan-result Lambda callback
 
 # Requires Postgres with the PostGIS extension available (postgis/postgis
 # Docker image, or `CREATE EXTENSION postgis;` on a managed instance that
@@ -50,7 +52,8 @@ Three layers, each with one job:
   fake HTTP request to call into them.
 - **`app/repositories/`** — data access only. Every query lives here, one
   file per aggregate (`user_repository.py`, `broadcast_repository.py`,
-  `conversation_repository.py`, `block_repository.py`, `tag_repository.py`).
+  `conversation_repository.py`, `block_repository.py`, `tag_repository.py`,
+  `upload_repository.py`).
   Repositories never commit — they `flush()` (to get generated IDs within
   the current transaction) and leave the commit to whichever service
   called them. This is also the enforcement boundary for the app's central
@@ -76,6 +79,7 @@ app/
     user_service.py           profile updates, tag follows
     feed_service.py           feed assembly + impression recording
     broadcast_service.py      broadcast create/delete
+    upload_service.py         avatar/attachment S3 uploads, GuardDuty scan results
     conversation_service.py   DM eligibility (the core guardrail) + messaging
     search_service.py         username search validation
     digest_service.py         weekly digest payload + orchestration

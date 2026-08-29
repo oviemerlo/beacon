@@ -5,20 +5,29 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.schemas import FeedSearchHitOut, TagOut
+from app.utils.course_tags import canonical_course_tag
 from app.services import feed_service
 
 router = APIRouter(prefix="/feed", tags=["feed"])
 
 
-def _parse_tag_ids(tags: str | None) -> list[int]:
-    if not tags:
+def _csv_parts(value: str | None) -> list[str]:
+    if not value:
         return []
-    ids: list[int] = []
-    for part in tags.split(","):
-        part = part.strip()
-        if part.isdigit():
-            ids.append(int(part))
-    return ids
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _parse_tag_ids(tags: str | None) -> list[int]:
+    return [int(part) for part in _csv_parts(tags) if part.isdigit()]
+
+
+def _parse_course_codes(courses: str | None) -> list[str]:
+    codes: list[str] = []
+    for part in _csv_parts(courses):
+        canonical = canonical_course_tag(part)
+        if canonical and canonical not in codes:
+            codes.append(canonical)
+    return codes
 
 
 @router.get("/for-you")
@@ -26,10 +35,13 @@ async def for_you_feed(
     limit: int = 30,
     offset: int = 0,
     tags: str | None = None,
+    courses: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await feed_service.get_for_you_feed(db, current_user.id, limit, offset, _parse_tag_ids(tags))
+    return await feed_service.get_for_you_feed(
+        db, current_user.id, limit, offset, _parse_tag_ids(tags), _parse_course_codes(courses)
+    )
 
 
 @router.get("/opt-in")
@@ -53,10 +65,13 @@ async def mark_seen(current_user: User = Depends(get_current_user), db: AsyncSes
 async def search_feed_history(
     q: str,
     tags: str | None = None,
+    courses: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await feed_service.search_history(db, current_user.id, q, _parse_tag_ids(tags))
+    return await feed_service.search_history(
+        db, current_user.id, q, _parse_tag_ids(tags), _parse_course_codes(courses)
+    )
 
 
 @router.get("/search-tags", response_model=list[TagOut])

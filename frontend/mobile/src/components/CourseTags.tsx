@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
   COURSE_TAG_MAX_LEN,
+  compactCourseKey,
   enrollInCourse,
   getMyCourses,
   trimCourseTag,
@@ -16,7 +17,8 @@ export function CourseTags() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nextCourse = trimCourseTag(courseInput);
-  const canAdd = nextCourse.length > 0 && nextCourse.length <= COURSE_TAG_MAX_LEN && !submitting;
+  const compact = compactCourseKey(courseInput);
+  const canAdd = compact.length > 0 && compact.length <= COURSE_TAG_MAX_LEN && !submitting;
 
   useEffect(() => {
     getMyCourses()
@@ -61,7 +63,7 @@ export function CourseTags() {
           placeholderTextColor={colors.parchment500}
           value={courseInput}
           onChangeText={setCourseInput}
-          maxLength={COURSE_TAG_MAX_LEN}
+          maxLength={COURSE_TAG_MAX_LEN * 2}
           autoCapitalize="none"
           autoCorrect={false}
           onSubmitEditing={addCourse}
