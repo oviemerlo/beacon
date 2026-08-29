@@ -458,11 +458,12 @@ function BroadcastCard({
       </View>
       {featuredReply ? <Text style={styles.replyToLabel}>Reply to: {echoPreview(broadcast.content)}</Text> : null}
       <Text style={styles.cardText}>{featuredReply ? featuredReply.content : broadcast.content}</Text>
-      <Text style={styles.sentAtLabel}>
-        {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
-      </Text>
+      </EchoMediaLayout>
       <View style={styles.metaRow}>
-        {!isOwn && <Text style={styles.cardMeta}>{(broadcast.distance_m / 1000).toFixed(1)} km away</Text>}
+        <Text style={styles.cardMeta} numberOfLines={1}>
+          {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
+          {!isOwn ? `  ·  ${(broadcast.distance_m / 1000).toFixed(1)} km away` : ""}
+        </Text>
         <View style={[styles.reachPill, { backgroundColor: reachColors.backgroundColor, borderColor: reachColors.borderColor }]}>
           <Text style={[styles.reachPillText, { color: reachColors.color }]}>{reachLabel}</Text>
         </View>
@@ -476,7 +477,6 @@ function BroadcastCard({
           </Text>
         </Pressable>
       </View>
-      </EchoMediaLayout>
       <View style={styles.replyRow}>
         {!isOwn && (
           <>
@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
   nestedMatch: { marginTop: 12, marginLeft: 10, paddingLeft: 10, borderLeftWidth: 1, borderLeftColor: colors.dusk600, gap: 6 },
   nestedMatchBody: { color: colors.parchment300, fontSize: 14 },
   replyToLabel: { color: colors.parchment500, fontSize: 11, fontFamily: "monospace", marginTop: 6 },
-  cardText: { color: colors.parchment100, fontSize: 15, marginTop: 6 },
+  cardText: { color: colors.parchment100, fontSize: 15, marginTop: 6, marginBottom: 4 },
   headingRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
   headingCopy: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 20, rowGap: 8 },
   senderCluster: { flexDirection: "row", alignItems: "center", gap: 8, marginRight: 8 },
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
   overflowMenuItemText: { color: colors.parchment100, fontSize: 14 },
   broadcastTagPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
   broadcastTagPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
+  metaRow: { flexDirection: "row", flexWrap: "nowrap", alignItems: "center", gap: 8, marginTop: 16 },
   cardMeta: { color: colors.parchment500, fontSize: 11, fontWeight: "400", fontFamily: "monospace" },
   reachPill: { borderColor: colors.parchment500, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
   reachPillText: { fontSize: 10, fontFamily: "monospace" },

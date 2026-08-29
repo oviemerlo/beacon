@@ -396,23 +396,23 @@ function BroadcastCard({
       {featuredReply && (
         <p className="text-parchment-500 text-xs font-mono mb-1">Reply to: {echoPreview(broadcast.content)}</p>
       )}
-      <p className="text-parchment-100">{featuredReply ? featuredReply.content : broadcast.content}</p>
-      <p className="feed-card-time mt-2">
-        {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
-      </p>
-      <div className="flex items-center flex-wrap gap-1.5 mt-3 text-[10px] leading-tight font-mono text-parchment-500">
-        {!isOwn && <span>{km} km away</span>}
+      <p className="text-parchment-100 mt-1.5 mb-1">{featuredReply ? featuredReply.content : broadcast.content}</p>
+      </EchoMediaLayout>
+      <div className="flex items-center flex-nowrap gap-2 mt-4 text-[10px] leading-tight font-mono text-parchment-500">
+        <span className="feed-card-time whitespace-nowrap">
+          {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
+          {!isOwn ? `  ·  ${km} km away` : ""}
+        </span>
         <span className="feed-card-meta" style={reachColors}>
           {reachLabel}
         </span>
         <Link
           href={`/broadcasts/${broadcast.id}`}
-          className="text-parchment-500 hover:text-parchment-100"
+          className="text-parchment-500 hover:text-parchment-100 whitespace-nowrap"
         >
           {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
         </Link>
       </div>
-      </EchoMediaLayout>
       <div className="flex flex-wrap gap-1.5 mt-3">
         {!isOwn && (
           <>
