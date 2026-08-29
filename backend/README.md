@@ -137,4 +137,6 @@ poll) are the two biggest remaining gaps.
 
 start frontend/web command: npm run dev
 start frontend/mobile command: npx expo run:ios
+start frontend/mobile command for android: source ~/.zshrc
+                                          npx expo run:android
 backend: uvicorn app.main:app --reload

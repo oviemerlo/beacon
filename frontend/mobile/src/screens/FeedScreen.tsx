@@ -192,7 +192,7 @@ export function FeedScreen({
           removeClippedSubviews={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ padding: 16, gap: 12 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.signal500} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.signal500} title="" />}
           ListHeaderComponent={
             searching ? <Text style={styles.searchStatus}>Searching…</Text> : searchError ? <Text style={styles.searchError}>{searchError}</Text> : null
           }
@@ -219,7 +219,7 @@ export function FeedScreen({
           keyExtractor={(b) => b.id}
           removeClippedSubviews={false}
           contentContainerStyle={{ padding: 16, gap: 12 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.signal500} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.signal500} title="" />}
           ListEmptyComponent={
             <Card>
               <Text style={styles.emptyTitle}>

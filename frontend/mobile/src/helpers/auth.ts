@@ -3,12 +3,20 @@ import * as AuthSession from "expo-auth-session";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Platform } from "react-native";
 import { TokenStore } from "./secureStore";
+import { apiBaseUrl } from "./api";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = apiBaseUrl();
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
+
+if (Platform.OS === "android") {
+  GoogleSignin.configure({
+    webClientId: GOOGLE_WEB_CLIENT_ID, // Android uses the Web client's ID to get a verifiable idToken
+  });
+}
 
 function logAuth(stage: string, details?: Record<string, unknown>) {
   if (details) {
@@ -27,19 +35,62 @@ function getGoogleIosRedirectUri(clientId: string): string {
   return `com.googleusercontent.apps.${clientPrefix}:/oauthredirect`;
 }
 
+async function exchangeGoogleIdTokenWithBackend(idToken: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/auth/google/token-exchange?id_token=${encodeURIComponent(idToken)}`, {
+      method: "POST",
+    });
+  } catch {
+    logAuth("google:backend-exchange:network-error", { apiUrl: API_URL });
+    throw new Error(
+      Platform.OS === "android"
+        ? `Couldn't reach the API at ${API_URL}. On the Android emulator the host machine is http://10.0.2.2:8000`
+        : `Couldn't reach the API at ${API_URL}. On the iOS simulator use http://127.0.0.1:8000`
+    );
+  }
+  logAuth("google:backend-exchange:response", { ok: res.ok, status: res.status, apiUrl: API_URL });
+  if (!res.ok) {
+    const text = await res.text();
+    logAuth("google:backend-exchange:error", { body: text });
+    throw new Error(`Backend rejected Google sign-in: ${text}`);
+  }
+
+  const { access_token, refresh_token } = await res.json();
+  await TokenStore.save(access_token, refresh_token);
+  logAuth("google:success");
+}
+
 /**
- * Runs Google Sign-In on-device to get an ID token, then hands it to the
- * backend's POST /auth/google/token-exchange — the native-app path the
- * backend scaffold already exposes (see beacon-backend/app/api/routes/auth.py).
- * The web app uses the redirect-based /auth/google/login flow instead;
- * both land on the same upsert logic server-side.
- *
- * Uses direct native redirects (Google iOS redirect on iOS, app scheme on other
- * platforms) rather than the deprecated auth.expo.io proxy. Requires a dev
- * build, not Expo Go, since Expo Go can't register custom schemes.
+ * Android: uses the native Google Sign-In SDK (Play Services) instead of a
+ * browser redirect. Google disallows custom URI scheme redirects for new
+ * Android OAuth clients by default, so the browser-based AuthSession flow
+ * below (used for iOS/web) isn't viable here — this is Google's recommended
+ * path for Android instead.
  */
-export async function signInWithGoogle(): Promise<void> {
-  logAuth("google:start", { platform: Platform.OS });
+async function signInWithGoogleAndroid(): Promise<void> {
+  await GoogleSignin.hasPlayServices();
+  const userInfo = await GoogleSignin.signIn();
+  const idToken = userInfo.data?.idToken;
+  if (!idToken) throw new Error("Google sign-in was cancelled or failed");
+  logAuth("google:id-token:received");
+
+  await exchangeGoogleIdTokenWithBackend(idToken);
+}
+
+/**
+ * iOS / web: browser-based AuthSession authorization code + PKCE flow,
+ * exchanging the code with Google directly, then handing the resulting
+ * ID token to the backend's POST /auth/google/token-exchange — the
+ * native-app path the backend scaffold already exposes (see
+ * beacon-backend/app/api/routes/auth.py). The web app itself uses the
+ * redirect-based /auth/google/login flow instead; both land on the same
+ * upsert logic server-side.
+ *
+ * Requires a dev build, not Expo Go, since Expo Go can't register custom
+ * schemes.
+ */
+async function signInWithGoogleAuthSession(): Promise<void> {
   const clientId = Platform.OS === "ios" ? GOOGLE_IOS_CLIENT_ID : GOOGLE_WEB_CLIENT_ID;
   if (!clientId) {
     throw new Error(
@@ -52,7 +103,7 @@ export async function signInWithGoogle(): Promise<void> {
   const redirectUri =
     Platform.OS === "ios"
       ? getGoogleIosRedirectUri(clientId)
-      : AuthSession.makeRedirectUri({ scheme: "beacon" });
+      : AuthSession.makeRedirectUri({ scheme: "echotocrowd" });
   logAuth("google:redirect-uri", { redirectUri, clientId });
 
   const request = new AuthSession.AuthRequest({
@@ -101,25 +152,16 @@ export async function signInWithGoogle(): Promise<void> {
   if (!idToken) throw new Error("Google sign-in was cancelled or failed");
   logAuth("google:id-token:received");
 
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}/auth/google/token-exchange?id_token=${encodeURIComponent(idToken)}`, {
-      method: "POST",
-    });
-  } catch {
-    logAuth("google:backend-exchange:network-error", { apiUrl: API_URL });
-    throw new Error(`Couldn't reach the API at ${API_URL}. For the iOS simulator use http://127.0.0.1:8000`);
-  }
-  logAuth("google:backend-exchange:response", { ok: res.ok, status: res.status, apiUrl: API_URL });
-  if (!res.ok) {
-    const text = await res.text();
-    logAuth("google:backend-exchange:error", { body: text });
-    throw new Error(`Backend rejected Google sign-in: ${text}`);
-  }
+  await exchangeGoogleIdTokenWithBackend(idToken);
+}
 
-  const { access_token, refresh_token } = await res.json();
-  await TokenStore.save(access_token, refresh_token);
-  logAuth("google:success");
+export async function signInWithGoogle(): Promise<void> {
+  logAuth("google:start", { platform: Platform.OS });
+  if (Platform.OS === "android") {
+    await signInWithGoogleAndroid();
+    return;
+  }
+  await signInWithGoogleAuthSession();
 }
 
 /** iOS only — the Apple button is conditionally rendered in LoginScreen. */

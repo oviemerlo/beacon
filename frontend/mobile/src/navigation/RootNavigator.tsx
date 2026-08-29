@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavigationContainer, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, Image, Text, View } from "react-native";
 
 import { TokenStore } from "../helpers/secureStore";
@@ -136,12 +137,21 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
 
   return (
     <Tabs.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: { backgroundColor: colors.dusk900, borderTopColor: colors.dusk700 },
         tabBarActiveTintColor: colors.signal400,
         tabBarInactiveTintColor: colors.parchment500,
-      }}
+        tabBarIcon: ({ color, size, focused }) => {
+          const icons = {
+            Feed: focused ? "radio" : "radio-outline",
+            Broadcast: focused ? "megaphone" : "megaphone-outline",
+            Messages: focused ? "chatbubbles" : "chatbubbles-outline",
+            Profile: focused ? "person" : "person-outline",
+          } as const;
+          return <Ionicons name={icons[route.name as keyof typeof icons]} size={size} color={color} />;
+        },
+      })}
     >
       <Tabs.Screen name="Feed" component={FeedStackNavigator} options={{ tabBarBadge: feedUnread > 0 ? feedUnread : undefined }} />
       <Tabs.Screen name="Broadcast">

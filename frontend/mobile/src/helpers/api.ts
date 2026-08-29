@@ -1,7 +1,14 @@
+import { Platform } from "react-native";
 import { TokenStore } from "./secureStore";
 import { extractErrorMessage } from "./httpError";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+export function apiBaseUrl(): string {
+  const configured = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+  if (Platform.OS !== "android") return configured;
+  return configured.replace("://127.0.0.1", "://10.0.2.2").replace("://localhost", "://10.0.2.2");
+}
+
+const API_URL = apiBaseUrl();
 
 export class ApiError extends Error {
   status: number;
