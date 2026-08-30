@@ -4,7 +4,17 @@ import * as Location from "expo-location";
 import { apiFetch } from "../helpers/api";
 import { colors, radii } from "../theme/tokens";
 
+const MIN_AGE_YEARS = 16;
 const DOB_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function calculateAge(dobIso: string, today = new Date()): number {
+  const [year, month, day] = dobIso.split("-").map(Number);
+  let years = today.getFullYear() - year;
+  if (today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day)) {
+    years -= 1;
+  }
+  return years;
+}
 
 function isValidIsoDate(value: string): boolean {
   if (!DOB_PATTERN.test(value)) return false;
@@ -22,7 +32,7 @@ function isValidIsoDate(value: string): boolean {
 }
 
 export function OnboardingScreen({ onDone }: { onDone: () => void }) {
-  const [step, setStep] = useState<"profile" | "location" | "tags">("profile");
+  const [step, setStep] = useState<"profile" | "blocked" | "location" | "tags">("profile");
   const [displayName, setDisplayName] = useState("");
   const [birthdate, setBirthdate] = useState("");
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -90,6 +100,10 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
       setProfileError("Birthdate must be in YYYY-MM-DD format.");
       return;
     }
+    if (calculateAge(birthdate) < MIN_AGE_YEARS) {
+      setStep("blocked");
+      return;
+    }
 
     setProfileError(null);
     setProfileSubmitting(true);
@@ -120,6 +134,14 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
           onDisplayNameChange={setDisplayName}
           onBirthdateChange={setBirthdate}
           onContinue={saveProfileAndContinue}
+        />
+      ) : step === "blocked" ? (
+        <BlockedStep
+          onGoBack={() => {
+            setBirthdate("");
+            setProfileError(null);
+            setStep("profile");
+          }}
         />
       ) : step === "location" ? (
         <>
@@ -155,6 +177,18 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
         <TagStep onDone={onDone} />
       )}
     </View>
+  );
+}
+
+function BlockedStep({ onGoBack }: { onGoBack: () => void }) {
+  return (
+    <>
+      <Text style={styles.title}>EchoToCrowd is rated 16+</Text>
+      <Text style={styles.subtitle}>You can't create an account right now.</Text>
+      <Pressable style={styles.buttonSecondary} onPress={onGoBack}>
+        <Text style={styles.buttonSecondaryText}>Go back</Text>
+      </Pressable>
+    </>
   );
 }
 

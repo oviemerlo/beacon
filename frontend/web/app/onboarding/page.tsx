@@ -4,9 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { clientFetch } from "@/helpers/client-api";
 
+const MIN_AGE_YEARS = 16;
+
+function calculateAge(dobIso: string, today = new Date()): number {
+  const [year, month, day] = dobIso.split("-").map(Number);
+  let years = today.getFullYear() - year;
+  if (today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day)) {
+    years -= 1;
+  }
+  return years;
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"profile" | "location" | "tags">("profile");
+  const [step, setStep] = useState<"profile" | "blocked" | "location" | "tags">("profile");
   const [displayName, setDisplayName] = useState("");
   const [birthdate, setBirthdate] = useState("");
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -41,6 +52,10 @@ export default function OnboardingPage() {
     }
     if (!birthdate) {
       setProfileError("Birthdate is required.");
+      return;
+    }
+    if (calculateAge(birthdate) < MIN_AGE_YEARS) {
+      setStep("blocked");
       return;
     }
 
@@ -106,6 +121,14 @@ export default function OnboardingPage() {
             onBirthdateChange={setBirthdate}
             onContinue={saveProfileAndContinue}
           />
+        ) : step === "blocked" ? (
+          <BlockedStep
+            onGoBack={() => {
+              setBirthdate("");
+              setProfileError(null);
+              setStep("profile");
+            }}
+          />
         ) : step === "location" ? (
           <>
             <h1 className="font-display text-xl font-bold">Where are you based?</h1>
@@ -132,6 +155,20 @@ export default function OnboardingPage() {
         )}
       </div>
     </main>
+  );
+}
+
+function BlockedStep({ onGoBack }: { onGoBack: () => void }) {
+  return (
+    <>
+      <h1 className="font-display text-xl font-bold">EchoToCrowd is rated 16+</h1>
+      <p className="text-parchment-500 text-sm mt-2 mb-5">
+        You can't create an account right now.
+      </p>
+      <button onClick={onGoBack} className="btn-secondary w-full">
+        Go back
+      </button>
+    </>
   );
 }
 

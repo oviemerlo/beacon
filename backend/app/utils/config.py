@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     USERNAME_SEARCH_MIN_CHARS: int = 3
     USERNAME_SEARCH_MAX_RESULTS: int = 5
     GROUP_THREAD_DM_THRESHOLD: int = 3  # DMs on one broadcast before "start a group" is offered
-    MIN_AGE_YEARS: int = 13
+    MIN_AGE_YEARS: int = 16
     FOLLOWED_TAG_LIMIT_DEFAULT: int = 2  # student / non-student
     FOLLOWED_TAG_LIMIT_BUSINESS: int = 4
     FOLLOWED_TAG_LIMIT_ADMIN: int = 10_000
