@@ -113,16 +113,15 @@ export function SchoolVerification({ onVerifiedChange }: { onVerifiedChange?: (v
       {phase === "verified" ? (
         <div className="space-y-2">
           <div className="tag-pill border-moss-500 bg-moss-500/10 text-moss-500">
-            <span>Verified</span>
-            <span>{verifiedSchoolName ?? "School"}</span>
             <span aria-hidden>✓</span>
+            <span>{verifiedSchoolName ?? "School"}</span>
           </div>
         </div>
       ) : (
         <>
           {phase === "idle" && (
-            <button className="btn-secondary text-sm" onClick={() => setPhase("searching")}>
-              Verify your school
+            <button className="btn-primary text-sm" onClick={() => setPhase("searching")}>
+              Verify school →
             </button>
           )}
 

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,8 @@ class UploadedFile(Base):
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     scan_status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    moderation_status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    moderation_labels: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     uploader: Mapped["User"] = relationship()
@@ -40,6 +42,10 @@ class UploadedFile(Base):
         CheckConstraint(
             "scan_status IN ('pending', 'clean', 'infected', 'scan_failed')",
             name="ck_uploaded_files_scan_status",
+        ),
+        CheckConstraint(
+            "moderation_status IN ('pending', 'clean', 'flagged', 'rejected')",
+            name="ck_uploaded_files_moderation_status",
         ),
         CheckConstraint(
             "(context = 'avatar' AND broadcast_id IS NULL) OR "

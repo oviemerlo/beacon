@@ -1,5 +1,6 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { displayTagLabel, REGION_INFO_SUBTITLE } from "../helpers/tags";
 import { colors, radii } from "../theme/tokens";
 import type { Tag } from "../types/api";
 
@@ -18,8 +19,8 @@ export function RegionCountriesSheet({
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Dismiss country list" />
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <Text style={styles.title}>{tag?.label}</Text>
-          <Text style={styles.subtitle}>Countries in this region</Text>
+          <Text style={styles.title}>{tag ? displayTagLabel(tag.label) : ""}</Text>
+          <Text style={styles.subtitle}>{REGION_INFO_SUBTITLE}</Text>
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
             {countries.map((country) => (
               <Text key={country} style={styles.country}>

@@ -384,6 +384,8 @@ async def create(
     school_id: int | None,
     course_codes: list[str],
     include_sender_avatar: bool = False,
+    moderation_status: str = "pending",
+    moderation_labels: str | None = None,
 ) -> Broadcast:
     broadcast = Broadcast(
         sender_id=sender_id,
@@ -397,6 +399,8 @@ async def create(
         tag_match_mode=tag_match_mode,
         expires_at=expires_at,
         include_sender_avatar=include_sender_avatar,
+        moderation_status=moderation_status,
+        moderation_labels=moderation_labels,
     )
     db.add(broadcast)
     await db.flush()

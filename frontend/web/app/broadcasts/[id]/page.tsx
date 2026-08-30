@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { BroadcastAttachments } from "@/components/BroadcastAttachments";
+import { CharacterCountdown, EchoBody } from "@/components/EchoBody";
 import { EchoMediaLayout } from "@/components/EchoAttachments";
+import { BROADCAST_CONTENT_MAX } from "@/helpers/broadcast-content";
 import { SenderAvatar } from "@/components/SenderAvatar";
 import { VerifiedMark } from "@/components/VerifiedMark";
-import { reachBadgeColors, reachBadgeLabel } from "@/helpers/broadcast-reach";
+import { reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
 import { splitMentionParts } from "@/helpers/mentions";
 import { echoAudienceLabels } from "@/helpers/tags";
@@ -137,7 +139,9 @@ export default function BroadcastDetailPage() {
             placeholder="Write your public reply…"
             value={reply}
             onChange={(e) => setReply(e.target.value)}
+            maxLength={BROADCAST_CONTENT_MAX}
           />
+          <CharacterCountdown value={reply} />
           <div className="mt-3">
             <BroadcastAttachments
               files={attachments}
@@ -164,7 +168,6 @@ export default function BroadcastDetailPage() {
 
 function ThreadItem({ item, isParent = false }: { item: FeedBroadcast; isParent?: boolean }) {
   const reachLabel = reachBadgeLabel(item.is_global, item.radius_meters);
-  const reachColors = reachBadgeColors(item.is_global, item.radius_meters);
   const audienceLabels = echoAudienceLabels(item.tags, item.course_codes, item.course_code);
 
   return (
@@ -183,7 +186,7 @@ function ThreadItem({ item, isParent = false }: { item: FeedBroadcast; isParent?
               </span>
             ))}
         </div>
-        <p className="text-parchment-100 mt-1">
+        <EchoBody className="text-parchment-100 mt-1">
           {splitMentionParts(item.content).map((part, index) =>
             part.mention ? (
               <span key={`${item.id}-${index}`} className="mention-text">
@@ -193,13 +196,11 @@ function ThreadItem({ item, isParent = false }: { item: FeedBroadcast; isParent?
               <span key={`${item.id}-${index}`}>{part.text}</span>
             )
           )}
-        </p>
-        <div className="flex items-center gap-2 mt-2">
+        </EchoBody>
+        <div className="flex items-center gap-2 mt-auto pt-2">
           <span className="text-parchment-500 text-xs font-mono">{formatBroadcastSentAt(item.created_at)}</span>
           {isParent && (
-            <span className="tag-pill" style={reachColors}>
-              {reachLabel}
-            </span>
+            <span className="feed-card-reach">{reachLabel}</span>
           )}
         </div>
       </EchoMediaLayout>

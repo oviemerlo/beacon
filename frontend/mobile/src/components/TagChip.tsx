@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { displayTagLabel } from "../helpers/tags";
 import { colors, radii } from "../theme/tokens";
 import type { Tag } from "../types/api";
 
@@ -29,7 +30,7 @@ export function TagChip({
         accessibilityRole="button"
         accessibilityState={{ selected }}
       >
-        <Text style={[styles.pillText, selected && styles.pillTextActive]}>{tag.label}</Text>
+        <Text style={[styles.pillText, selected && styles.pillTextActive]}>{displayTagLabel(tag.label)}</Text>
       </Pressable>
       {showInfo && (
         <Pressable
@@ -52,12 +53,14 @@ export function TagChipRow({
   onToggle,
   onShowCountries,
   locked = false,
+  lockedIds = [],
 }: {
   tags: Tag[];
   selectedIds: number[];
   onToggle: (tagId: number) => void;
   onShowCountries: (tag: Tag) => void;
   locked?: boolean;
+  lockedIds?: number[];
 }) {
   return (
     <View style={styles.row}>
@@ -68,7 +71,7 @@ export function TagChipRow({
           selected={selectedIds.includes(tag.id)}
           onToggle={() => onToggle(tag.id)}
           onShowCountries={onShowCountries}
-          locked={locked}
+          locked={locked || lockedIds.includes(tag.id)}
         />
       ))}
     </View>

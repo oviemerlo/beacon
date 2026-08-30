@@ -50,8 +50,12 @@ export function reachSelectorColors(category: ReachCategory, selected: boolean, 
 }
 
 export const REGIONAL_REACH_LOCKED_MESSAGE =
-  "Regional reach is available after verification. Free accounts can send Local echoes.";
+  "Up to 100 km reach is available on Campus, Connect, and Amplify. Free accounts can send Local echoes.";
 
-export function canUseRegionalReach(isVerified: boolean, isAdmin = false): boolean {
-  return isAdmin || isVerified;
+export function canUseRegionalReach(
+  isVerified: boolean,
+  isAdmin = false,
+  accountType: "individual" | "business" = "individual"
+): boolean {
+  return isAdmin || isVerified || accountType === "business";
 }

@@ -15,6 +15,9 @@ cp .env.example .env
 # edit .env: DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_ID/SECRET, Apple keys,
 # INTERNAL_JOB_TOKEN if you want to use the manual digest trigger
 # S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY for echo2crowd uploads (separate from SES)
+# AWS_REKOGNITION_ACCESS_KEY_ID / AWS_REKOGNITION_SECRET_ACCESS_KEY for image
+# moderation (separate IAM user, AmazonRekognitionReadOnlyAccess only)
+# OPENAI_API_KEY for Echo text moderation (omni-moderation-latest)
 # INTERNAL_WEBHOOK_SECRET for the GuardDuty scan-result Lambda callback
 
 # Requires Postgres with the PostGIS extension available (postgis/postgis
@@ -80,6 +83,8 @@ app/
     feed_service.py           feed assembly + impression recording
     broadcast_service.py      broadcast create/delete
     upload_service.py         avatar/attachment S3 uploads, GuardDuty scan results
+    moderation_service.py     AWS Rekognition image moderation (fail-open)
+    text_moderation_service.py OpenAI Echo text moderation (fail-open; reject blocks create)
     conversation_service.py   DM eligibility (the core guardrail) + messaging
     search_service.py         username search validation
     digest_service.py         weekly digest payload + orchestration

@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     FOLLOWED_TAG_LIMIT_DEFAULT: int = 2  # student / non-student
     FOLLOWED_TAG_LIMIT_BUSINESS: int = 4
     FOLLOWED_TAG_LIMIT_ADMIN: int = 10_000
+    COUNTRY_SLOT_LIMIT_FREE: int = 1
+    COUNTRY_SLOT_LIMIT_PAID: int = 2
+    COUNTRY_SLOT_CHANGE_DAYS: int = 30
 
     # Guards POST /internal/jobs/run-digest-now — required header value.
     # Leave unset (empty string) to disable the route entirely in an
@@ -68,6 +71,18 @@ class Settings(BaseSettings):
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     SES_FROM_EMAIL: str = ""
+
+    # Distinct IAM user from SES and S3 — AmazonRekognitionReadOnlyAccess only.
+    AWS_REKOGNITION_ACCESS_KEY_ID: str = ""
+    AWS_REKOGNITION_SECRET_ACCESS_KEY: str = ""
+    AWS_REKOGNITION_REGION: str = "us-east-1"
+    MODERATION_REJECT_CONFIDENCE: float = 90.0
+    MODERATION_FLAG_CONFIDENCE: float = 60.0
+
+    OPENAI_API_KEY: str = ""
+    # OpenAI category_scores are 0.0–1.0, unlike Rekognition's 0–100 labels.
+    MODERATION_TEXT_REJECT_CONFIDENCE: float = 0.90
+    MODERATION_TEXT_FLAG_CONFIDENCE: float = 0.50
 
     # Distinct IAM user from SES — scoped to echo2crowd/* only.
     S3_ACCESS_KEY_ID: str = ""

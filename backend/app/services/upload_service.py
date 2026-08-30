@@ -20,8 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.upload import UploadedFile
 from app.models.user import User
-from app.repositories import broadcast_repository, upload_repository
+from app.repositories import broadcast_repository, report_repository, upload_repository, user_repository
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
+from app.services.moderation_service import ModerationResult, moderate_image_bytes
 from app.services.user_service import can_attach_files
 from app.utils.config import settings
 
@@ -44,6 +45,14 @@ PRESIGNED_URL_EXPIRES_IN = 900
 SCAN_STATUS_CLEAN = "clean"
 SCAN_STATUS_INFECTED = "infected"
 SCAN_STATUS_FAILED = "scan_failed"
+MODERATION_STATUS_CLEAN = "clean"
+MODERATION_STATUS_FLAGGED = "flagged"
+MODERATION_STATUS_REJECTED = "rejected"
+MODERATION_DECISION_TO_STATUS = {
+    "clean": MODERATION_STATUS_CLEAN,
+    "flag": MODERATION_STATUS_FLAGGED,
+    "reject": MODERATION_STATUS_REJECTED,
+}
 
 GUARDDUTY_STATUS_MAP = {
     "NO_THREATS_FOUND": SCAN_STATUS_CLEAN,
@@ -215,6 +224,30 @@ def _resolve_scan_status(scan_status: str, raw_guardduty_status: str | None) -> 
         raise
 
 
+async def _create_moderation_report(
+    db: AsyncSession,
+    *,
+    context: str,
+    report_target_id: uuid.UUID,
+    result: ModerationResult | None,
+) -> None:
+    admin = await user_repository.get_any_admin_user(db)
+    if admin is None:
+        logger.error("No admin user to attribute Rekognition auto-report")
+        return
+    label = result.top_label if result and result.top_label else "unknown"
+    confidence = result.confidence if result and result.confidence is not None else 0.0
+    target_type = "user" if context == "avatar" else "broadcast"
+    await report_repository.create_report(
+        db,
+        reporter_id=admin.id,
+        target_type=target_type,
+        target_id=report_target_id,
+        reason="inappropriate_content",
+        details=f"Auto-flagged by AWS Rekognition: {label} ({confidence:.1f}% confidence)",
+    )
+
+
 async def _store_upload(
     db: AsyncSession,
     *,
@@ -226,6 +259,7 @@ async def _store_upload(
     allowed_types: set[str],
     max_bytes: int,
     s3_key: str,
+    report_target_id: uuid.UUID,
 ) -> UploadedFile:
     if not file_bytes:
         raise ValidationError("File is empty")
@@ -244,6 +278,15 @@ async def _store_upload(
     filename = _filename_for_type(_sanitize_filename(declared_filename), stored_type)
     # Never use the raw client filename as the S3 key; uuid prefix is the identity.
     key = s3_key.rsplit("/", 1)[0] + "/" + filename
+
+    moderation_status = "pending"
+    moderation_labels = None
+    moderation_result: ModerationResult | None = None
+    if content_type in IMAGE_TYPES:
+        moderation_result = moderate_image_bytes(stored_bytes)
+        moderation_status = MODERATION_DECISION_TO_STATUS[moderation_result.decision]
+        moderation_labels = moderation_result.raw_labels_json
+
     _put_object(s3_key=key, body=stored_bytes, content_type=stored_type)
     row = await upload_repository.create(
         db,
@@ -254,7 +297,16 @@ async def _store_upload(
         original_filename=filename,
         content_type=stored_type,
         size_bytes=len(stored_bytes),
+        moderation_status=moderation_status,
+        moderation_labels=moderation_labels,
     )
+    if moderation_status in (MODERATION_STATUS_FLAGGED, MODERATION_STATUS_REJECTED):
+        await _create_moderation_report(
+            db,
+            context=context,
+            report_target_id=report_target_id,
+            result=moderation_result,
+        )
     # GuardDuty's Lambda is a log-only stub on localhost, so local uploads
     # would stay pending forever. Production waits for the scan webhook.
     if settings.ENVIRONMENT == "development":
@@ -277,6 +329,7 @@ async def upload_avatar(db: AsyncSession, user: User, file_bytes: bytes, declare
         allowed_types=ALLOWED_AVATAR_TYPES,
         max_bytes=settings.MAX_IMAGE_UPLOAD_BYTES,
         s3_key=f"avatar/{uuid.uuid4()}/placeholder",
+        report_target_id=user.id,
     )
 
 
@@ -306,6 +359,7 @@ async def upload_broadcast_attachment(
         allowed_types=ALLOWED_ATTACHMENT_TYPES,
         max_bytes=settings.MAX_DOCUMENT_UPLOAD_BYTES,
         s3_key=f"broadcast_attachment/{broadcast.id}/{uuid.uuid4()}/placeholder",
+        report_target_id=broadcast.id,
     )
 
 
@@ -314,7 +368,7 @@ async def get_presigned_url(db: AsyncSession, user: User, file_id: uuid.UUID | s
     row = await upload_repository.get_by_id(db, file_id)
     if row is None:
         raise NotFoundError("File not found")
-    if row.scan_status != SCAN_STATUS_CLEAN:
+    if row.scan_status != SCAN_STATUS_CLEAN or row.moderation_status == MODERATION_STATUS_REJECTED:
         raise ValidationError("This file is not available yet.")
     if not _s3_configured():
         raise ValidationError("File storage is not configured")

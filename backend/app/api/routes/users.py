@@ -26,8 +26,7 @@ async def replace_followed_tags(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    tag_ids = await user_service.replace_followed_tags(db, current_user.id, payload)
-    return {"tag_ids": tag_ids}
+    return await user_service.replace_followed_tags(db, current_user.id, payload)
 
 
 @router.put("/me/followed-tags/{tag_id}")
@@ -42,7 +41,6 @@ async def unfollow_tag(tag_id: int, current_user: User = Depends(get_current_use
     return {"status": "ok"}
 
 
-@router.get("/me/followed-tags")
+@router.get("/me/followed-tags", response_model=FollowedTagsOut)
 async def list_followed_tags(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    tag_ids = await user_service.get_followed_tag_ids(db, current_user.id)
-    return {"tag_ids": tag_ids}
+    return await user_service.get_followed_tags(db, current_user.id)

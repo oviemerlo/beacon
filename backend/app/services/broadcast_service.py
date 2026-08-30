@@ -1,5 +1,6 @@
 """Broadcast creation/deletion business rules."""
 
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -7,13 +8,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.config import settings
 from app.models.broadcast import Broadcast
-from app.repositories import broadcast_repository, school_repository, tag_repository, user_repository
+from app.repositories import broadcast_repository, report_repository, school_repository, tag_repository, user_repository
 from app.schemas.schemas import BroadcastCreateIn
 from app.services.broadcast_tags import serialize_echo_rows
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 from app.services import school_service
 from app.services.school_service import is_currently_verified, prepare_course_tag
+from app.services.text_moderation_service import TextModerationResult, moderate_text
 from app.services.user_service import REGION_TAGS_LOCKED_MESSAGE, can_follow_region_tags, can_use_regional_reach
+
+logger = logging.getLogger(__name__)
+
+TEXT_REJECTED_MESSAGE = "This content couldn't be posted. Please revise and try again."
+MODERATION_STATUS_CLEAN = "clean"
+MODERATION_STATUS_FLAGGED = "flagged"
 
 
 async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: BroadcastCreateIn) -> Broadcast:
@@ -84,6 +92,16 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
         course_codes = requested_courses
         school_id = verification.school_id
 
+    moderation_status = "pending"
+    moderation_labels = None
+    moderation_result: TextModerationResult | None = None
+    if payload.reply_to_broadcast_id is None:
+        moderation_result = await moderate_text(payload.content)
+        if moderation_result.decision == "reject":
+            raise ValidationError(TEXT_REJECTED_MESSAGE)
+        moderation_status = MODERATION_STATUS_FLAGGED if moderation_result.decision == "flag" else MODERATION_STATUS_CLEAN
+        moderation_labels = moderation_result.raw_result_json
+
     broadcast = await broadcast_repository.create(
         db,
         sender_id=sender_id,
@@ -98,10 +116,35 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
         school_id=school_id,
         course_codes=course_codes,
         include_sender_avatar=bool(payload.include_sender_avatar),
+        moderation_status=moderation_status,
+        moderation_labels=moderation_labels,
     )
+    if moderation_status == MODERATION_STATUS_FLAGGED:
+        await _create_text_moderation_report(db, broadcast.id, moderation_result)
     await db.commit()
     await db.refresh(broadcast)
     return broadcast
+
+
+async def _create_text_moderation_report(
+    db: AsyncSession,
+    broadcast_id: uuid.UUID,
+    result: TextModerationResult | None,
+) -> None:
+    admin = await user_repository.get_any_admin_user(db)
+    if admin is None:
+        logger.error("No admin user to attribute OpenAI auto-report")
+        return
+    category = result.top_category if result and result.top_category else "unknown"
+    score = result.score if result and result.score is not None else 0.0
+    await report_repository.create_report(
+        db,
+        reporter_id=admin.id,
+        target_type="broadcast",
+        target_id=broadcast_id,
+        reason="inappropriate_content",
+        details=f"Auto-flagged by OpenAI moderation: {category} ({score:.2f} score)",
+    )
 
 
 async def delete_broadcast(db: AsyncSession, current_user_id: uuid.UUID, broadcast_id: str) -> None:

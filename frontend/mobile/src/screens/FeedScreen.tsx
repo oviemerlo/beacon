@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Alert, TextInput, ScrollView } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
-import { reachBadgeColors, reachBadgeLabel } from "../helpers/broadcastReach";
+import { reachBadgeLabel } from "../helpers/broadcastReach";
 import { pickReasonAndSubmitReport } from "../helpers/reportActions";
 import { audienceFilterActive, echoAudienceLabels, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "../helpers/tags";
 import { echoPreview, formatBroadcastSentAt } from "../helpers/time";
 import { usePolling } from "../helpers/usePolling";
 import { colors, radii } from "../theme/tokens";
+import { EchoBody } from "../components/EchoBody";
 import { Card } from "../components/Shared";
 import { EchoMediaLayout } from "../components/EchoAttachments";
 import { SenderAvatar } from "../components/SenderAvatar";
@@ -286,7 +287,7 @@ function SearchHitCard({
         </View>
       </View>
       <Pressable onPress={() => onOpenBroadcast(hit.id)}>
-        <Text style={styles.cardText}>{hit.body}</Text>
+        <EchoBody style={styles.cardText}>{hit.body}</EchoBody>
       </Pressable>
       <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(hit.created_at)}</Text>
       {hit.matches.map((match) => (
@@ -340,7 +341,6 @@ function BroadcastCard({
   const headerAvatarId = featuredReply ? featuredReply.sender_avatar_file_id : broadcast.sender_avatar_file_id;
   const headerAvatarName = featuredReply ? featuredReply.sender_display_name : broadcast.sender_display_name;
   const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
-  const reachColors = reachBadgeColors(broadcast.is_global, broadcast.radius_meters);
 
   async function reportBroadcast() {
     setMenuOpen(false);
@@ -408,18 +408,18 @@ function BroadcastCard({
   }
 
   return (
-    <Card style={menuOpen ? { ...styles.cardOverflow, ...styles.cardMenuOpen } : styles.cardOverflow}>
+    <Card style={menuOpen ? { ...styles.cardOverflow, ...styles.cardMenuOpen, ...styles.feedCard } : { ...styles.cardOverflow, ...styles.feedCard }}>
       <EchoMediaLayout attachments={featuredReply ? undefined : broadcast.attachments}>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
           <View style={styles.senderCluster}>
-            <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} />
-            <Text style={styles.senderName}>{headerName}</Text>
+            <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} size={36} />
+            <Text style={styles.cardSenderName}>{headerName}</Text>
             <VerifiedMark verified={headerVerified} />
           </View>
           {echoAudienceLabels(broadcast.tags, broadcast.course_codes, broadcast.course_code).map((label) => (
-            <View key={label} style={styles.broadcastTagPill}>
-              <Text style={styles.broadcastTagPillText}>{label}</Text>
+            <View key={label} style={styles.cardTagPill}>
+              <Text style={styles.cardTagPillText}>{label}</Text>
             </View>
           ))}
         </View>
@@ -456,42 +456,51 @@ function BroadcastCard({
           </View>
         )}
       </View>
-      {featuredReply ? <Text style={styles.replyToLabel}>Reply to: {echoPreview(broadcast.content)}</Text> : null}
-      <Text style={styles.cardText}>{featuredReply ? featuredReply.content : broadcast.content}</Text>
-      </EchoMediaLayout>
-      <View style={styles.metaRow}>
-        <Text style={styles.cardMeta} numberOfLines={1}>
-          {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
-          {!isOwn ? `  ·  ${(broadcast.distance_m / 1000).toFixed(1)} km away` : ""}
-        </Text>
-        <View style={[styles.reachPill, { backgroundColor: reachColors.backgroundColor, borderColor: reachColors.borderColor }]}>
-          <Text style={[styles.reachPillText, { color: reachColors.color }]}>{reachLabel}</Text>
-        </View>
-        <Pressable
-          onPress={() => onOpenBroadcast(broadcast.id)}
-          accessibilityRole="link"
-          accessibilityLabel={`View thread, ${broadcast.reply_count ?? 0} replies`}
-        >
-          <Text style={styles.replyCountText}>
-            {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
+      {featuredReply ? (
+        <View style={styles.parentQuote}>
+          <Text style={styles.parentQuoteLabel}>Replying to</Text>
+          <Text style={styles.parentQuoteText} numberOfLines={1}>
+            {echoPreview(broadcast.content)}
           </Text>
-        </Pressable>
+        </View>
+      ) : null}
+      <EchoBody style={styles.cardText}>{featuredReply ? featuredReply.content : broadcast.content}</EchoBody>
+      <View style={styles.cardFooter}>
+        <View style={styles.metaRow}>
+          <Text style={styles.cardMeta} numberOfLines={1}>
+            {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
+            {!isOwn ? `  ·  ${(broadcast.distance_m / 1000).toFixed(1)} km away` : ""}
+          </Text>
+          <View style={styles.reachPill}>
+            <Text style={styles.reachPillText}>{reachLabel}</Text>
+          </View>
+          <Pressable
+            onPress={() => onOpenBroadcast(broadcast.id)}
+            accessibilityRole="link"
+            accessibilityLabel={`View thread, ${broadcast.reply_count ?? 0} replies`}
+          >
+            <Text style={styles.replyCountText}>
+              {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
+            </Text>
+          </Pressable>
+        </View>
+        <View style={styles.replyRow}>
+          {!isOwn && (
+            <>
+              <Pressable onPress={() => onOpenBroadcast(broadcast.id)} style={styles.replyPill}>
+                <Text style={styles.replyPillText}>Reply in feed</Text>
+              </Pressable>
+              <Pressable onPress={onPrivateReply} style={styles.replyPill}>
+                <Text style={styles.replyPillText}>Reply privately</Text>
+              </Pressable>
+            </>
+          )}
+          <Pressable onPress={() => onOpenBroadcast(broadcast.id)} style={styles.replyPill}>
+            <Text style={styles.replyPillText}>View thread</Text>
+          </Pressable>
+        </View>
       </View>
-      <View style={styles.replyRow}>
-        {!isOwn && (
-          <>
-            <Pressable onPress={() => onOpenBroadcast(broadcast.id)} style={styles.replyPill}>
-              <Text style={styles.replyPillText}>Reply in feed</Text>
-            </Pressable>
-            <Pressable onPress={onPrivateReply} style={styles.replyPill}>
-              <Text style={styles.replyPillText}>Reply privately</Text>
-            </Pressable>
-          </>
-        )}
-        <Pressable onPress={() => onOpenBroadcast(broadcast.id)} style={styles.replyPill}>
-          <Text style={styles.replyPillText}>View thread</Text>
-        </Pressable>
-      </View>
+      </EchoMediaLayout>
     </Card>
   );
 }
@@ -525,8 +534,19 @@ const styles = StyleSheet.create({
   searchError: { color: colors.rust400, fontSize: 13, marginBottom: 8 },
   nestedMatch: { marginTop: 12, marginLeft: 10, paddingLeft: 10, borderLeftWidth: 1, borderLeftColor: colors.dusk600, gap: 6 },
   nestedMatchBody: { color: colors.parchment300, fontSize: 14 },
-  replyToLabel: { color: colors.parchment500, fontSize: 11, fontFamily: "monospace", marginTop: 6 },
-  cardText: { color: colors.parchment100, fontSize: 15, marginTop: 6, marginBottom: 4 },
+  parentQuote: {
+    marginTop: 10,
+    marginBottom: 2,
+    paddingLeft: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.dusk600,
+  },
+  parentQuoteLabel: { color: colors.parchment500, fontSize: 11, marginBottom: 2 },
+  parentQuoteText: { color: colors.parchment500, fontSize: 14, fontWeight: "400" },
+  cardText: { color: colors.parchment100, fontSize: 16, fontWeight: "400", lineHeight: 22, marginTop: 8, marginBottom: 4 },
+  cardSenderName: { color: colors.parchment100, fontSize: 16, fontWeight: "600" },
+  cardTagPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  cardTagPillText: { color: colors.parchment300, fontSize: 13, fontWeight: "500" },
   headingRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
   headingCopy: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 20, rowGap: 8 },
   senderCluster: { flexDirection: "row", alignItems: "center", gap: 8, marginRight: 8 },
@@ -563,16 +583,18 @@ const styles = StyleSheet.create({
   overflowMenuItemText: { color: colors.parchment100, fontSize: 14 },
   broadcastTagPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
   broadcastTagPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
-  metaRow: { flexDirection: "row", flexWrap: "nowrap", alignItems: "center", gap: 8, marginTop: 16 },
-  cardMeta: { color: colors.parchment500, fontSize: 11, fontWeight: "400", fontFamily: "monospace" },
-  reachPill: { borderColor: colors.parchment500, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
-  reachPillText: { fontSize: 10, fontFamily: "monospace" },
+  feedCard: { paddingBottom: 10 },
+  cardFooter: { marginTop: "auto", paddingTop: 20 },
+  metaRow: { flexDirection: "row", flexWrap: "nowrap", alignItems: "center", gap: 8 },
+  cardMeta: { color: colors.parchment500, fontSize: 9, fontWeight: "400", fontFamily: "monospace" },
+  reachPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 1 },
+  reachPillText: { color: colors.parchment500, fontSize: 8, fontFamily: "monospace" },
   replyRow: { flexDirection: "row", gap: 8, marginTop: 10 },
   replyPill: { borderColor: colors.dusk600, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
-  replyPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
+  replyPillText: { color: colors.parchment500, fontSize: 9, fontFamily: "monospace" },
   tagPill: { borderColor: colors.signal500, borderWidth: 1, backgroundColor: `${colors.signal500}1A`, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
   tagPillText: { color: colors.signal400, fontSize: 10, fontFamily: "monospace" },
-  replyCountText: { color: colors.parchment500, fontSize: 11, fontFamily: "monospace" },
+  replyCountText: { color: colors.parchment500, fontSize: 9, fontFamily: "monospace" },
   emptyTitle: { color: colors.parchment100, fontWeight: "600", textAlign: "center" },
   emptySubtitle: { color: colors.parchment500, fontSize: 13, textAlign: "center", marginTop: 6 },
 });

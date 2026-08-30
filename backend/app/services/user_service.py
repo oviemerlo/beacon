@@ -9,24 +9,30 @@ from app.utils.config import settings
 from app.models.tag import Tag
 from app.models.user import User
 from app.repositories import tag_repository, upload_repository, user_repository
-from app.schemas.schemas import FollowedTagsReplaceIn, ProfileUpdateIn, TagOut, UserProfileOut
+from app.schemas.schemas import FollowedTagsOut, FollowedTagsReplaceIn, ProfileUpdateIn, TagOut, UserProfileOut
 from app.services import school_service
+from app.services.country_slots import (
+    apply_country_slot_changes,
+    country_slot_limit,
+    reconcile_country_slots,
+    serialize_slots,
+)
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 
 FOLLOWABLE_TYPES = ("nationality", "region", "hobby")
 
 REGION_TAGS_LOCKED_MESSAGE = (
-    "Region tags are available to premium subscribers. "
-    "Free accounts can follow country, hobby, school, and course tags."
+    "Amplify audience is part of Amplify ($30/mo). "
+    "Campus and Connect can still target up to 100 km."
 )
 
 
 def can_follow_region_tags(user: User) -> bool:
-    return user.is_admin or user.is_verified
+    return user.is_admin or user.account_type == "business"
 
 
 def can_use_regional_reach(user: User) -> bool:
-    return user.is_admin or user.is_verified
+    return user.is_admin or user.is_verified or user.account_type == "business"
 
 
 def can_attach_files(user: User) -> bool:
@@ -133,6 +139,8 @@ async def update_profile(db: AsyncSession, user: User, payload: ProfileUpdateIn)
         **location_update,
     )
 
+    if payload.nationality_tag_ids is not None:
+        apply_country_slot_changes(user, payload.nationality_tag_ids)
     if payload.nationality_tag_ids is not None or payload.hobby_tag_ids is not None:
         new_tag_ids = list(dict.fromkeys((payload.nationality_tag_ids or []) + (payload.hobby_tag_ids or [])))
         school_ids = await user_repository.school_tag_ids(db, user.id)
@@ -149,9 +157,13 @@ async def follow_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int, notifica
         raise NotFoundError("User not found")
     if tag.tag_type == "region" and not can_follow_region_tags(user):
         raise ValidationError(REGION_TAGS_LOCKED_MESSAGE)
-    if not user.is_admin:
-        current_ids = await user_repository.list_followed_tag_ids(db, user_id, FOLLOWABLE_TYPES)
-        if tag_id not in current_ids and len(current_ids) >= followed_tag_limit(user.account_type):
+    if tag.tag_type == "nationality":
+        current_ids = await _nationality_follow_ids(db, user_id)
+        if tag_id not in current_ids:
+            apply_country_slot_changes(user, [*current_ids, tag_id])
+    elif not user.is_admin:
+        current_ids = await _counted_follow_ids(db, user_id)
+        if tag_id not in current_ids and len(current_ids) >= followed_tag_limit(user.account_type, user.is_admin):
             raise ValidationError(_tag_limit_message(user.account_type))
     await user_repository.follow_and_own(db, user_id, tag_id, notifications_enabled)
     await db.commit()
@@ -173,8 +185,30 @@ async def unfollow_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> Non
     tag = await tag_repository.get_by_id(db, tag_id)
     if tag is not None and tag.tag_type == "school":
         raise ForbiddenError("School tags can only be added via verification")
+    if tag is not None and tag.tag_type == "nationality":
+        user = await user_repository.get_by_id(db, user_id)
+        if user is None:
+            raise NotFoundError("User not found")
+        current_ids = await _nationality_follow_ids(db, user_id)
+        apply_country_slot_changes(user, [item for item in current_ids if item != tag_id])
     await user_repository.unfollow_and_disown(db, user_id, tag_id)
     await db.commit()
+
+
+def _followed_tags_out(user: User, tag_ids: list[int]) -> FollowedTagsOut:
+    return FollowedTagsOut(
+        tag_ids=tag_ids,
+        country_slot_limit=country_slot_limit(user),
+        country_slots=serialize_slots(user),
+    )
+
+
+async def _counted_follow_ids(db: AsyncSession, user_id: uuid.UUID) -> list[int]:
+    return await user_repository.list_followed_tag_ids(db, user_id, ("region", "hobby"))
+
+
+async def _nationality_follow_ids(db: AsyncSession, user_id: uuid.UUID) -> list[int]:
+    return await user_repository.list_followed_tag_ids(db, user_id, ("nationality",))
 
 
 def _tag_limit_message(account_type: str) -> str:
@@ -198,18 +232,24 @@ async def _drop_locked_region_tags(db: AsyncSession, user: User) -> bool:
     return True
 
 
-async def get_followed_tag_ids(db: AsyncSession, user_id: uuid.UUID) -> list[int]:
+async def get_followed_tags(db: AsyncSession, user_id: uuid.UUID) -> FollowedTagsOut:
     user = await user_repository.get_by_id(db, user_id)
     if user is None:
         raise NotFoundError("User not found")
     dropped = await _drop_community_tags(db, user.id)
     dropped = await _drop_locked_region_tags(db, user) or dropped
-    if dropped:
-        await db.commit()
-    return await user_repository.list_followed_tag_ids(db, user_id, FOLLOWABLE_TYPES)
+    nationality_ids = await _nationality_follow_ids(db, user_id)
+    await reconcile_country_slots(db, user, nationality_ids)
+    await db.commit()
+    tag_ids = await user_repository.list_followed_tag_ids(db, user_id, FOLLOWABLE_TYPES)
+    return _followed_tags_out(user, tag_ids)
 
 
-async def replace_followed_tags(db: AsyncSession, user_id: uuid.UUID, payload: FollowedTagsReplaceIn) -> list[int]:
+async def get_followed_tag_ids(db: AsyncSession, user_id: uuid.UUID) -> list[int]:
+    return (await get_followed_tags(db, user_id)).tag_ids
+
+
+async def replace_followed_tags(db: AsyncSession, user_id: uuid.UUID, payload: FollowedTagsReplaceIn) -> FollowedTagsOut:
     if payload.school:
         raise ForbiddenError("School tags can only be added via verification")
 
@@ -232,9 +272,6 @@ async def replace_followed_tags(db: AsyncSession, user_id: uuid.UUID, payload: F
             seen.add(tag_id)
             ordered_ids.append(tag_id)
 
-    if not user.is_admin and len(ordered_ids) > followed_tag_limit(user.account_type):
-        raise ValidationError(_tag_limit_message(user.account_type))
-
     tags = await tag_repository.get_by_ids(db, ordered_ids)
     by_id = {tag.id: tag for tag in tags}
     if len(by_id) != len(ordered_ids):
@@ -247,6 +284,12 @@ async def replace_followed_tags(db: AsyncSession, user_id: uuid.UUID, payload: F
             if by_id[tag_id].tag_type != tag_type:
                 raise ValidationError(f"Tag {tag_id} is not a {tag_type} tag")
 
+    counted_ids = [tag_id for tag_id in ordered_ids if by_id[tag_id].tag_type in ("region", "hobby")]
+    if not user.is_admin and len(counted_ids) > followed_tag_limit(user.account_type, user.is_admin):
+        raise ValidationError(_tag_limit_message(user.account_type))
+
+    apply_country_slot_changes(user, [tag_id for tag_id in payload.nationality])
     await user_repository.replace_followed_tags(db, user_id, ordered_ids)
     await db.commit()
-    return await user_repository.list_followed_tag_ids(db, user_id, FOLLOWABLE_TYPES)
+    tag_ids = await user_repository.list_followed_tag_ids(db, user_id, FOLLOWABLE_TYPES)
+    return _followed_tags_out(user, tag_ids)

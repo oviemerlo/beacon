@@ -13,8 +13,8 @@ export function EchoMediaLayout({
 }) {
   if (!attachments?.length) return children;
   return (
-    <div className="flex items-start gap-3">
-      <div className="min-w-0 flex-1">{children}</div>
+    <div className="flex items-stretch gap-3">
+      <div className="min-w-0 flex-1 flex flex-col">{children}</div>
       <div className="w-[42%] max-w-[11.5rem] shrink-0">
         <EchoAttachments attachments={attachments} />
       </div>

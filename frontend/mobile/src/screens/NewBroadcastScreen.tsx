@@ -4,6 +4,8 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import Slider from "@react-native-community/slider";
 import * as Location from "expo-location";
 import { BroadcastAttachments } from "../components/BroadcastAttachments";
+import { CharacterCountdown } from "../components/EchoBody";
+import { BROADCAST_CONTENT_MAX } from "../helpers/broadcastContent";
 import { apiFetch } from "../helpers/api";
 import { ATTACHMENT_LOCKED_MESSAGE, canAttachFiles, uploadBroadcastAttachment, type PickedUpload } from "../helpers/uploads";
 import {
@@ -58,7 +60,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
     apiFetch<UserProfile>("/users/me")
       .then((me) => {
         setProfileTags(me.tags ?? []);
-        setCanUseRegional(canUseRegionalReach(me.is_verified, me.is_admin));
+        setCanUseRegional(canUseRegionalReach(me.is_verified, me.is_admin, me.account_type));
         setCanAttach(canAttachFiles(me.is_verified, me.is_admin));
       })
       .catch(() => setProfileTags([]));
@@ -166,8 +168,9 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         value={content}
         onChangeText={setContent}
         multiline
-        maxLength={2000}
+        maxLength={BROADCAST_CONTENT_MAX}
       />
+      <CharacterCountdown value={content} />
 
       <BroadcastAttachments
         files={attachments}
@@ -316,7 +319,7 @@ const styles = StyleSheet.create({
     color: colors.parchment100,
     minHeight: 110,
     textAlignVertical: "top",
-    marginBottom: 12,
+    marginBottom: 0,
   },
   label: { color: colors.parchment100, fontSize: 14, fontWeight: "600" },
   selectedHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 },

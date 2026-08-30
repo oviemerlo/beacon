@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator, ScrollView, Alert } from "react-native";
 import * as Location from "expo-location";
 import { apiFetch } from "../helpers/api";
-import { reachBadgeColors, reachBadgeLabel } from "../helpers/broadcastReach";
+import { reachBadgeLabel } from "../helpers/broadcastReach";
 import { splitMentionParts } from "../helpers/mentions";
 import { usePolling } from "../helpers/usePolling";
 import { echoAudienceLabels } from "../helpers/tags";
@@ -10,6 +10,8 @@ import { formatBroadcastSentAt } from "../helpers/time";
 import { canAttachFiles, REPLY_MEDIA_LOCKED_MESSAGE, uploadBroadcastAttachment, type PickedUpload } from "../helpers/uploads";
 import { colors, radii } from "../theme/tokens";
 import { BroadcastAttachments } from "../components/BroadcastAttachments";
+import { CharacterCountdown, EchoBody } from "../components/EchoBody";
+import { BROADCAST_CONTENT_MAX } from "../helpers/broadcastContent";
 import { Card } from "../components/Shared";
 import { EchoMediaLayout } from "../components/EchoAttachments";
 import { SenderAvatar } from "../components/SenderAvatar";
@@ -135,7 +137,9 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
           value={message}
           onChangeText={setMessage}
           multiline
+          maxLength={BROADCAST_CONTENT_MAX}
         />
+        <CharacterCountdown value={message} />
         <View style={styles.composerTools}>
           <BroadcastAttachments
             files={attachments}
@@ -160,7 +164,6 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
 
 function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: boolean }) {
   const reachLabel = reachBadgeLabel(item.is_global, item.radius_meters);
-  const reachColors = reachBadgeColors(item.is_global, item.radius_meters);
   const audienceLabels = echoAudienceLabels(item.tags, item.course_codes, item.course_code);
   return (
     <View style={[isReply && styles.replyItem]}>
@@ -177,18 +180,18 @@ function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: 
               ))
             : null}
         </View>
-        <Text style={styles.threadContent}>
+        <EchoBody style={styles.threadContent}>
           {splitMentionParts(item.content).map((part, index) => (
             <Text key={`${item.id}-${index}`} style={part.mention ? styles.mentionInBody : undefined}>
               {part.text}
             </Text>
           ))}
-        </Text>
+        </EchoBody>
         <View style={styles.threadMetaRow}>
           <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(item.created_at)}</Text>
           {!isReply && (
-            <View style={[styles.reachPill, { backgroundColor: reachColors.backgroundColor, borderColor: reachColors.borderColor }]}>
-              <Text style={[styles.reachPillText, { color: reachColors.color }]}>{reachLabel}</Text>
+            <View style={styles.reachPill}>
+              <Text style={styles.reachPillText}>{reachLabel}</Text>
             </View>
           )}
         </View>
@@ -209,10 +212,10 @@ const styles = StyleSheet.create({
   broadcastTagPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
   threadContent: { color: colors.parchment100, marginTop: 4 },
   mentionInBody: { color: colors.signal400, fontWeight: "600" },
-  threadMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  threadMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: "auto", paddingTop: 8 },
   sentAtLabel: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
-  reachPill: { borderColor: colors.parchment500, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
-  reachPillText: { fontSize: 10, fontFamily: "monospace" },
+  reachPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 1 },
+  reachPillText: { color: colors.parchment500, fontSize: 8, fontFamily: "monospace" },
   textarea: { color: colors.parchment100, minHeight: 100, textAlignVertical: "top" },
   composerTools: { marginTop: 12 },
   error: { color: colors.rust400, fontSize: 13, marginTop: 8 },

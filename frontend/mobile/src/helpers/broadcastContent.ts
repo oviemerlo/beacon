@@ -1,0 +1,2 @@
+export const BROADCAST_CONTENT_MAX = 200;
+export const ECHO_BODY_COLLAPSED_LINES = 4;

@@ -1,5 +1,6 @@
 "use client";
 
+import { displayTagLabel } from "@/helpers/tags";
 import type { Tag } from "@/types/api";
 
 export function TagChip({
@@ -21,7 +22,8 @@ export function TagChip({
       className={`tag-pill ${selected ? "tag-pill-active" : ""} ${locked ? "opacity-40" : ""}`}
       aria-describedby={countries.length > 0 ? `region-countries-${tag.id}` : undefined}
     >
-      {tag.label}
+      {displayTagLabel(tag.label)}
+      {countries.length > 0 && <span className="text-parchment-500 pl-1">ⓘ</span>}
     </button>
   );
 
@@ -36,7 +38,8 @@ export function TagChip({
         className="invisible opacity-0 group-hover/region:visible group-hover/region:opacity-100 group-focus-within/region:visible group-focus-within/region:opacity-100 absolute left-0 top-full z-30 pt-1"
       >
         <span className="block w-64 max-h-48 overflow-y-auto rounded-beacon border border-dusk-600 bg-dusk-800 p-2.5 text-[11px] leading-relaxed text-parchment-300 shadow-lg">
-          <span className="block font-medium text-parchment-100 mb-1.5">{tag.label}</span>
+          <span className="block font-medium text-parchment-100 mb-1.5">{displayTagLabel(tag.label)}</span>
+          <span className="block text-parchment-500 mb-1.5">Targets country communities within this geographic region.</span>
           {countries.length > 12 ? (
             <ul className="space-y-0.5">
               {countries.map((country) => (
@@ -57,11 +60,13 @@ export function TagChipRow({
   selectedIds,
   onToggle,
   locked = false,
+  lockedIds = [],
 }: {
   tags: Tag[];
   selectedIds: number[];
   onToggle: (tagId: number) => void;
   locked?: boolean;
+  lockedIds?: number[];
 }) {
   return (
     <div className="flex flex-wrap gap-2">
@@ -71,7 +76,7 @@ export function TagChipRow({
           tag={tag}
           selected={selectedIds.includes(tag.id)}
           onToggle={() => onToggle(tag.id)}
-          locked={locked}
+          locked={locked || lockedIds.includes(tag.id)}
         />
       ))}
     </div>

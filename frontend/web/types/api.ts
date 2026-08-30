@@ -29,6 +29,20 @@ export interface UserProfile {
   avatar_scan_status?: string | null;
 }
 
+export interface CountrySlot {
+  slot: number;
+  tag_id: number | null;
+  changed_at: string | null;
+  next_change_at: string | null;
+  locked: boolean;
+}
+
+export interface FollowedTags {
+  tag_ids: number[];
+  country_slot_limit?: number | null;
+  country_slots?: CountrySlot[];
+}
+
 /** What's ever visible about ANOTHER user — deliberately narrow. */
 export interface PublicProfile {
   id: string;

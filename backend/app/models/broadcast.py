@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from geoalchemy2 import Geography
-from sqlalchemy import Boolean, Computed, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, Computed, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
@@ -24,7 +24,7 @@ class Broadcast(Base):
         ForeignKey("broadcasts.id", ondelete="CASCADE"),
         nullable=True,
     )
-    content: Mapped[str] = mapped_column(String(2000), nullable=False)
+    content: Mapped[str] = mapped_column(String(200), nullable=False)
 
     # Origin point the radius is measured from. Defaults to the sender's
     # registered location but a business can choose an arbitrary point
@@ -36,6 +36,8 @@ class Broadcast(Base):
     course_code: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     include_sender_avatar: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    moderation_status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    moderation_labels: Mapped[str | None] = mapped_column(Text, nullable=True)
     tag_match_mode: Mapped[str] = mapped_column(String(10), default="any")  # 'any' | 'all'
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -54,6 +56,13 @@ class Broadcast(Base):
         back_populates="replies",
     )
     replies: Mapped[list["Broadcast"]] = relationship("Broadcast", back_populates="parent_broadcast")
+
+    __table_args__ = (
+        CheckConstraint(
+            "moderation_status IN ('pending', 'clean', 'flagged', 'rejected')",
+            name="ck_broadcasts_moderation_status",
+        ),
+    )
 
 
 class BroadcastCourse(Base):

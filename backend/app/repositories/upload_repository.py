@@ -18,6 +18,8 @@ async def create(
     original_filename: str,
     content_type: str,
     size_bytes: int,
+    moderation_status: str = "pending",
+    moderation_labels: str | None = None,
 ) -> UploadedFile:
     row = UploadedFile(
         uploader_user_id=uploader_user_id,
@@ -28,6 +30,8 @@ async def create(
         content_type=content_type,
         size_bytes=size_bytes,
         scan_status="pending",
+        moderation_status=moderation_status,
+        moderation_labels=moderation_labels,
     )
     db.add(row)
     await db.flush()

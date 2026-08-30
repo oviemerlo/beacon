@@ -26,4 +26,6 @@ async def list_tags(db: AsyncSession = Depends(get_db)):
             continue
         grouped[tag.tag_type].append(_serialize_tag(tag))
     grouped["region"].sort(key=lambda item: _REGION_ORDER.get(item["label"], len(_REGION_ORDER)))
+    for item in grouped["region"]:
+        item["label"] = item["label"].replace(" / Hispanic", "")
     return grouped

@@ -113,16 +113,15 @@ export function SchoolVerification({ onVerifiedChange }: { onVerifiedChange?: (v
       {phase === "verified" ? (
         <View style={styles.stack}>
           <View style={styles.verifiedPill}>
-            <Text style={styles.verifiedText}>Verified</Text>
-            <Text style={styles.verifiedText}>{verifiedSchoolName ?? "School"}</Text>
             <Text style={styles.verifiedText}>✓</Text>
+            <Text style={styles.verifiedText}>{verifiedSchoolName ?? "School"}</Text>
           </View>
         </View>
       ) : (
         <>
           {phase === "idle" && (
-            <Pressable style={styles.secondaryButton} onPress={() => setPhase("searching")}>
-              <Text style={styles.secondaryButtonText}>Verify your school</Text>
+            <Pressable style={styles.primaryButton} onPress={() => setPhase("searching")}>
+              <Text style={styles.primaryButtonText}>Verify school →</Text>
             </Pressable>
           )}
 

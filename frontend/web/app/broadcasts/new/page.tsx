@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { BroadcastAttachments } from "@/components/BroadcastAttachments";
+import { CharacterCountdown } from "@/components/EchoBody";
+import { BROADCAST_CONTENT_MAX } from "@/helpers/broadcast-content";
 import { clientFetch } from "@/helpers/client-api";
 import {
   ATTACHMENT_LOCKED_MESSAGE,
@@ -59,7 +61,7 @@ export default function NewBroadcastPage() {
     clientFetch<UserProfile>("/users/me")
       .then((me) => {
         setProfileTags(me.tags ?? []);
-        setCanUseRegional(canUseRegionalReach(me.is_verified, me.is_admin));
+        setCanUseRegional(canUseRegionalReach(me.is_verified, me.is_admin, me.account_type));
         setCanAttach(canAttachFiles(me.is_verified, me.is_admin));
       })
       .catch(() => setProfileTags([]));
@@ -150,12 +152,15 @@ export default function NewBroadcastPage() {
         <p className="text-parchment-500 text-sm mt-2 mb-8">{reachSummary}</p>
 
         <textarea
-          className="input-field min-h-[120px] resize-none mb-3"
+          className="input-field min-h-[120px] resize-none"
           placeholder="What do you want people nearby to know?"
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          maxLength={2000}
+          maxLength={BROADCAST_CONTENT_MAX}
         />
+        <div className="mb-3">
+          <CharacterCountdown value={content} />
+        </div>
 
         <BroadcastAttachments
           files={attachments}

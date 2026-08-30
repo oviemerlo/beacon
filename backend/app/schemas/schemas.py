@@ -89,12 +89,22 @@ class FollowedTagsReplaceIn(BaseModel):
     community: list[int] = Field(default_factory=list)  # ignored; community tags are removed
 
 
+class CountrySlotOut(BaseModel):
+    slot: int
+    tag_id: int | None = None
+    changed_at: datetime | None = None
+    next_change_at: datetime | None = None
+    locked: bool = False
+
+
 class FollowedTagsOut(BaseModel):
     tag_ids: list[int]
+    country_slot_limit: int | None = None
+    country_slots: list[CountrySlotOut] = []
 
 
 class BroadcastCreateIn(BaseModel):
-    content: str = Field(min_length=1, max_length=2000)
+    content: str = Field(min_length=1, max_length=200)
     latitude: float
     longitude: float
     is_global: bool = False

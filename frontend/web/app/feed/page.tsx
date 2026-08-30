@@ -4,12 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
+import { EchoBody } from "@/components/EchoBody";
 import { EchoMediaLayout } from "@/components/EchoAttachments";
 import { SenderAvatar } from "@/components/SenderAvatar";
 import { VerifiedMark } from "@/components/VerifiedMark";
 import { LocationDriftBanner } from "@/components/LocationDriftBanner";
 import { promptAndSubmitReport } from "@/helpers/report-actions";
-import { reachBadgeColors, reachBadgeLabel } from "@/helpers/broadcast-reach";
+import { reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
 import { audienceFilterActive, echoAudienceLabels, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "@/helpers/tags";
 import { echoPreview, formatBroadcastSentAt } from "@/helpers/time";
@@ -231,7 +232,7 @@ function SearchHitCard({
         <span className="feed-card-meta">{matchLabel}</span>
       </div>
       <Link href={`/broadcasts/${hit.id}`} className="block">
-        <p className="text-parchment-100">{hit.body}</p>
+        <EchoBody>{hit.body}</EchoBody>
       </Link>
       <p className="feed-card-time mt-2">{formatBroadcastSentAt(hit.created_at)}</p>
       {hit.matches.length > 0 && (
@@ -278,7 +279,6 @@ function BroadcastCard({
 }) {
   const km = (broadcast.distance_m / 1000).toFixed(1);
   const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
-  const reachColors = reachBadgeColors(broadcast.is_global, broadcast.radius_meters);
   const isOwn = currentUserId === broadcast.sender_id;
   const featuredReply = broadcast.latest_reply ?? null;
   const headerName = featuredReply
@@ -315,17 +315,17 @@ function BroadcastCard({
   }
 
   return (
-    <div className="card block hover:border-signal-500/50 transition-colors">
+    <div className="card flex flex-col hover:border-signal-500/50 transition-colors !pb-2.5">
       <EchoMediaLayout attachments={featuredReply ? undefined : broadcast.attachments}>
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex items-center flex-wrap gap-x-5 gap-y-2 min-w-0">
-            <p className="text-parchment-500 text-sm inline-flex items-center gap-1.5 mr-2">
-              <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} />
+            <p className="text-parchment-100 text-base font-semibold inline-flex items-center gap-2 mr-2">
+              <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} className="h-9 w-9 shrink-0 rounded-full border border-dusk-600" />
               {headerName}
               <VerifiedMark verified={headerVerified} />
             </p>
             {echoAudienceLabels(broadcast.tags, broadcast.course_codes, broadcast.course_code).map((label) => (
-              <span key={label} className="tag-pill">
+              <span key={label} className="tag-pill text-xs font-medium">
                 {label}
               </span>
             ))}
@@ -394,18 +394,21 @@ function BroadcastCard({
         )}
       </div>
       {featuredReply && (
-        <p className="text-parchment-500 text-xs font-mono mb-1">Reply to: {echoPreview(broadcast.content)}</p>
+        <div className="mt-2.5 mb-1 border-l-2 border-dusk-600 pl-2.5">
+          <p className="text-parchment-500 text-[11px]">Replying to</p>
+          <p className="text-parchment-500 text-sm font-normal truncate">{echoPreview(broadcast.content)}</p>
+        </div>
       )}
-      <p className="text-parchment-100 mt-1.5 mb-1">{featuredReply ? featuredReply.content : broadcast.content}</p>
-      </EchoMediaLayout>
-      <div className="flex items-center flex-nowrap gap-2 mt-4 text-[10px] leading-tight font-mono text-parchment-500">
+      <EchoBody className="text-parchment-100 text-base font-normal leading-snug mt-2 mb-1">
+        {featuredReply ? featuredReply.content : broadcast.content}
+      </EchoBody>
+      <div className="mt-auto pt-5">
+      <div className="flex items-center flex-nowrap gap-2 text-[10px] leading-tight font-mono text-parchment-500">
         <span className="feed-card-time whitespace-nowrap">
           {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
           {!isOwn ? `  ·  ${km} km away` : ""}
         </span>
-        <span className="feed-card-meta" style={reachColors}>
-          {reachLabel}
-        </span>
+        <span className="feed-card-reach">{reachLabel}</span>
         <Link
           href={`/broadcasts/${broadcast.id}`}
           className="text-parchment-500 hover:text-parchment-100 whitespace-nowrap"
@@ -428,6 +431,8 @@ function BroadcastCard({
           View thread
         </Link>
       </div>
+      </div>
+      </EchoMediaLayout>
       {showPrivateComposer && !isOwn && (
         <div className="mt-3 flex flex-col gap-2">
           <input

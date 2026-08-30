@@ -82,8 +82,8 @@ function fileKind(contentType: string, name: string): string {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  copy: { flex: 1, minWidth: 0 },
+  row: { flexDirection: "row", alignItems: "stretch", gap: 10 },
+  copy: { flex: 1, minWidth: 0, justifyContent: "flex-start" },
   media: { width: "42%", maxWidth: 184, aspectRatio: 1 },
   grid: {
     width: "100%",
