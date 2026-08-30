@@ -316,21 +316,10 @@ function BroadcastCard({
 
   return (
     <div className="card flex flex-col hover:border-signal-500/50 transition-colors !pb-2.5">
-      <EchoMediaLayout attachments={featuredReply ? undefined : broadcast.attachments}>
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="flex items-center flex-wrap gap-x-5 gap-y-2 min-w-0">
-            <p className="text-parchment-100 text-base font-semibold inline-flex items-center gap-2 mr-2">
-              <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} className="h-9 w-9 shrink-0 rounded-full border border-dusk-600" />
-              {headerName}
-              <VerifiedMark verified={headerVerified} />
-            </p>
-            {echoAudienceLabels(broadcast.tags, broadcast.course_codes, broadcast.course_code).map((label) => (
-              <span key={label} className="tag-pill text-xs font-medium">
-                {label}
-              </span>
-            ))}
-          </div>
-          {currentUserId && (
+      <EchoMediaLayout
+        attachments={featuredReply ? featuredReply.attachments : broadcast.attachments}
+        corner={
+          currentUserId ? (
             <FeedCardOverflowMenu
             senderName={isOwn ? "your post" : broadcast.sender_display_name}
             actions={
@@ -391,17 +380,31 @@ function BroadcastCard({
                   ]
             }
           />
-        )}
-      </div>
-      {featuredReply && (
-        <div className="mt-2.5 mb-1 border-l-2 border-dusk-600 pl-2.5">
-          <p className="text-parchment-500 text-[11px]">Replying to</p>
-          <p className="text-parchment-500 text-sm font-normal truncate">{echoPreview(broadcast.content)}</p>
+          ) : undefined
+        }
+      >
+        <div className="flex items-center flex-wrap gap-x-5 gap-y-2 min-w-0 mb-2">
+          <p className="text-parchment-100 text-base font-semibold inline-flex items-center gap-2 mr-2">
+            <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} className="h-9 w-9 shrink-0 rounded-full border border-dusk-600" />
+            {headerName}
+            <VerifiedMark verified={headerVerified} />
+          </p>
+          {echoAudienceLabels(broadcast.tags, broadcast.course_codes, broadcast.course_code).map((label) => (
+            <span key={label} className="tag-pill text-xs font-medium">
+              {label}
+            </span>
+          ))}
         </div>
-      )}
-      <EchoBody className="text-parchment-100 text-base font-normal leading-snug mt-2 mb-1">
-        {featuredReply ? featuredReply.content : broadcast.content}
-      </EchoBody>
+        {featuredReply && (
+          <div className="mt-2.5 mb-1 border-l-2 border-dusk-600 pl-2.5">
+            <p className="text-parchment-500 text-[11px]">Replying to</p>
+            <p className="text-parchment-500 text-sm font-normal truncate">{echoPreview(broadcast.content)}</p>
+          </div>
+        )}
+        <EchoBody className="text-parchment-100 text-base font-normal leading-snug mt-2 mb-1">
+          {featuredReply ? featuredReply.content : broadcast.content}
+        </EchoBody>
+      </EchoMediaLayout>
       <div className="mt-auto pt-5">
       <div className="flex items-center flex-nowrap gap-2 text-[10px] leading-tight font-mono text-parchment-500">
         <span className="feed-card-time whitespace-nowrap">
@@ -432,7 +435,6 @@ function BroadcastCard({
         </Link>
       </div>
       </div>
-      </EchoMediaLayout>
       {showPrivateComposer && !isOwn && (
         <div className="mt-3 flex flex-col gap-2">
           <input

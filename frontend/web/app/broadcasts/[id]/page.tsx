@@ -197,13 +197,13 @@ function ThreadItem({ item, isParent = false }: { item: FeedBroadcast; isParent?
             )
           )}
         </EchoBody>
+      </EchoMediaLayout>
         <div className="flex items-center gap-2 mt-auto pt-2">
           <span className="text-parchment-500 text-xs font-mono">{formatBroadcastSentAt(item.created_at)}</span>
           {isParent && (
             <span className="feed-card-reach">{reachLabel}</span>
           )}
         </div>
-      </EchoMediaLayout>
     </div>
   );
 }

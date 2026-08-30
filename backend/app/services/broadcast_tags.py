@@ -126,17 +126,21 @@ async def attach_sender_avatars(db: AsyncSession, cards: list[dict], broadcasts:
         card["sender_avatar_file_id"] = _avatar_id(avatars, broadcast.sender_id)
 
 
+def _attachment_payloads(rows) -> list[dict]:
+    return [
+        {
+            "file_id": str(row.id),
+            "original_filename": row.original_filename,
+            "content_type": row.content_type,
+        }
+        for row in rows
+    ]
+
+
 async def attach_broadcast_attachments(db: AsyncSession, cards: list[dict], broadcasts: list[Broadcast]) -> None:
     by_id = await upload_repository.list_clean_attachments_for_broadcasts(db, [broadcast.id for broadcast in broadcasts])
     for card, broadcast in zip(cards, broadcasts):
-        card["attachments"] = [
-            {
-                "file_id": str(row.id),
-                "original_filename": row.original_filename,
-                "content_type": row.content_type,
-            }
-            for row in by_id.get(broadcast.id, [])
-        ]
+        card["attachments"] = _attachment_payloads(by_id.get(broadcast.id, []))
 
 
 async def serialize_echo_rows(db: AsyncSession, viewer_id, rows) -> list[dict]:
@@ -147,6 +151,9 @@ async def serialize_echo_rows(db: AsyncSession, viewer_id, rows) -> list[dict]:
     await attach_course_codes(db, cards, broadcasts)
     parent_ids = [row[0].id for row in rows]
     latest_by_parent = await broadcast_repository.latest_visible_replies_by_parent(db, viewer_id, parent_ids)
+    reply_attachments = await upload_repository.list_clean_attachments_for_broadcasts(
+        db, [reply.id for reply in latest_by_parent.values()]
+    )
     avatar_user_ids = [broadcast.sender_id for broadcast in broadcasts]
     avatar_user_ids.extend(reply.sender_id for reply in latest_by_parent.values())
     avatars = await upload_repository.latest_clean_avatar_ids_for_users(db, avatar_user_ids)
@@ -165,6 +172,7 @@ async def serialize_echo_rows(db: AsyncSession, viewer_id, rows) -> list[dict]:
             "sender_avatar_file_id": _avatar_id(avatars, reply.sender_id),
             "content": reply.content,
             "created_at": reply.created_at,
+            "attachments": _attachment_payloads(reply_attachments.get(reply.id, [])),
         }
     return cards
 

@@ -187,6 +187,7 @@ function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: 
             </Text>
           ))}
         </EchoBody>
+      </EchoMediaLayout>
         <View style={styles.threadMetaRow}>
           <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(item.created_at)}</Text>
           {!isReply && (
@@ -195,7 +196,6 @@ function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: 
             </View>
           )}
         </View>
-      </EchoMediaLayout>
     </View>
   );
 }

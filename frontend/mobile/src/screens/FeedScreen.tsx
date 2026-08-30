@@ -10,7 +10,7 @@ import { usePolling } from "../helpers/usePolling";
 import { colors, radii } from "../theme/tokens";
 import { EchoBody } from "../components/EchoBody";
 import { Card } from "../components/Shared";
-import { EchoMediaLayout } from "../components/EchoAttachments";
+import { EchoAttachments, EchoMediaLayout } from "../components/EchoAttachments";
 import { SenderAvatar } from "../components/SenderAvatar";
 import { VerifiedMark } from "../components/VerifiedMark";
 import { LocationDriftBanner } from "../components/LocationDriftBanner";
@@ -409,21 +409,9 @@ function BroadcastCard({
 
   return (
     <Card style={menuOpen ? { ...styles.cardOverflow, ...styles.cardMenuOpen, ...styles.feedCard } : { ...styles.cardOverflow, ...styles.feedCard }}>
-      <EchoMediaLayout attachments={featuredReply ? undefined : broadcast.attachments}>
-      <View style={styles.headingRow}>
-        <View style={styles.headingCopy}>
-          <View style={styles.senderCluster}>
-            <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} size={36} />
-            <Text style={styles.cardSenderName}>{headerName}</Text>
-            <VerifiedMark verified={headerVerified} />
-          </View>
-          {echoAudienceLabels(broadcast.tags, broadcast.course_codes, broadcast.course_code).map((label) => (
-            <View key={label} style={styles.cardTagPill}>
-              <Text style={styles.cardTagPillText}>{label}</Text>
-            </View>
-          ))}
-        </View>
-        {!!currentUserId && (
+      <EchoMediaLayout
+        corner={
+          currentUserId ? (
           <View style={styles.overflowWrap}>
             <Pressable
               accessibilityLabel={`More actions for ${isOwn ? "your post" : broadcast.sender_display_name}`}
@@ -454,8 +442,22 @@ function BroadcastCard({
               </View>
             )}
           </View>
-        )}
-      </View>
+          ) : undefined
+        }
+      >
+        <View style={styles.headingCopy}>
+          <View style={styles.senderCluster}>
+            <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} size={36} />
+            <Text style={styles.cardSenderName}>{headerName}</Text>
+            <VerifiedMark verified={headerVerified} />
+          </View>
+          {echoAudienceLabels(broadcast.tags, broadcast.course_codes, broadcast.course_code).map((label) => (
+            <View key={label} style={styles.cardTagPill}>
+              <Text style={styles.cardTagPillText}>{label}</Text>
+            </View>
+          ))}
+        </View>
+      </EchoMediaLayout>
       {featuredReply ? (
         <View style={styles.parentQuote}>
           <Text style={styles.parentQuoteLabel}>Replying to</Text>
@@ -465,6 +467,11 @@ function BroadcastCard({
         </View>
       ) : null}
       <EchoBody style={styles.cardText}>{featuredReply ? featuredReply.content : broadcast.content}</EchoBody>
+      {(featuredReply ? featuredReply.attachments : broadcast.attachments)?.length ? (
+        <View style={styles.feedMedia}>
+          <EchoAttachments attachments={featuredReply ? featuredReply.attachments : broadcast.attachments} />
+        </View>
+      ) : null}
       <View style={styles.cardFooter}>
         <View style={styles.metaRow}>
           <Text style={styles.cardMeta} numberOfLines={1}>
@@ -500,7 +507,6 @@ function BroadcastCard({
           </Pressable>
         </View>
       </View>
-      </EchoMediaLayout>
     </Card>
   );
 }
@@ -544,9 +550,10 @@ const styles = StyleSheet.create({
   parentQuoteLabel: { color: colors.parchment500, fontSize: 11, marginBottom: 2 },
   parentQuoteText: { color: colors.parchment500, fontSize: 14, fontWeight: "400" },
   cardText: { color: colors.parchment100, fontSize: 16, fontWeight: "400", lineHeight: 22, marginTop: 8, marginBottom: 4 },
+  feedMedia: { marginTop: 8, marginHorizontal: -4 },
   cardSenderName: { color: colors.parchment100, fontSize: 16, fontWeight: "600" },
-  cardTagPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 3 },
-  cardTagPillText: { color: colors.parchment300, fontSize: 13, fontWeight: "500" },
+  cardTagPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 2 },
+  cardTagPillText: { color: colors.parchment300, fontSize: 11, fontWeight: "500" },
   headingRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
   headingCopy: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 20, rowGap: 8 },
   senderCluster: { flexDirection: "row", alignItems: "center", gap: 8, marginRight: 8 },

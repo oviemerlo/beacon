@@ -70,6 +70,7 @@ export interface LatestFeedReply {
   sender_avatar_file_id?: string | null;
   content: string;
   created_at: string;
+  attachments?: BroadcastAttachment[];
 }
 
 export interface FeedBroadcast {

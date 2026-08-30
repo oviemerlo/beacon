@@ -6,31 +6,37 @@ import type { BroadcastAttachment } from "@/types/api";
 
 export function EchoMediaLayout({
   attachments,
+  corner,
   children,
 }: {
   attachments?: BroadcastAttachment[];
+  corner?: ReactNode;
   children: ReactNode;
 }) {
-  if (!attachments?.length) return children;
+  const count = attachments?.length ?? 0;
+  const railMedia = count === 1;
+  const stripMedia = count > 1;
+  if (count === 0 && !corner) return children;
   return (
-    <div className="flex items-stretch gap-3">
-      <div className="min-w-0 flex-1 flex flex-col">{children}</div>
-      <div className="w-[42%] max-w-[11.5rem] shrink-0">
-        <EchoAttachments attachments={attachments} />
+    <div className="flex flex-col gap-2 min-w-0">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">{children}</div>
+        {corner || railMedia ? (
+          <div className={`shrink-0 flex flex-col items-end gap-2 ${railMedia ? "w-[7.5rem]" : ""}`}>
+            {corner}
+            {railMedia ? <EchoAttachments attachments={attachments} /> : null}
+          </div>
+        ) : null}
       </div>
+      {stripMedia ? <EchoAttachments attachments={attachments} /> : null}
     </div>
   );
 }
 
 export function EchoAttachments({ attachments }: { attachments?: BroadcastAttachment[] }) {
   if (!attachments?.length) return null;
-  const many = attachments.length > 1;
   return (
-    <div
-      className={`aspect-square w-full overflow-hidden rounded-beacon border border-dusk-600 bg-dusk-800 grid gap-px ${
-        many ? "grid-cols-2" : "grid-cols-1"
-      } ${attachments.length > 2 ? "grid-rows-2" : ""}`}
-    >
+    <div className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
       {attachments.map((file) => (
         <AttachmentTile key={file.file_id} file={file} />
       ))}
@@ -56,7 +62,8 @@ function AttachmentTile({ file }: { file: BroadcastAttachment }) {
     };
   }, [file.file_id]);
 
-  const className = "relative block h-full w-full bg-dusk-800";
+  const className =
+    "relative block h-[7.5rem] w-[7.5rem] shrink-0 overflow-hidden rounded-beacon border border-dusk-600 bg-dusk-800";
 
   if (image && url) {
     return (

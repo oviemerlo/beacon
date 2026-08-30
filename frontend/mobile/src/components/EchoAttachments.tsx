@@ -1,40 +1,60 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getUploadUrl, isImageAttachment } from "../helpers/uploads";
 import { colors, radii } from "../theme/tokens";
 import type { BroadcastAttachment } from "../types/api";
 
 export function EchoMediaLayout({
   attachments,
+  corner,
   children,
 }: {
   attachments?: BroadcastAttachment[];
+  corner?: ReactNode;
   children: ReactNode;
 }) {
-  if (!attachments?.length) return children;
+  const count = attachments?.length ?? 0;
+  const railMedia = count === 1;
+  const stripMedia = count > 1;
+  if (count === 0 && !corner) return children;
   return (
-    <View style={styles.row}>
-      <View style={styles.copy}>{children}</View>
-      <View style={styles.media}>
-        <EchoAttachments attachments={attachments} />
+    <View style={styles.stack}>
+      <View style={styles.rail}>
+        <View style={styles.copy}>{children}</View>
+        {corner || railMedia ? (
+          <View style={[styles.corner, railMedia && styles.cornerWide]}>
+            {corner}
+            {railMedia ? (
+              <View style={styles.media}>
+                <EchoAttachments attachments={attachments} />
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </View>
+      {stripMedia ? <EchoAttachments attachments={attachments} /> : null}
     </View>
   );
 }
 
 export function EchoAttachments({ attachments }: { attachments?: BroadcastAttachment[] }) {
   if (!attachments?.length) return null;
-  const many = attachments.length > 1;
   return (
-    <View style={[styles.grid, many && styles.gridMany]}>
+    <ScrollView
+      horizontal
+      nestedScrollEnabled
+      directionalLockEnabled
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.strip}
+    >
       {attachments.map((file) => (
-        <AttachmentTile key={file.file_id} file={file} many={many} />
+        <AttachmentTile key={file.file_id} file={file} />
       ))}
-    </View>
+    </ScrollView>
   );
 }
 
-function AttachmentTile({ file, many }: { file: BroadcastAttachment; many: boolean }) {
+function AttachmentTile({ file }: { file: BroadcastAttachment }) {
   const [url, setUrl] = useState<string | null>(null);
   const image = isImageAttachment(file.content_type, file.original_filename);
 
@@ -56,7 +76,7 @@ function AttachmentTile({ file, many }: { file: BroadcastAttachment; many: boole
     <Pressable
       onPress={() => url && void Linking.openURL(url)}
       disabled={!url}
-      style={[styles.tile, many ? styles.tileMany : styles.tileSingle]}
+      style={styles.tile}
     >
       {image && url ? (
         <Image source={{ uri: url }} style={styles.image} resizeMode="contain" />
@@ -81,25 +101,25 @@ function fileKind(contentType: string, name: string): string {
   return "FILE";
 }
 
+const TILE = 120;
+
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "stretch", gap: 10 },
-  copy: { flex: 1, minWidth: 0, justifyContent: "flex-start" },
-  media: { width: "42%", maxWidth: 184, aspectRatio: 1 },
-  grid: {
-    width: "100%",
-    aspectRatio: 1,
+  stack: { gap: 8 },
+  rail: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  copy: { flex: 1, minWidth: 0 },
+  corner: { alignItems: "flex-end", gap: 8 },
+  cornerWide: { width: TILE },
+  media: { width: TILE, aspectRatio: 1 },
+  strip: { flexDirection: "row", gap: 8, paddingRight: 4 },
+  tile: {
+    width: TILE,
+    height: TILE,
     overflow: "hidden",
     borderRadius: radii.beacon,
     borderWidth: 1,
     borderColor: colors.dusk600,
     backgroundColor: colors.dusk800,
-    flexDirection: "row",
-    flexWrap: "wrap",
   },
-  gridMany: { gap: 1 },
-  tile: { backgroundColor: colors.dusk800 },
-  tileSingle: { width: "100%", height: "100%" },
-  tileMany: { width: "50%", height: "50%" },
   image: { width: "100%", height: "100%" },
   doc: { flex: 1, justifyContent: "flex-end", padding: 10, gap: 6 },
   kind: {

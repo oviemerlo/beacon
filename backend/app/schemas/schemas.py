@@ -132,6 +132,12 @@ class BroadcastOut(BaseModel):
     tags: list[TagOut] = []
 
 
+class BroadcastAttachmentOut(BaseModel):
+    file_id: uuid.UUID
+    original_filename: str
+    content_type: str
+
+
 class LatestFeedReplyOut(BaseModel):
     id: uuid.UUID
     sender_id: uuid.UUID
@@ -139,12 +145,7 @@ class LatestFeedReplyOut(BaseModel):
     sender_is_verified: bool = False
     content: str
     created_at: datetime
-
-
-class BroadcastAttachmentOut(BaseModel):
-    file_id: uuid.UUID
-    original_filename: str
-    content_type: str
+    attachments: list[BroadcastAttachmentOut] = []
 
 
 class FeedBroadcastOut(BaseModel):
