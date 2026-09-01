@@ -6,6 +6,7 @@ import { applyMention, mentionTriggerFromInput, splitMentionParts } from "../hel
 import { pickReasonAndSubmitReport } from "../helpers/reportActions";
 import { formatMessageSentAt } from "../helpers/time";
 import { colors, radii } from "../theme/tokens";
+import { LinkPreviewList } from "../components/LinkPreviewCard";
 import type { ConversationContext, MentionCandidate, Message, UserProfile } from "../types/api";
 
 export function ConversationDetailScreen({ conversationId }: { conversationId: string }) {
@@ -208,6 +209,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
                     </Text>
                   ))}
                 </Text>
+                <LinkPreviewList previews={item.link_previews} />
                 <View style={styles.bubbleMetaRow}>
                   {!isMine ? (
                     <Pressable

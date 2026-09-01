@@ -118,6 +118,17 @@ class BroadcastCreateIn(BaseModel):
     include_sender_avatar: bool = False
 
 
+class PublicBroadcastOut(BaseModel):
+    """Unauthenticated share page — no distance or location."""
+
+    id: uuid.UUID
+    sender: PublicProfileOut
+    content: str
+    created_at: datetime
+    tags: list[TagOut] = []
+    og_image_url: str | None = None
+
+
 class BroadcastOut(BaseModel):
     id: uuid.UUID
     sender: PublicProfileOut
@@ -138,6 +149,17 @@ class BroadcastAttachmentOut(BaseModel):
     content_type: str
 
 
+class LinkPreviewOut(BaseModel):
+    id: uuid.UUID
+    normalized_url: str
+    title: str | None = None
+    description: str | None = None
+    image_url: str | None = None
+    site_name: str | None = None
+    favicon_url: str | None = None
+    status: str
+
+
 class LatestFeedReplyOut(BaseModel):
     id: uuid.UUID
     sender_id: uuid.UUID
@@ -146,6 +168,7 @@ class LatestFeedReplyOut(BaseModel):
     content: str
     created_at: datetime
     attachments: list[BroadcastAttachmentOut] = []
+    link_previews: list[LinkPreviewOut] = []
 
 
 class FeedBroadcastOut(BaseModel):
@@ -167,6 +190,7 @@ class FeedBroadcastOut(BaseModel):
     reply_count: int = 0
     latest_reply: LatestFeedReplyOut | None = None
     attachments: list[BroadcastAttachmentOut] = []
+    link_previews: list[LinkPreviewOut] = []
 
 
 class BroadcastThreadOut(BaseModel):
@@ -200,6 +224,7 @@ class MessageOut(BaseModel):
     sent_at: datetime
     read_at: datetime | None
     mentioned_user_ids: list[uuid.UUID] = []
+    link_previews: list[LinkPreviewOut] = []
 
     class Config:
         from_attributes = True

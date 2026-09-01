@@ -9,12 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.config import settings
 from app.models.broadcast import Broadcast
 from app.repositories import broadcast_repository, report_repository, school_repository, tag_repository, user_repository
-from app.schemas.schemas import BroadcastCreateIn
-from app.services.broadcast_tags import serialize_echo_rows
+from app.schemas.schemas import BroadcastCreateIn, PublicBroadcastOut, PublicProfileOut
+from app.services.broadcast_tags import serialize_echo_rows, tag_payload
+from app.services import upload_service
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 from app.services import school_service
 from app.services.school_service import is_currently_verified, prepare_course_tag
 from app.services.text_moderation_service import TextModerationResult, moderate_text
+from app.services.link_preview_service import schedule_previews
 from app.services.user_service import REGION_TAGS_LOCKED_MESSAGE, can_follow_region_tags, can_use_regional_reach
 
 logger = logging.getLogger(__name__)
@@ -123,6 +125,7 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
         await _create_text_moderation_report(db, broadcast.id, moderation_result)
     await db.commit()
     await db.refresh(broadcast)
+    schedule_previews(payload.content, broadcast_id=broadcast.id)
     return broadcast
 
 
@@ -167,6 +170,25 @@ async def hide_broadcast(db: AsyncSession, current_user_id: uuid.UUID, broadcast
 
     await broadcast_repository.hide_for_user(db, current_user_id, broadcast.id)
     await db.commit()
+
+
+async def get_public_broadcast(db: AsyncSession, broadcast_id: uuid.UUID) -> PublicBroadcastOut:
+    broadcast = await broadcast_repository.get_by_id(db, broadcast_id)
+    if broadcast is None or broadcast.deleted_at is not None or broadcast.moderation_status == "rejected":
+        raise NotFoundError("Broadcast not found")
+    sender = await user_repository.get_by_id(db, broadcast.sender_id)
+    if sender is None:
+        raise NotFoundError("Broadcast not found")
+    tag_ids = await broadcast_repository.list_tag_ids(db, broadcast.id)
+    tags = await tag_repository.get_by_ids(db, tag_ids) if tag_ids else []
+    return PublicBroadcastOut(
+        id=broadcast.id,
+        sender=PublicProfileOut.model_validate(sender),
+        content=broadcast.content,
+        created_at=broadcast.created_at,
+        tags=[tag_payload(tag) for tag in tags],
+        og_image_url=await upload_service.public_og_image_url(db, broadcast.id),
+    )
 
 
 async def get_broadcast_thread(db: AsyncSession, user_id: uuid.UUID, broadcast_id: str):

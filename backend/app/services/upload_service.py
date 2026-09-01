@@ -363,6 +363,28 @@ async def upload_broadcast_attachment(
     )
 
 
+async def public_og_image_url(db: AsyncSession, broadcast_id: uuid.UUID) -> str | None:
+    """First clean image attachment, or None. Fail open — sharing still works without it."""
+    by_id = await upload_repository.list_clean_attachments_for_broadcasts(db, [broadcast_id])
+    if not _s3_configured():
+        return None
+    for row in by_id.get(broadcast_id, []):
+        if row.content_type not in IMAGE_TYPES:
+            continue
+        if row.moderation_status == MODERATION_STATUS_REJECTED:
+            continue
+        try:
+            return _s3_client().generate_presigned_url(
+                "get_object",
+                Params={"Bucket": settings.S3_BUCKET_NAME, "Key": row.s3_key},
+                ExpiresIn=PRESIGNED_URL_EXPIRES_IN,
+            )
+        except (ClientError, BotoCoreError) as exc:
+            logger.error("public OG presign failed: %s", exc)
+            return None
+    return None
+
+
 async def get_presigned_url(db: AsyncSession, user: User, file_id: uuid.UUID | str) -> str:
     _ = user
     row = await upload_repository.get_by_id(db, file_id)

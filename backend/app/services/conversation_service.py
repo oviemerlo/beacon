@@ -18,11 +18,14 @@ from app.repositories import (
     block_repository,
     broadcast_repository,
     conversation_repository,
+    link_preview_repository,
     notification_repository,
     user_repository,
 )
 from app.services import mention_service
+from app.services.broadcast_tags import _link_preview_payload
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
+from app.services.link_preview_service import schedule_previews
 
 
 async def _assert_messaging_allowed(db: AsyncSession, user_a: uuid.UUID, user_b: uuid.UUID) -> None:
@@ -60,6 +63,7 @@ async def start_conversation(db: AsyncSession, initiator_id: uuid.UUID, broadcas
     await _notify_mentions(db, message)
     await db.commit()
     await db.refresh(conversation)
+    schedule_previews(first_message, message_id=message.id)
     return conversation
 
 
@@ -70,12 +74,19 @@ async def _assert_participant(db: AsyncSession, user_id: uuid.UUID, conversation
     return conversation
 
 
+async def _attach_message_link_previews(db: AsyncSession, messages: list[Message]) -> None:
+    by_id = await link_preview_repository.list_ok_for_messages(db, [m.id for m in messages])
+    for message in messages:
+        message.link_previews = [_link_preview_payload(p) for p in by_id.get(message.id, [])]
+
+
 async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> list[Message]:
     conversation = await _assert_participant(db, user_id, conversation_id)
     messages = await conversation_repository.list_messages(db, conversation_id)
     await conversation_repository.mark_read_for_user_in_conversation(db, user_id, conversation.id)
     await notification_repository.mark_read_for_conversation(db, user_id, conversation.id)
     await db.commit()
+    await _attach_message_link_previews(db, messages)
     return messages
 
 
@@ -91,6 +102,8 @@ async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: st
     await _notify_mentions(db, message)
     await db.commit()
     await db.refresh(message)
+    schedule_previews(body, message_id=message.id)
+    await _attach_message_link_previews(db, [message])
     return message
 
 

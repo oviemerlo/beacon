@@ -5,11 +5,13 @@ hold: a country when they don't follow the region, or the region when they
 don't follow the country.
 """
 
+import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.broadcast import Broadcast
 from app.models.tag import Tag
-from app.repositories import broadcast_repository, upload_repository
+from app.repositories import broadcast_repository, link_preview_repository, upload_repository
 from app.services import user_service
 from app.services.regions import get_countries_for_region, get_region_for_country_name
 
@@ -143,6 +145,30 @@ async def attach_broadcast_attachments(db: AsyncSession, cards: list[dict], broa
         card["attachments"] = _attachment_payloads(by_id.get(broadcast.id, []))
 
 
+def _link_preview_payload(preview) -> dict:
+    return {
+        "id": preview.id,
+        "normalized_url": preview.normalized_url,
+        "title": preview.title,
+        "description": preview.description,
+        "image_url": preview.image_url,
+        "site_name": preview.site_name,
+        "favicon_url": preview.favicon_url,
+        "status": preview.status,
+    }
+
+
+async def attach_link_previews(db: AsyncSession, cards: list[dict], broadcasts: list[Broadcast]) -> None:
+    ids = [b.id for b in broadcasts]
+    reply_ids = [uuid.UUID(str(card["latest_reply"]["id"])) for card in cards if card.get("latest_reply")]
+    by_id = await link_preview_repository.list_ok_for_broadcasts(db, ids + reply_ids)
+    for card, broadcast in zip(cards, broadcasts):
+        card["link_previews"] = [_link_preview_payload(p) for p in by_id.get(broadcast.id, [])]
+        latest = card.get("latest_reply")
+        if latest is not None:
+            latest["link_previews"] = [_link_preview_payload(p) for p in by_id.get(uuid.UUID(str(latest["id"])), [])]
+
+
 async def serialize_echo_rows(db: AsyncSession, viewer_id, rows) -> list[dict]:
     viewer_tags = await user_service.list_identity_tags(db, viewer_id)
     cards = [serialize_echo_row(row, viewer_id, viewer_tags) for row in rows]
@@ -174,6 +200,7 @@ async def serialize_echo_rows(db: AsyncSession, viewer_id, rows) -> list[dict]:
             "created_at": reply.created_at,
             "attachments": _attachment_payloads(reply_attachments.get(reply.id, [])),
         }
+    await attach_link_previews(db, cards, broadcasts)
     return cards
 
 

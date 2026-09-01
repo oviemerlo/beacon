@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { EchoBody } from "@/components/EchoBody";
 import { EchoMediaLayout } from "@/components/EchoAttachments";
+import { LinkPreviewList } from "@/components/LinkPreviewCard";
+import { FeedCardActionRow, startPrivateConversation } from "@/components/FeedCardActionRow";
+import { buildFeedCardActions, FeedCardOverflowMenu } from "@/components/FeedCardOverflowMenu";
 import { SenderAvatar } from "@/components/SenderAvatar";
 import { VerifiedMark } from "@/components/VerifiedMark";
 import { LocationDriftBanner } from "@/components/LocationDriftBanner";
-import { promptAndSubmitReport } from "@/helpers/report-actions";
 import { reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
 import { audienceFilterActive, echoAudienceLabels, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "@/helpers/tags";
@@ -174,6 +176,8 @@ export default function FeedPage() {
                   hit={hit}
                   currentUserId={user?.id ?? null}
                   onOpenConversation={(id) => router.push(`/conversations/${id}`)}
+                  onBlocked={(senderId) => setSearchHits((rows) => rows.filter((row) => row.sender_id !== senderId))}
+                  onRemoved={(broadcastId) => setSearchHits((rows) => rows.filter((row) => row.id !== broadcastId))}
                 />
               ))}
             </div>
@@ -208,12 +212,17 @@ function SearchHitCard({
   hit,
   currentUserId,
   onOpenConversation,
+  onBlocked,
+  onRemoved,
 }: {
   hit: FeedSearchHit;
   currentUserId: string | null;
   onOpenConversation: (conversationId: string) => void;
+  onBlocked: (senderId: string) => void;
+  onRemoved: (broadcastId: string) => void;
 }) {
   const matchLabel = hit.match_type === "both" ? "Echo + replies" : hit.match_type === "echo" ? "Echo" : "Reply";
+  const isOwn = currentUserId === hit.sender_id;
   return (
     <div className="card">
       <div className="flex items-start justify-between gap-3 mb-2">
@@ -229,12 +238,42 @@ function SearchHitCard({
             </span>
           ))}
         </div>
-        <span className="feed-card-meta">{matchLabel}</span>
+        <div className="flex flex-col items-end shrink-0">
+          {currentUserId ? (
+            <FeedCardOverflowMenu
+              senderName={isOwn ? "your post" : hit.sender_display_name}
+              actions={buildFeedCardActions({
+                isOwn,
+                broadcastId: hit.id,
+                senderId: hit.sender_id,
+                senderDisplayName: hit.sender_display_name,
+                onBlocked,
+                onRemoved,
+              })}
+            />
+          ) : null}
+          <span className="feed-card-meta mt-8">{matchLabel}</span>
+        </div>
       </div>
       <Link href={`/broadcasts/${hit.id}`} className="block">
         <EchoBody>{hit.body}</EchoBody>
       </Link>
       <p className="feed-card-time mt-2">{formatBroadcastSentAt(hit.created_at)}</p>
+      <FeedCardActionRow
+        broadcastId={hit.id}
+        isOwn={isOwn}
+        senderName={isOwn ? "You" : hit.sender_display_name}
+        content={hit.body}
+        onReplyPrivately={
+          isOwn
+            ? undefined
+            : () => {
+                void startPrivateConversation(hit.id, "Hi")
+                  .then((res) => onOpenConversation(res.conversation_id))
+                  .catch(() => window.alert("Couldn't start private reply."));
+              }
+        }
+      />
       {hit.matches.length > 0 && (
         <div className="mt-3 ml-3 border-l border-dusk-600 pl-3 flex flex-col gap-3">
           {hit.matches.map((match) => (
@@ -300,10 +339,7 @@ function BroadcastCard({
     if (!firstMessage || sendingPrivate) return;
     setSendingPrivate(true);
     try {
-      const res = await clientFetch<{ conversation_id: string }>("/conversations", {
-        method: "POST",
-        body: JSON.stringify({ broadcast_id: broadcast.id, first_message: firstMessage }),
-      });
+      const res = await startPrivateConversation(broadcast.id, firstMessage);
       setPrivateMessage("");
       setShowPrivateComposer(false);
       onOpenConversation(res.conversation_id);
@@ -321,65 +357,16 @@ function BroadcastCard({
         corner={
           currentUserId ? (
             <FeedCardOverflowMenu
-            senderName={isOwn ? "your post" : broadcast.sender_display_name}
-            actions={
-              isOwn
-                ? [
-                    {
-                      label: "Delete",
-                      onSelect: async () => {
-                        const confirmed = window.confirm("Delete this Echo? It will disappear from everyone's feed.");
-                        if (!confirmed) return;
-                        try {
-                          await clientFetch(`/broadcasts/${broadcast.id}`, { method: "DELETE" });
-                          onRemoved(broadcast.id);
-                        } catch {
-                          window.alert("Couldn't delete this Echo.");
-                        }
-                      },
-                    },
-                  ]
-                : [
-                    {
-                      label: "Report",
-                      onSelect: async () => {
-                        try {
-                          await promptAndSubmitReport("broadcast", broadcast.id, "this broadcast");
-                          window.alert("Report submitted.");
-                        } catch {
-                          window.alert("Couldn't submit report.");
-                        }
-                      },
-                    },
-                    {
-                      label: "Block",
-                      onSelect: async () => {
-                        const confirmed = window.confirm(
-                          `Block ${broadcast.sender_display_name}?\n\nYou won't see their posts in your feed, including ones already here. They can still see your broadcasts.`
-                        );
-                        if (!confirmed) return;
-                        try {
-                          await clientFetch(`/blocks/${broadcast.sender_id}`, { method: "PUT" });
-                          onBlocked(broadcast.sender_id);
-                        } catch {
-                          window.alert("Couldn't block this user.");
-                        }
-                      },
-                    },
-                    {
-                      label: "Remove from my feed",
-                      onSelect: async () => {
-                        try {
-                          await clientFetch(`/broadcasts/${broadcast.id}/hide`, { method: "PUT" });
-                          onRemoved(broadcast.id);
-                        } catch {
-                          window.alert("Couldn't remove this Echo from your feed.");
-                        }
-                      },
-                    },
-                  ]
-            }
-          />
+              senderName={isOwn ? "your post" : broadcast.sender_display_name}
+              actions={buildFeedCardActions({
+                isOwn,
+                broadcastId: broadcast.id,
+                senderId: broadcast.sender_id,
+                senderDisplayName: broadcast.sender_display_name,
+                onBlocked,
+                onRemoved,
+              })}
+            />
           ) : undefined
         }
       >
@@ -404,6 +391,7 @@ function BroadcastCard({
         <EchoBody className="text-parchment-100 text-base font-normal leading-snug mt-2 mb-1">
           {featuredReply ? featuredReply.content : broadcast.content}
         </EchoBody>
+        <LinkPreviewList previews={featuredReply ? featuredReply.link_previews : broadcast.link_previews} />
       </EchoMediaLayout>
       <div className="mt-auto pt-5">
       <div className="flex items-center flex-nowrap gap-2 text-[10px] leading-tight font-mono text-parchment-500">
@@ -419,21 +407,13 @@ function BroadcastCard({
           {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
         </Link>
       </div>
-      <div className="flex flex-wrap gap-1.5 mt-3">
-        {!isOwn && (
-          <>
-            <Link href={`/broadcasts/${broadcast.id}`} className="feed-card-action">
-              Reply in feed
-            </Link>
-            <button onClick={() => setShowPrivateComposer((v) => !v)} className="feed-card-action">
-              Reply privately
-            </button>
-          </>
-        )}
-        <Link href={`/broadcasts/${broadcast.id}`} className="feed-card-action">
-          View thread
-        </Link>
-      </div>
+      <FeedCardActionRow
+        broadcastId={broadcast.id}
+        isOwn={isOwn}
+        senderName={isOwn ? "You" : broadcast.sender_display_name}
+        content={featuredReply ? featuredReply.content : broadcast.content}
+        onReplyPrivately={() => setShowPrivateComposer((v) => !v)}
+      />
       </div>
       {showPrivateComposer && !isOwn && (
         <div className="mt-3 flex flex-col gap-2">
@@ -467,57 +447,6 @@ function BroadcastCard({
               Cancel
             </button>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FeedCardOverflowMenu({
-  senderName,
-  actions,
-}: {
-  senderName: string;
-  actions: { label: string; onSelect: () => Promise<void> }[];
-}) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open]);
-
-  return (
-    <div className="relative shrink-0" ref={menuRef}>
-      <button
-        type="button"
-        aria-label={`More actions for ${senderName}`}
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-        className="flex h-7 w-7 items-center justify-center rounded-beacon border border-dusk-600 bg-dusk-800 text-parchment-300 hover:text-parchment-100 hover:border-parchment-500"
-      >
-        <span className="text-base leading-none">⋯</span>
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 min-w-[11rem] overflow-hidden rounded-beacon border border-dusk-600 bg-dusk-800 py-1 shadow-lg">
-          {actions.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              className="block w-full px-3 py-1.5 text-left text-sm text-parchment-100 hover:bg-dusk-700"
-              onClick={async () => {
-                setOpen(false);
-                await action.onSelect();
-              }}
-            >
-              {action.label}
-            </button>
-          ))}
         </div>
       )}
     </div>

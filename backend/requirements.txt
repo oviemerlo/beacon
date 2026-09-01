@@ -45,6 +45,7 @@ pytz==2026.2
 PyYAML==6.0.3
 requests==2.34.2
 rsa==4.9.1
+selectolax==0.3.29
 shapely==2.1.2
 six==1.17.0
 slowapi==0.1.9

@@ -14,6 +14,8 @@ import { CharacterCountdown, EchoBody } from "../components/EchoBody";
 import { BROADCAST_CONTENT_MAX } from "../helpers/broadcastContent";
 import { Card } from "../components/Shared";
 import { EchoMediaLayout } from "../components/EchoAttachments";
+import { LinkPreviewList } from "../components/LinkPreviewCard";
+import { ShareButton } from "../components/ShareButton";
 import { SenderAvatar } from "../components/SenderAvatar";
 import { VerifiedMark } from "../components/VerifiedMark";
 import type { BroadcastThread, FeedBroadcast, UserProfile } from "../types/api";
@@ -187,6 +189,7 @@ function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: 
             </Text>
           ))}
         </EchoBody>
+        <LinkPreviewList previews={item.link_previews} />
       </EchoMediaLayout>
         <View style={styles.threadMetaRow}>
           <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(item.created_at)}</Text>
@@ -195,6 +198,13 @@ function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: 
               <Text style={styles.reachPillText}>{reachLabel}</Text>
             </View>
           )}
+          <ShareButton
+            broadcastId={item.id}
+            senderName={item.sender_display_name}
+            content={item.content}
+            style={styles.sharePill}
+            textStyle={styles.sharePillText}
+          />
         </View>
     </View>
   );
@@ -216,6 +226,8 @@ const styles = StyleSheet.create({
   sentAtLabel: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
   reachPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 1 },
   reachPillText: { color: colors.parchment500, fontSize: 8, fontFamily: "monospace" },
+  sharePill: { borderColor: colors.dusk600, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  sharePillText: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
   textarea: { color: colors.parchment100, minHeight: 100, textAlignVertical: "top" },
   composerTools: { marginTop: 12 },
   error: { color: colors.rust400, fontSize: 13, marginTop: 8 },

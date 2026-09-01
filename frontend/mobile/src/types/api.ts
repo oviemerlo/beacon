@@ -70,6 +70,7 @@ export interface LatestFeedReply {
   content: string;
   created_at: string;
   attachments?: BroadcastAttachment[];
+  link_previews?: LinkPreview[];
 }
 
 export interface FeedBroadcast {
@@ -92,12 +93,24 @@ export interface FeedBroadcast {
   latest_reply?: LatestFeedReply | null;
   replies?: FeedReply[];
   attachments?: BroadcastAttachment[];
+  link_previews?: LinkPreview[];
 }
 
 export interface BroadcastAttachment {
   file_id: string;
   original_filename: string;
   content_type: string;
+}
+
+export interface LinkPreview {
+  id: string;
+  normalized_url: string;
+  title?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  site_name?: string | null;
+  favicon_url?: string | null;
+  status: string;
 }
 
 export interface FeedReply {
@@ -183,6 +196,7 @@ export interface Message {
   sent_at: string;
   read_at: string | null;
   mentioned_user_ids?: string[];
+  link_previews?: LinkPreview[];
 }
 
 export interface MentionCandidate {

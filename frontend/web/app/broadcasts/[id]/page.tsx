@@ -6,6 +6,8 @@ import { AppNav } from "@/components/AppNav";
 import { BroadcastAttachments } from "@/components/BroadcastAttachments";
 import { CharacterCountdown, EchoBody } from "@/components/EchoBody";
 import { EchoMediaLayout } from "@/components/EchoAttachments";
+import { LinkPreviewList } from "@/components/LinkPreviewCard";
+import { ShareButton } from "@/components/ShareButton";
 import { BROADCAST_CONTENT_MAX } from "@/helpers/broadcast-content";
 import { SenderAvatar } from "@/components/SenderAvatar";
 import { VerifiedMark } from "@/components/VerifiedMark";
@@ -197,12 +199,14 @@ function ThreadItem({ item, isParent = false }: { item: FeedBroadcast; isParent?
             )
           )}
         </EchoBody>
+        <LinkPreviewList previews={item.link_previews} />
       </EchoMediaLayout>
         <div className="flex items-center gap-2 mt-auto pt-2">
           <span className="text-parchment-500 text-xs font-mono">{formatBroadcastSentAt(item.created_at)}</span>
           {isParent && (
             <span className="feed-card-reach">{reachLabel}</span>
           )}
+          <ShareButton broadcastId={item.id} senderName={item.sender_display_name} content={item.content} />
         </div>
     </div>
   );

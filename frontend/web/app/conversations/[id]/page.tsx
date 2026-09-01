@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
+import { LinkPreviewList } from "@/components/LinkPreviewCard";
 import { clientFetch } from "@/helpers/client-api";
 import { applyMention, mentionTriggerFromInput, splitMentionParts } from "@/helpers/mentions";
 import { promptAndSubmitReport } from "@/helpers/report-actions";
@@ -227,6 +228,7 @@ export default function ConversationDetailPage() {
                         )
                       )}
                     </p>
+                    <LinkPreviewList previews={m.link_previews} />
                     <div className="flex items-center justify-between gap-4 mt-2">
                       {!isMine ? (
                         <button

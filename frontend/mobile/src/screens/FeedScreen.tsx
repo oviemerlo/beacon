@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Alert, TextInput, ScrollView } from "react-native";
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, TextInput, ScrollView } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
-import { reachBadgeLabel } from "../helpers/broadcastReach";
-import { pickReasonAndSubmitReport } from "../helpers/reportActions";
-import { audienceFilterActive, echoAudienceLabels, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "../helpers/tags";
-import { echoPreview, formatBroadcastSentAt } from "../helpers/time";
+import { audienceFilterActive, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "../helpers/tags";
 import { usePolling } from "../helpers/usePolling";
 import { colors, radii } from "../theme/tokens";
-import { EchoBody } from "../components/EchoBody";
 import { Card } from "../components/Shared";
-import { EchoAttachments, EchoMediaLayout } from "../components/EchoAttachments";
-import { SenderAvatar } from "../components/SenderAvatar";
-import { VerifiedMark } from "../components/VerifiedMark";
+import { BroadcastCard } from "../components/BroadcastCard";
+import { SearchHitCard } from "../components/SearchHitCard";
+import { startPrivateConversation } from "../components/FeedCardActionRow";
 import { LocationDriftBanner } from "../components/LocationDriftBanner";
 import type { FeedBroadcast, FeedSearchHit, UserProfile } from "../types/api";
 
@@ -124,13 +120,7 @@ export function FeedScreen({
 
   async function startPrivateReply(broadcastId: string) {
     try {
-      const res = await apiFetch<{ conversation_id: string }>("/conversations", {
-        method: "POST",
-        body: JSON.stringify({
-          broadcast_id: broadcastId,
-          first_message: "Hi",
-        }),
-      });
+      const res = await startPrivateConversation(broadcastId, "Hi");
       onOpenConversation(res.conversation_id);
     } catch {
       // Keep feed stable on failure.
@@ -211,6 +201,9 @@ export function FeedScreen({
               currentUserId={user?.id ?? null}
               onOpenBroadcast={onOpenBroadcast}
               onOpenConversation={onOpenConversation}
+              onPrivateReply={() => void startPrivateReply(item.id)}
+              onBlocked={(senderId) => setSearchHits((rows) => rows.filter((row) => row.sender_id !== senderId))}
+              onRemoved={(broadcastId) => setSearchHits((rows) => rows.filter((row) => row.id !== broadcastId))}
             />
           )}
         />
@@ -255,262 +248,6 @@ export function FeedScreen({
   );
 }
 
-function SearchHitCard({
-  hit,
-  currentUserId,
-  onOpenBroadcast,
-  onOpenConversation,
-}: {
-  hit: FeedSearchHit;
-  currentUserId: string | null;
-  onOpenBroadcast: (id: string) => void;
-  onOpenConversation: (conversationId: string) => void;
-}) {
-  const matchLabel = hit.match_type === "both" ? "Echo + replies" : hit.match_type === "echo" ? "Echo" : "Reply";
-  return (
-    <Card>
-      <View style={styles.headingRow}>
-        <View style={styles.headingCopy}>
-          <View style={styles.senderCluster}>
-            <SenderAvatar fileId={hit.sender_avatar_file_id} name={hit.sender_id === currentUserId ? "You" : hit.sender_display_name} />
-            <Text style={styles.senderName}>{hit.sender_id === currentUserId ? "You" : hit.sender_display_name}</Text>
-            <VerifiedMark verified={hit.sender_is_verified} />
-          </View>
-          {echoAudienceLabels(hit.tags, hit.course_codes, hit.course_code).map((label) => (
-            <View key={label} style={styles.broadcastTagPill}>
-              <Text style={styles.broadcastTagPillText}>{label}</Text>
-            </View>
-          ))}
-        </View>
-        <View style={styles.tagPill}>
-          <Text style={styles.tagPillText}>{matchLabel}</Text>
-        </View>
-      </View>
-      <Pressable onPress={() => onOpenBroadcast(hit.id)}>
-        <EchoBody style={styles.cardText}>{hit.body}</EchoBody>
-      </Pressable>
-      <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(hit.created_at)}</Text>
-      {hit.matches.map((match) => (
-        <View key={match.id} style={styles.nestedMatch}>
-          <Text style={styles.senderName}>
-            {match.sender_id && match.sender_id === currentUserId ? "You" : match.sender_display_name || "Unknown"}
-          </Text>
-          <Text style={styles.nestedMatchBody}>{match.body}</Text>
-          <Text style={styles.sentAtLabel}>
-            {formatBroadcastSentAt(match.created_at)}
-            {match.source === "message" ? " · private reply" : " · feed reply"}
-          </Text>
-          <Pressable
-            onPress={() => (match.conversation_id ? onOpenConversation(match.conversation_id) : onOpenBroadcast(hit.id))}
-            style={styles.replyPill}
-          >
-            <Text style={styles.replyPillText}>{match.conversation_id ? "Open conversation" : "View thread"}</Text>
-          </Pressable>
-        </View>
-      ))}
-    </Card>
-  );
-}
-
-function BroadcastCard({
-  broadcast,
-  currentUserId,
-  onOpenBroadcast,
-  onPrivateReply,
-  onBlocked,
-  onRemoved,
-}: {
-  broadcast: FeedBroadcast;
-  currentUserId: string | null;
-  onOpenBroadcast: (id: string) => void;
-  onPrivateReply: () => void;
-  onBlocked: (senderId: string) => void;
-  onRemoved: (broadcastId: string) => void;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const isOwn = currentUserId === broadcast.sender_id;
-  const featuredReply = broadcast.latest_reply ?? null;
-  const headerName = featuredReply
-    ? currentUserId === featuredReply.sender_id
-      ? "You"
-      : featuredReply.sender_display_name
-    : isOwn
-      ? "You"
-      : broadcast.sender_display_name;
-  const headerVerified = featuredReply ? featuredReply.sender_is_verified : broadcast.sender_is_verified;
-  const headerAvatarId = featuredReply ? featuredReply.sender_avatar_file_id : broadcast.sender_avatar_file_id;
-  const headerAvatarName = featuredReply ? featuredReply.sender_display_name : broadcast.sender_display_name;
-  const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
-
-  async function reportBroadcast() {
-    setMenuOpen(false);
-    try {
-      await pickReasonAndSubmitReport("broadcast", broadcast.id);
-    } catch {
-      // Keep feed stable on failure.
-    }
-  }
-
-  function confirmBlock() {
-    setMenuOpen(false);
-    Alert.alert(
-      `Block ${broadcast.sender_display_name}?`,
-      "You won't see their posts in your feed, including ones already here. They can still see your broadcasts.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Block",
-          style: "destructive",
-          onPress: () => {
-            void (async () => {
-              try {
-                await apiFetch(`/blocks/${broadcast.sender_id}`, { method: "PUT" });
-                onBlocked(broadcast.sender_id);
-              } catch {
-                Alert.alert("Couldn't block this user.");
-              }
-            })();
-          },
-        },
-      ]
-    );
-  }
-
-  function confirmDelete() {
-    setMenuOpen(false);
-    Alert.alert("Delete this Echo?", "It will disappear from everyone's feed.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            try {
-              await apiFetch(`/broadcasts/${broadcast.id}`, { method: "DELETE" });
-              onRemoved(broadcast.id);
-            } catch {
-              Alert.alert("Couldn't delete this Echo.");
-            }
-          })();
-        },
-      },
-    ]);
-  }
-
-  async function hideFromFeed() {
-    setMenuOpen(false);
-    try {
-      await apiFetch(`/broadcasts/${broadcast.id}/hide`, { method: "PUT" });
-      onRemoved(broadcast.id);
-    } catch {
-      Alert.alert("Couldn't remove this Echo from your feed.");
-    }
-  }
-
-  return (
-    <Card style={menuOpen ? { ...styles.cardOverflow, ...styles.cardMenuOpen, ...styles.feedCard } : { ...styles.cardOverflow, ...styles.feedCard }}>
-      <EchoMediaLayout
-        corner={
-          currentUserId ? (
-          <View style={styles.overflowWrap}>
-            <Pressable
-              accessibilityLabel={`More actions for ${isOwn ? "your post" : broadcast.sender_display_name}`}
-              onPress={() => setMenuOpen((value) => !value)}
-              style={styles.overflowButton}
-            >
-              <Text style={styles.overflowButtonText}>⋯</Text>
-            </Pressable>
-            {menuOpen && (
-              <View style={styles.overflowMenu}>
-                {isOwn ? (
-                  <Pressable onPress={confirmDelete} style={styles.overflowMenuItem}>
-                    <Text style={styles.overflowMenuItemText}>Delete</Text>
-                  </Pressable>
-                ) : (
-                  <>
-                    <Pressable onPress={() => void reportBroadcast()} style={styles.overflowMenuItem}>
-                      <Text style={styles.overflowMenuItemText}>Report</Text>
-                    </Pressable>
-                    <Pressable onPress={confirmBlock} style={styles.overflowMenuItem}>
-                      <Text style={styles.overflowMenuItemText}>Block</Text>
-                    </Pressable>
-                    <Pressable onPress={() => void hideFromFeed()} style={styles.overflowMenuItem}>
-                      <Text style={styles.overflowMenuItemText}>Remove from my feed</Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            )}
-          </View>
-          ) : undefined
-        }
-      >
-        <View style={styles.headingCopy}>
-          <View style={styles.senderCluster}>
-            <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} size={36} />
-            <Text style={styles.cardSenderName}>{headerName}</Text>
-            <VerifiedMark verified={headerVerified} />
-          </View>
-          {echoAudienceLabels(broadcast.tags, broadcast.course_codes, broadcast.course_code).map((label) => (
-            <View key={label} style={styles.cardTagPill}>
-              <Text style={styles.cardTagPillText}>{label}</Text>
-            </View>
-          ))}
-        </View>
-      </EchoMediaLayout>
-      {featuredReply ? (
-        <View style={styles.parentQuote}>
-          <Text style={styles.parentQuoteLabel}>Replying to</Text>
-          <Text style={styles.parentQuoteText} numberOfLines={1}>
-            {echoPreview(broadcast.content)}
-          </Text>
-        </View>
-      ) : null}
-      <EchoBody style={styles.cardText}>{featuredReply ? featuredReply.content : broadcast.content}</EchoBody>
-      {(featuredReply ? featuredReply.attachments : broadcast.attachments)?.length ? (
-        <View style={styles.feedMedia}>
-          <EchoAttachments attachments={featuredReply ? featuredReply.attachments : broadcast.attachments} />
-        </View>
-      ) : null}
-      <View style={styles.cardFooter}>
-        <View style={styles.metaRow}>
-          <Text style={styles.cardMeta} numberOfLines={1}>
-            {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
-            {!isOwn ? `  ·  ${(broadcast.distance_m / 1000).toFixed(1)} km away` : ""}
-          </Text>
-          <View style={styles.reachPill}>
-            <Text style={styles.reachPillText}>{reachLabel}</Text>
-          </View>
-          <Pressable
-            onPress={() => onOpenBroadcast(broadcast.id)}
-            accessibilityRole="link"
-            accessibilityLabel={`View thread, ${broadcast.reply_count ?? 0} replies`}
-          >
-            <Text style={styles.replyCountText}>
-              {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
-            </Text>
-          </Pressable>
-        </View>
-        <View style={styles.replyRow}>
-          {!isOwn && (
-            <>
-              <Pressable onPress={() => onOpenBroadcast(broadcast.id)} style={styles.replyPill}>
-                <Text style={styles.replyPillText}>Reply in feed</Text>
-              </Pressable>
-              <Pressable onPress={onPrivateReply} style={styles.replyPill}>
-                <Text style={styles.replyPillText}>Reply privately</Text>
-              </Pressable>
-            </>
-          )}
-          <Pressable onPress={() => onOpenBroadcast(broadcast.id)} style={styles.replyPill}>
-            <Text style={styles.replyPillText}>View thread</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Card>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950 },
   searchWrap: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 8 },
@@ -538,70 +275,6 @@ const styles = StyleSheet.create({
   searchByTags: { color: colors.parchment500, fontSize: 11 },
   searchStatus: { color: colors.parchment500, fontSize: 13, fontFamily: "monospace", marginBottom: 8 },
   searchError: { color: colors.rust400, fontSize: 13, marginBottom: 8 },
-  nestedMatch: { marginTop: 12, marginLeft: 10, paddingLeft: 10, borderLeftWidth: 1, borderLeftColor: colors.dusk600, gap: 6 },
-  nestedMatchBody: { color: colors.parchment300, fontSize: 14 },
-  parentQuote: {
-    marginTop: 10,
-    marginBottom: 2,
-    paddingLeft: 10,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.dusk600,
-  },
-  parentQuoteLabel: { color: colors.parchment500, fontSize: 11, marginBottom: 2 },
-  parentQuoteText: { color: colors.parchment500, fontSize: 14, fontWeight: "400" },
-  cardText: { color: colors.parchment100, fontSize: 16, fontWeight: "400", lineHeight: 22, marginTop: 8, marginBottom: 4 },
-  feedMedia: { marginTop: 8, marginHorizontal: -4 },
-  cardSenderName: { color: colors.parchment100, fontSize: 16, fontWeight: "600" },
-  cardTagPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 2 },
-  cardTagPillText: { color: colors.parchment300, fontSize: 11, fontWeight: "500" },
-  headingRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
-  headingCopy: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 20, rowGap: 8 },
-  senderCluster: { flexDirection: "row", alignItems: "center", gap: 8, marginRight: 8 },
-  senderName: { color: colors.parchment500, fontSize: 12 },
-  sentAtLabel: { color: colors.parchment500, fontSize: 11, fontWeight: "400", fontFamily: "monospace", marginTop: 4 },
-  cardOverflow: { overflow: "visible", zIndex: 1 },
-  cardMenuOpen: { zIndex: 20, elevation: 12 },
-  overflowWrap: { position: "relative", zIndex: 2 },
-  overflowButton: {
-    width: 28,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radii.beacon,
-    borderWidth: 1,
-    borderColor: colors.dusk600,
-    backgroundColor: colors.dusk800,
-  },
-  overflowButtonText: { color: colors.parchment300, fontSize: 16, lineHeight: 16 },
-  overflowMenu: {
-    position: "absolute",
-    top: 32,
-    right: 0,
-    minWidth: 180,
-    borderRadius: radii.beacon,
-    borderWidth: 1,
-    borderColor: colors.dusk600,
-    backgroundColor: colors.dusk800,
-    overflow: "hidden",
-    zIndex: 20,
-    elevation: 16,
-  },
-  overflowMenuItem: { paddingHorizontal: 12, paddingVertical: 10 },
-  overflowMenuItemText: { color: colors.parchment100, fontSize: 14 },
-  broadcastTagPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
-  broadcastTagPillText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
-  feedCard: { paddingBottom: 10 },
-  cardFooter: { marginTop: "auto", paddingTop: 20 },
-  metaRow: { flexDirection: "row", flexWrap: "nowrap", alignItems: "center", gap: 8 },
-  cardMeta: { color: colors.parchment500, fontSize: 9, fontWeight: "400", fontFamily: "monospace" },
-  reachPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 1 },
-  reachPillText: { color: colors.parchment500, fontSize: 8, fontFamily: "monospace" },
-  replyRow: { flexDirection: "row", gap: 8, marginTop: 10 },
-  replyPill: { borderColor: colors.dusk600, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
-  replyPillText: { color: colors.parchment500, fontSize: 9, fontFamily: "monospace" },
-  tagPill: { borderColor: colors.signal500, borderWidth: 1, backgroundColor: `${colors.signal500}1A`, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 2 },
-  tagPillText: { color: colors.signal400, fontSize: 10, fontFamily: "monospace" },
-  replyCountText: { color: colors.parchment500, fontSize: 9, fontFamily: "monospace" },
   emptyTitle: { color: colors.parchment100, fontWeight: "600", textAlign: "center" },
   emptySubtitle: { color: colors.parchment500, fontSize: 13, textAlign: "center", marginTop: 6 },
 });

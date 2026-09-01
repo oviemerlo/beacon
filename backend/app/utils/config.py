@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     COUNTRY_SLOT_LIMIT_FREE: int = 1
     COUNTRY_SLOT_LIMIT_PAID: int = 2
     COUNTRY_SLOT_CHANGE_DAYS: int = 30
+    LINK_PREVIEW_FETCH_TIMEOUT_SECONDS: float = 5
+    LINK_PREVIEW_MAX_BYTES: int = 1_048_576
 
     # Guards POST /internal/jobs/run-digest-now — required header value.
     # Leave unset (empty string) to disable the route entirely in an

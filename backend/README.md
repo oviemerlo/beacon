@@ -85,6 +85,7 @@ app/
     upload_service.py         avatar/attachment S3 uploads, GuardDuty scan results
     moderation_service.py     AWS Rekognition image moderation (fail-open)
     text_moderation_service.py OpenAI Echo text moderation (fail-open; reject blocks create)
+    link_preview_service.py   URL unfurl cache (fail-open; fire-and-forget on create)
     conversation_service.py   DM eligibility (the core guardrail) + messaging
     search_service.py         username search validation
     digest_service.py         weekly digest payload + orchestration
@@ -92,7 +93,7 @@ app/
   jobs/
     digest_job.py    scheduled job, wired in main.py via APScheduler
   api/
-    routes/          auth (OAuth), users, broadcasts, feed, search, messages — thin
+    routes/          auth (OAuth), users, broadcasts, public (unauthenticated share), feed, search, messages — thin
     deps.py          get_current_user
     error_handlers.py  maps domain exceptions to HTTP responses
 alembic/           migrations (0001 creates the full schema + PostGIS extension)
