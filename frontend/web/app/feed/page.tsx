@@ -320,6 +320,10 @@ function BroadcastCard({
   const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
   const isOwn = currentUserId === broadcast.sender_id;
   const featuredReply = broadcast.latest_reply ?? null;
+  const displayedEntity = featuredReply
+    ? { id: featuredReply.id, sender_id: featuredReply.sender_id, sender_display_name: featuredReply.sender_display_name }
+    : { id: broadcast.id, sender_id: broadcast.sender_id, sender_display_name: broadcast.sender_display_name };
+  const isOwnDisplayed = currentUserId === displayedEntity.sender_id;
   const headerName = featuredReply
     ? currentUserId === featuredReply.sender_id
       ? "You"
@@ -357,14 +361,15 @@ function BroadcastCard({
         corner={
           currentUserId ? (
             <FeedCardOverflowMenu
-              senderName={isOwn ? "your post" : broadcast.sender_display_name}
+              senderName={isOwnDisplayed ? "your post" : displayedEntity.sender_display_name}
               actions={buildFeedCardActions({
-                isOwn,
-                broadcastId: broadcast.id,
-                senderId: broadcast.sender_id,
-                senderDisplayName: broadcast.sender_display_name,
+                isOwn: isOwnDisplayed,
+                broadcastId: displayedEntity.id,
+                senderId: displayedEntity.sender_id,
+                senderDisplayName: displayedEntity.sender_display_name,
                 onBlocked,
                 onRemoved,
+                removeFromFeedId: broadcast.id,
               })}
             />
           ) : undefined

@@ -46,21 +46,28 @@ export function EchoAttachments({ attachments }: { attachments?: BroadcastAttach
 
 function AttachmentTile({ file }: { file: BroadcastAttachment }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const image = isImageAttachment(file.content_type, file.original_filename);
 
   useEffect(() => {
     let cancelled = false;
     getUploadUrl(file.file_id)
       .then((next) => {
-        if (!cancelled) setUrl(next);
+        if (!cancelled) {
+          setUrl(next.url);
+          setThumbnailUrl(next.thumbnail_url);
+        }
       })
       .catch(() => {
-        if (!cancelled) setUrl(null);
+        if (!cancelled) {
+          setUrl(null);
+          setThumbnailUrl(null);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [file.file_id]);
+  }, [file.file_id, file.has_thumbnail]);
 
   const className =
     "relative block h-[7.5rem] w-[7.5rem] shrink-0 overflow-hidden rounded-beacon border border-dusk-600 bg-dusk-800";
@@ -70,6 +77,24 @@ function AttachmentTile({ file }: { file: BroadcastAttachment }) {
       <a href={url} target="_blank" rel="noreferrer" className={className}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt={file.original_filename} className="absolute inset-0 h-full w-full object-contain" />
+      </a>
+    );
+  }
+
+  if (file.has_thumbnail && thumbnailUrl) {
+    const tile = (
+      <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={thumbnailUrl} alt={file.original_filename} className="absolute inset-0 h-full w-full object-cover" />
+        <span className="absolute left-2 top-2 rounded-beacon border border-dusk-600 bg-dusk-900 px-1.5 py-0.5 text-[10px] font-mono text-parchment-300">
+          {fileKind(file.content_type, file.original_filename)}
+        </span>
+      </>
+    );
+    if (!url) return <span className={className}>{tile}</span>;
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className={className}>
+        {tile}
       </a>
     );
   }

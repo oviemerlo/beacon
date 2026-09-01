@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, TextInput } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, TextInput, Alert } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
 import { pickReasonAndSubmitReport } from "../helpers/reportActions";
@@ -222,6 +222,34 @@ export function ConversationsScreen({ onOpenConversation }: { onOpenConversation
                     style={styles.actionPill}
                   >
                     <Text style={styles.actionPillText}>Report profile</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      Alert.alert(
+                        "Delete this conversation?",
+                        "It will disappear from your messages. The other person can still see it and reply.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: () => {
+                              void (async () => {
+                                try {
+                                  await apiFetch(`/conversations/${thread.id}/hide`, { method: "PUT" });
+                                  setThreads((rows) => rows.filter((row) => row.id !== thread.id));
+                                } catch {
+                                  Alert.alert("Couldn't delete this conversation.");
+                                }
+                              })();
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                    style={styles.actionPill}
+                  >
+                    <Text style={styles.actionPillText}>Delete</Text>
                   </Pressable>
                 </View>
               </Card>

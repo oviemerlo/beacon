@@ -97,6 +97,14 @@ async def get_by_s3_key(db: AsyncSession, bucket: str, s3_key: str) -> UploadedF
     return result.scalar_one_or_none()
 
 
+async def set_thumbnail(db: AsyncSession, file_id: uuid.UUID, thumbnail_s3_key: str) -> None:
+    row = await db.get(UploadedFile, file_id)
+    if row is None:
+        return
+    row.thumbnail_s3_key = thumbnail_s3_key
+    await db.flush()
+
+
 async def update_scan_status(db: AsyncSession, file_id: uuid.UUID, scan_status: str) -> UploadedFile | None:
     row = await db.get(UploadedFile, file_id)
     if row is None:

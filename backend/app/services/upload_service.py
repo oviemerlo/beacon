@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import os
 import re
+import time
 import unicodedata
 import uuid
 import zipfile
@@ -18,9 +20,11 @@ from botocore.exceptions import BotoCoreError, ClientError
 from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import AsyncSessionLocal
 from app.models.upload import UploadedFile
 from app.models.user import User
 from app.repositories import broadcast_repository, report_repository, upload_repository, user_repository
+from app.services import attachment_thumbnail_service
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 from app.services.moderation_service import ModerationResult, moderate_image_bytes
 from app.services.user_service import can_attach_files
@@ -53,6 +57,8 @@ MODERATION_DECISION_TO_STATUS = {
     "flag": MODERATION_STATUS_FLAGGED,
     "reject": MODERATION_STATUS_REJECTED,
 }
+THUMBNAIL_TYPES = {"application/pdf", DOCX_MIME, XLSX_MIME}
+_recent_thumbnail_schedule: dict[str, float] = {}
 
 GUARDDUTY_STATUS_MAP = {
     "NO_THREATS_FOUND": SCAN_STATUS_CLEAN,
@@ -349,7 +355,7 @@ async def upload_broadcast_attachment(
     if broadcast.sender_id != user.id:
         raise ForbiddenError("You can only attach files to your own Echoes")
 
-    return await _store_upload(
+    row = await _store_upload(
         db,
         user=user,
         context="broadcast_attachment",
@@ -361,6 +367,8 @@ async def upload_broadcast_attachment(
         s3_key=f"broadcast_attachment/{broadcast.id}/{uuid.uuid4()}/placeholder",
         report_target_id=broadcast.id,
     )
+    schedule_attachment_thumbnail(row.id, row.content_type, file_bytes)
+    return row
 
 
 async def public_og_image_url(db: AsyncSession, broadcast_id: uuid.UUID) -> str | None:
@@ -385,7 +393,43 @@ async def public_og_image_url(db: AsyncSession, broadcast_id: uuid.UUID) -> str 
     return None
 
 
-async def get_presigned_url(db: AsyncSession, user: User, file_id: uuid.UUID | str) -> str:
+def _presign(s3_key: str) -> str:
+    return _s3_client().generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.S3_BUCKET_NAME, "Key": s3_key},
+        ExpiresIn=PRESIGNED_URL_EXPIRES_IN,
+    )
+
+
+async def _run_thumbnail_in_background(file_id: uuid.UUID, content_type: str, file_bytes: bytes) -> None:
+    try:
+        thumb = await attachment_thumbnail_service.generate_thumbnail(content_type, file_bytes)
+        if thumb is None:
+            return
+        key = f"broadcast_attachment/thumbnails/{file_id}.png"
+        _put_object(s3_key=key, body=thumb, content_type="image/png")
+        async with AsyncSessionLocal() as db:
+            await upload_repository.set_thumbnail(db, file_id, key)
+            await db.commit()
+    except Exception as exc:
+        logger.error("background attachment thumbnail failed for %s: %s", file_id, exc)
+
+
+def schedule_attachment_thumbnail(file_id: uuid.UUID, content_type: str, file_bytes: bytes) -> None:
+    if content_type not in THUMBNAIL_TYPES:
+        return
+    key = str(file_id)
+    now = time.monotonic()
+    if now - _recent_thumbnail_schedule.get(key, 0) < 30:
+        return
+    _recent_thumbnail_schedule[key] = now
+    try:
+        asyncio.create_task(_run_thumbnail_in_background(file_id, content_type, file_bytes))
+    except RuntimeError:
+        logger.error("no running loop for attachment thumbnail task")
+
+
+async def get_presigned_url(db: AsyncSession, user: User, file_id: uuid.UUID | str) -> dict:
     _ = user
     row = await upload_repository.get_by_id(db, file_id)
     if row is None:
@@ -395,14 +439,17 @@ async def get_presigned_url(db: AsyncSession, user: User, file_id: uuid.UUID | s
     if not _s3_configured():
         raise ValidationError("File storage is not configured")
     try:
-        return _s3_client().generate_presigned_url(
-            "get_object",
-            Params={"Bucket": settings.S3_BUCKET_NAME, "Key": row.s3_key},
-            ExpiresIn=PRESIGNED_URL_EXPIRES_IN,
-        )
+        url = _presign(row.s3_key)
     except (ClientError, BotoCoreError) as exc:
         logger.error("S3 presign failed: %s", exc)
         raise ValidationError("Couldn't generate a download link") from exc
+    thumbnail_url = None
+    if row.thumbnail_s3_key:
+        try:
+            thumbnail_url = _presign(row.thumbnail_s3_key)
+        except (ClientError, BotoCoreError) as exc:
+            logger.error("S3 thumbnail presign failed: %s", exc)
+    return {"url": url, "thumbnail_url": thumbnail_url}
 
 
 async def handle_scan_result_webhook(

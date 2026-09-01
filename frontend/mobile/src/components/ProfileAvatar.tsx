@@ -21,7 +21,7 @@ export function ProfileAvatar({
       return;
     }
     let cancelled = false;
-    const load = scanStatus === "pending" ? waitForUploadUrl(fileId) : getUploadUrl(fileId);
+    const load = scanStatus === "pending" ? waitForUploadUrl(fileId) : getUploadUrl(fileId).then((next) => next.url);
     load
       .then((next) => {
         if (!cancelled) setUrl(next);

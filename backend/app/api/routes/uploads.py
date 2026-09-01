@@ -44,5 +44,4 @@ async def get_upload_url(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    url = await upload_service.get_presigned_url(db, current_user, file_id)
-    return {"url": url}
+    return await upload_service.get_presigned_url(db, current_user, file_id)

@@ -22,7 +22,7 @@ export function SenderAvatar({
     let cancelled = false;
     getUploadUrl(fileId)
       .then((next) => {
-        if (!cancelled) setUrl(next);
+        if (!cancelled) setUrl(next.url);
       })
       .catch(() => {
         if (!cancelled) setUrl(null);

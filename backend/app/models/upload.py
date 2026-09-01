@@ -25,6 +25,7 @@ class UploadedFile(Base):
         UUID(as_uuid=True), ForeignKey("broadcasts.id", ondelete="CASCADE"), nullable=True
     )
     s3_key: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
+    thumbnail_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)

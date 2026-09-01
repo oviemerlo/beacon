@@ -58,6 +58,11 @@ async def mention_candidates(
     return await conversation_service.list_mention_candidates(db, current_user.id, conversation_id, q)
 
 
+@router.put("/{conversation_id}/hide", status_code=204)
+async def hide_conversation(conversation_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await conversation_service.hide_conversation(db, current_user.id, conversation_id)
+
+
 @router.get("/{conversation_id}", response_model=ConversationContextOut)
 async def get_conversation(conversation_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await conversation_service.get_conversation_context(db, current_user.id, conversation_id)

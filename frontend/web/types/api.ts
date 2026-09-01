@@ -110,6 +110,7 @@ export interface BroadcastAttachment {
   file_id: string;
   original_filename: string;
   content_type: string;
+  has_thumbnail?: boolean;
 }
 
 export interface LinkPreview {

@@ -147,6 +147,7 @@ class BroadcastAttachmentOut(BaseModel):
     file_id: uuid.UUID
     original_filename: str
     content_type: str
+    has_thumbnail: bool = False
 
 
 class LinkPreviewOut(BaseModel):

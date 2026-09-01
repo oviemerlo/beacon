@@ -19,6 +19,9 @@ cp .env.example .env
 # moderation (separate IAM user, AmazonRekognitionReadOnlyAccess only)
 # OPENAI_API_KEY for Echo text moderation (omni-moderation-latest)
 # INTERNAL_WEBHOOK_SECRET for the GuardDuty scan-result Lambda callback
+# DOCX/XLSX first-page thumbs need `soffice` on PATH (libreoffice-writer and
+# libreoffice-calc). The backend Dockerfile installs them; locally use
+# `brew install --cask libreoffice` or the distro packages.
 
 # Requires Postgres with the PostGIS extension available (postgis/postgis
 # Docker image, or `CREATE EXTENSION postgis;` on a managed instance that
@@ -83,6 +86,7 @@ app/
     feed_service.py           feed assembly + impression recording
     broadcast_service.py      broadcast create/delete
     upload_service.py         avatar/attachment S3 uploads, GuardDuty scan results
+    attachment_thumbnail_service.py PDF/Office first-page thumbs (fail-open; fire-and-forget)
     moderation_service.py     AWS Rekognition image moderation (fail-open)
     text_moderation_service.py OpenAI Echo text moderation (fail-open; reject blocks create)
     link_preview_service.py   URL unfurl cache (fail-open; fire-and-forget on create)

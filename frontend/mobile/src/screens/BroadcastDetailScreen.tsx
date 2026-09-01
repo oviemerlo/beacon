@@ -16,11 +16,18 @@ import { Card } from "../components/Shared";
 import { EchoMediaLayout } from "../components/EchoAttachments";
 import { LinkPreviewList } from "../components/LinkPreviewCard";
 import { ShareButton } from "../components/ShareButton";
+import { buildFeedCardActions, FeedCardOverflowMenu } from "../components/FeedCardOverflowMenu";
 import { SenderAvatar } from "../components/SenderAvatar";
 import { VerifiedMark } from "../components/VerifiedMark";
 import type { BroadcastThread, FeedBroadcast, UserProfile } from "../types/api";
 
-export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) {
+export function BroadcastDetailScreen({
+  broadcastId,
+  onLeaveThread,
+}: {
+  broadcastId: string;
+  onLeaveThread: () => void;
+}) {
   const [thread, setThread] = useState<BroadcastThread | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [loadingThread, setLoadingThread] = useState(true);
@@ -31,6 +38,19 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
   const [error, setError] = useState<string | null>(null);
 
   const canAttach = canAttachFiles(Boolean(currentUser?.is_verified), Boolean(currentUser?.is_admin));
+  const currentUserId = currentUser?.id ?? null;
+
+  function onReplyRemoved(broadcastIdToRemove: string) {
+    setThread((current) =>
+      current ? { ...current, replies: current.replies.filter((r) => r.id !== broadcastIdToRemove) } : current
+    );
+  }
+
+  function onReplyBlocked(senderId: string) {
+    setThread((current) =>
+      current ? { ...current, replies: current.replies.filter((r) => r.sender_id !== senderId) } : current
+    );
+  }
 
   useEffect(() => {
     apiFetch<UserProfile>("/users/me").then(setCurrentUser).catch(() => setCurrentUser(null));
@@ -118,14 +138,26 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
       {threadError && <Text style={styles.error}>{threadError}</Text>}
       {thread && (
         <Card style={styles.threadCard}>
-          <ThreadItem item={thread.parent} />
+          <ThreadItem
+            item={thread.parent}
+            currentUserId={currentUserId}
+            onRemoved={onLeaveThread}
+            onBlocked={onLeaveThread}
+          />
           <Text style={styles.repliesHeader}>Replies ({thread.replies.length})</Text>
           {thread.replies.length === 0 ? (
             <Text style={styles.hint}>No public replies yet.</Text>
           ) : (
             <ScrollView style={styles.repliesList} nestedScrollEnabled>
               {thread.replies.map((item) => (
-                <ThreadItem key={item.id} item={item} isReply />
+                <ThreadItem
+                  key={item.id}
+                  item={item}
+                  isReply
+                  currentUserId={currentUserId}
+                  onRemoved={onReplyRemoved}
+                  onBlocked={onReplyBlocked}
+                />
               ))}
             </ScrollView>
           )}
@@ -164,12 +196,42 @@ export function BroadcastDetailScreen({ broadcastId }: { broadcastId: string }) 
   );
 }
 
-function ThreadItem({ item, isReply = false }: { item: FeedBroadcast; isReply?: boolean }) {
+function ThreadItem({
+  item,
+  isReply = false,
+  currentUserId,
+  onRemoved,
+  onBlocked,
+}: {
+  item: FeedBroadcast;
+  isReply?: boolean;
+  currentUserId: string | null;
+  onRemoved: (id: string) => void;
+  onBlocked: (senderId: string) => void;
+}) {
+  const isOwn = currentUserId === item.sender_id;
   const reachLabel = reachBadgeLabel(item.is_global, item.radius_meters);
   const audienceLabels = echoAudienceLabels(item.tags, item.course_codes, item.course_code);
   return (
     <View style={[isReply && styles.replyItem]}>
-      <EchoMediaLayout attachments={item.attachments}>
+      <EchoMediaLayout
+        attachments={item.attachments}
+        corner={
+          currentUserId ? (
+            <FeedCardOverflowMenu
+              senderName={isOwn ? "your post" : item.sender_display_name}
+              actions={buildFeedCardActions({
+                isOwn,
+                broadcastId: item.id,
+                senderId: item.sender_id,
+                senderDisplayName: item.sender_display_name,
+                onBlocked,
+                onRemoved,
+              })}
+            />
+          ) : undefined
+        }
+      >
         <View style={styles.senderRow}>
           <SenderAvatar fileId={item.sender_avatar_file_id} name={item.sender_display_name} />
           <Text style={styles.senderName}>{item.sender_display_name}</Text>

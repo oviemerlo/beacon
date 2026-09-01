@@ -60,15 +60,16 @@ export async function uploadBroadcastAttachment(
   });
 }
 
-export async function getUploadUrl(fileId: string): Promise<string> {
-  const res = await apiFetch<{ url: string }>(`/uploads/${fileId}/url`);
-  return res.url;
+export async function getUploadUrl(fileId: string): Promise<{ url: string; thumbnail_url: string | null }> {
+  const res = await apiFetch<{ url: string; thumbnail_url?: string | null }>(`/uploads/${fileId}/url`);
+  return { url: res.url, thumbnail_url: res.thumbnail_url ?? null };
 }
 
 export async function waitForUploadUrl(fileId: string): Promise<string> {
   for (let attempt = 0; attempt < SCAN_POLL_TRIES; attempt += 1) {
     try {
-      return await getUploadUrl(fileId);
+      const urls = await getUploadUrl(fileId);
+      return urls.url;
     } catch (error) {
       const waiting = error instanceof ApiError && error.status === 400;
       if (!waiting || attempt === SCAN_POLL_TRIES - 1) throw error;

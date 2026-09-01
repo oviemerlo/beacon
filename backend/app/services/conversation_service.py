@@ -175,6 +175,12 @@ async def mark_mention_read(db: AsyncSession, user_id: uuid.UUID, notification_i
     await db.commit()
 
 
+async def hide_conversation(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> None:
+    conversation = await _assert_participant(db, user_id, conversation_id)
+    await conversation_repository.hide_for_user(db, user_id, conversation.id)
+    await db.commit()
+
+
 async def list_conversations_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[dict]:
     conversations = await conversation_repository.list_for_user(db, user_id)
     mention_conversation_ids = await notification_repository.unread_mention_conversation_ids(db, user_id)

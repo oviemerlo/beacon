@@ -13,6 +13,7 @@ export function buildFeedCardActions({
   senderDisplayName,
   onBlocked,
   onRemoved,
+  removeFromFeedId,
 }: {
   isOwn: boolean;
   broadcastId: string;
@@ -20,7 +21,9 @@ export function buildFeedCardActions({
   senderDisplayName: string;
   onBlocked: (senderId: string) => void;
   onRemoved: (broadcastId: string) => void;
+  removeFromFeedId?: string;
 }): OverflowAction[] {
+  const hideId = removeFromFeedId ?? broadcastId;
   if (isOwn) {
     return [
       {
@@ -91,8 +94,8 @@ export function buildFeedCardActions({
       onSelect: () => {
         void (async () => {
           try {
-            await apiFetch(`/broadcasts/${broadcastId}/hide`, { method: "PUT" });
-            onRemoved(broadcastId);
+                    await apiFetch(`/broadcasts/${hideId}/hide`, { method: "PUT" });
+                    onRemoved(hideId);
           } catch {
             Alert.alert("Couldn't remove this Echo from your feed.");
           }

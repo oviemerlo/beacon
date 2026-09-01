@@ -56,21 +56,28 @@ export function EchoAttachments({ attachments }: { attachments?: BroadcastAttach
 
 function AttachmentTile({ file }: { file: BroadcastAttachment }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const image = isImageAttachment(file.content_type, file.original_filename);
 
   useEffect(() => {
     let cancelled = false;
     getUploadUrl(file.file_id)
       .then((next) => {
-        if (!cancelled) setUrl(next);
+        if (!cancelled) {
+          setUrl(next.url);
+          setThumbnailUrl(next.thumbnail_url);
+        }
       })
       .catch(() => {
-        if (!cancelled) setUrl(null);
+        if (!cancelled) {
+          setUrl(null);
+          setThumbnailUrl(null);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [file.file_id]);
+  }, [file.file_id, file.has_thumbnail]);
 
   return (
     <Pressable
@@ -80,6 +87,11 @@ function AttachmentTile({ file }: { file: BroadcastAttachment }) {
     >
       {image && url ? (
         <Image source={{ uri: url }} style={styles.image} resizeMode="contain" />
+      ) : file.has_thumbnail && thumbnailUrl ? (
+        <View style={styles.thumbWrap}>
+          <Image source={{ uri: thumbnailUrl }} style={styles.image} resizeMode="cover" />
+          <Text style={styles.kindOverlay}>{fileKind(file.content_type, file.original_filename)}</Text>
+        </View>
       ) : (
         <View style={styles.doc}>
           <Text style={styles.kind}>{fileKind(file.content_type, file.original_filename)}</Text>
@@ -121,6 +133,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dusk800,
   },
   image: { width: "100%", height: "100%" },
+  thumbWrap: { width: "100%", height: "100%" },
+  kindOverlay: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    color: colors.parchment300,
+    fontSize: 10,
+    fontFamily: "monospace",
+    borderWidth: 1,
+    borderColor: colors.dusk600,
+    backgroundColor: colors.dusk900,
+    borderRadius: radii.beacon,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    overflow: "hidden",
+  },
   doc: { flex: 1, justifyContent: "flex-end", padding: 10, gap: 6 },
   kind: {
     alignSelf: "flex-start",

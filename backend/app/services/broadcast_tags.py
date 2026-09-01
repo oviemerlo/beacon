@@ -134,6 +134,7 @@ def _attachment_payloads(rows) -> list[dict]:
             "file_id": str(row.id),
             "original_filename": row.original_filename,
             "content_type": row.content_type,
+            "has_thumbnail": row.thumbnail_s3_key is not None,
         }
         for row in rows
     ]

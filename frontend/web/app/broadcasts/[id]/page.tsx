@@ -8,6 +8,7 @@ import { CharacterCountdown, EchoBody } from "@/components/EchoBody";
 import { EchoMediaLayout } from "@/components/EchoAttachments";
 import { LinkPreviewList } from "@/components/LinkPreviewCard";
 import { ShareButton } from "@/components/ShareButton";
+import { buildFeedCardActions, FeedCardOverflowMenu } from "@/components/FeedCardOverflowMenu";
 import { BROADCAST_CONTENT_MAX } from "@/helpers/broadcast-content";
 import { SenderAvatar } from "@/components/SenderAvatar";
 import { VerifiedMark } from "@/components/VerifiedMark";
@@ -33,6 +34,17 @@ export default function BroadcastDetailPage() {
   const [threadError, setThreadError] = useState<string | null>(null);
 
   const canAttach = canAttachFiles(Boolean(me?.is_verified), Boolean(me?.is_admin));
+  const currentUserId = me?.id ?? null;
+
+  function onReplyRemoved(broadcastId: string) {
+    setThread((current) => (current ? { ...current, replies: current.replies.filter((r) => r.id !== broadcastId) } : current));
+  }
+
+  function onReplyBlocked(senderId: string) {
+    setThread((current) =>
+      current ? { ...current, replies: current.replies.filter((r) => r.sender_id !== senderId) } : current
+    );
+  }
 
   useEffect(() => {
     clientFetch<UserProfile>("/users/me").then(setMe).catch(() => setMe(null));
@@ -124,13 +136,27 @@ export default function BroadcastDetailPage() {
         {threadError && <p className="text-rust-400 text-sm mb-4">{threadError}</p>}
         {thread && (
           <div className="card mb-4">
-            <ThreadItem item={thread.parent} isParent />
+            <ThreadItem
+              item={thread.parent}
+              isParent
+              currentUserId={currentUserId}
+              onRemoved={() => router.push("/feed")}
+              onBlocked={() => router.push("/feed")}
+            />
             <div className="mt-4 border-t border-dusk-700 pt-4 flex flex-col gap-3">
               <p className="text-parchment-500 text-xs font-mono">Replies ({thread.replies.length})</p>
               {thread.replies.length === 0 ? (
                 <p className="text-parchment-500 text-sm">No public replies yet.</p>
               ) : (
-                thread.replies.map((item) => <ThreadItem key={item.id} item={item} />)
+                thread.replies.map((item) => (
+                  <ThreadItem
+                    key={item.id}
+                    item={item}
+                    currentUserId={currentUserId}
+                    onRemoved={onReplyRemoved}
+                    onBlocked={onReplyBlocked}
+                  />
+                ))
               )}
             </div>
           </div>
@@ -168,13 +194,43 @@ export default function BroadcastDetailPage() {
   );
 }
 
-function ThreadItem({ item, isParent = false }: { item: FeedBroadcast; isParent?: boolean }) {
+function ThreadItem({
+  item,
+  isParent = false,
+  currentUserId,
+  onRemoved,
+  onBlocked,
+}: {
+  item: FeedBroadcast;
+  isParent?: boolean;
+  currentUserId: string | null;
+  onRemoved: (id: string) => void;
+  onBlocked: (senderId: string) => void;
+}) {
+  const isOwn = currentUserId === item.sender_id;
   const reachLabel = reachBadgeLabel(item.is_global, item.radius_meters);
   const audienceLabels = echoAudienceLabels(item.tags, item.course_codes, item.course_code);
 
   return (
     <div className={isParent ? "" : "border border-dusk-700 rounded-beacon p-3"}>
-      <EchoMediaLayout attachments={item.attachments}>
+      <EchoMediaLayout
+        attachments={item.attachments}
+        corner={
+          currentUserId ? (
+            <FeedCardOverflowMenu
+              senderName={isOwn ? "your post" : item.sender_display_name}
+              actions={buildFeedCardActions({
+                isOwn,
+                broadcastId: item.id,
+                senderId: item.sender_id,
+                senderDisplayName: item.sender_display_name,
+                onBlocked,
+                onRemoved,
+              })}
+            />
+          ) : undefined
+        }
+      >
         <div className="flex items-center flex-wrap gap-x-5 gap-y-2">
           <p className="text-parchment-500 text-xs inline-flex items-center gap-1.5">
             <SenderAvatar fileId={item.sender_avatar_file_id} name={item.sender_display_name} />

@@ -8,7 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.broadcast import Broadcast
-from app.models.conversation import Conversation, Message
+from app.models.conversation import Conversation, HiddenConversation, Message
+
+
+def _hidden_conversation_ids(user_id: uuid.UUID):
+    return select(HiddenConversation.conversation_id).where(HiddenConversation.user_id == user_id)
 
 
 async def find_existing(db: AsyncSession, initiator_id: uuid.UUID, recipient_id: uuid.UUID, broadcast_id: uuid.UUID) -> Conversation | None:
@@ -76,6 +80,7 @@ async def count_unread_for_user(db: AsyncSession, user_id: uuid.UUID) -> int:
         .join(Conversation, Conversation.id == Message.conversation_id)
         .where(
             (Conversation.initiator_id == user_id) | (Conversation.recipient_id == user_id),
+            Conversation.id.not_in(_hidden_conversation_ids(user_id)),
             Message.sender_id != user_id,
             Message.read_at.is_(None),
         )
@@ -133,10 +138,18 @@ async def list_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[Conversati
     result = await db.execute(
         select(Conversation)
         .where((Conversation.initiator_id == user_id) | (Conversation.recipient_id == user_id))
+        .where(Conversation.id.not_in(_hidden_conversation_ids(user_id)))
         .options(selectinload(Conversation.origin_broadcast).selectinload(Broadcast.sender))
         .order_by(func.coalesce(latest_sent_at, Conversation.created_at).desc())
     )
     return list(result.scalars().all())
+
+
+async def hide_for_user(db: AsyncSession, user_id: uuid.UUID, conversation_id: uuid.UUID) -> None:
+    existing = await db.get(HiddenConversation, (user_id, conversation_id))
+    if existing is None:
+        db.add(HiddenConversation(user_id=user_id, conversation_id=conversation_id))
+        await db.flush()
 
 
 async def latest_message_for_conversation(db: AsyncSession, conversation_id: uuid.UUID) -> Message | None:
@@ -160,6 +173,7 @@ async def search_messages_for_user(
         )
         .join(Conversation, Conversation.id == Message.conversation_id)
         .where(or_(Conversation.initiator_id == user_id, Conversation.recipient_id == user_id))
+        .where(Conversation.id.not_in(_hidden_conversation_ids(user_id)))
         .where(Message.search_vector.op("@@")(tsquery))
         .group_by(Message.conversation_id)
         .order_by(func.max(Message.sent_at).desc())

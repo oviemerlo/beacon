@@ -54,7 +54,9 @@ function FeedStackNavigator() {
         )}
       </FeedStack.Screen>
       <FeedStack.Screen name="BroadcastDetail" options={{ title: "Reply" }}>
-        {({ route }: any) => <BroadcastDetailScreen broadcastId={route.params.broadcastId} />}
+        {({ route, navigation }: any) => (
+          <BroadcastDetailScreen broadcastId={route.params.broadcastId} onLeaveThread={() => navigation.goBack()} />
+        )}
       </FeedStack.Screen>
       <FeedStack.Screen name="ConversationDetail" options={{ title: "Conversation" }}>
         {({ route }: any) => <ConversationDetailScreen conversationId={route.params.conversationId} />}

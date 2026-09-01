@@ -214,6 +214,23 @@ export default function ConversationsPage() {
                   >
                     Report profile
                   </button>
+                  <button
+                    className="feed-card-action"
+                    onClick={async () => {
+                      const confirmed = window.confirm(
+                        "Delete this conversation?\n\nIt will disappear from your messages. The other person can still see it and reply."
+                      );
+                      if (!confirmed) return;
+                      try {
+                        await clientFetch(`/conversations/${t.id}/hide`, { method: "PUT" });
+                        setThreads((rows) => rows.filter((row) => row.id !== t.id));
+                      } catch {
+                        window.alert("Couldn't delete this conversation.");
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}

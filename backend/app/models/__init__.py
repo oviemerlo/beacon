@@ -1,5 +1,5 @@
 from app.models.broadcast import Broadcast, BroadcastCourse, BroadcastImpression, BroadcastTag, HiddenBroadcast  # noqa: F401
-from app.models.conversation import BlockedUser, Conversation, Message  # noqa: F401
+from app.models.conversation import BlockedUser, Conversation, HiddenConversation, Message  # noqa: F401
 from app.models.link_preview import BroadcastLinkPreview, LinkPreview, MessageLinkPreview  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.group import Group, GroupMember, GroupMessage  # noqa: F401
