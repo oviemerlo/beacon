@@ -32,9 +32,12 @@ export default async function HomePage() {
           <h1 className="font-display text-5xl sm:text-6xl font-bold max-w-xl leading-[1.05]">
             Find your people, wherever you land.
           </h1>
-          <p className="mt-5 max-w-md text-parchment-500 text-lg">
-            EchoToCrowd connects newcomers and local businesses with people nearby who
-            share where they&apos;re from.
+          <p className="mt-5 max-w-2xl text-parchment-500 text-base leading-relaxed">
+            <span className="block">EchoToCrowd connects newcomers, local businesses, and students</span>
+            <span className="block">to nearby communities who share your culture, roots, and interests.</span>
+          </p>
+          <p className="tag-pill tag-pill-active mt-4">
+            + Find coursemates for assignments & study groups
           </p>
         </div>
 
@@ -55,6 +58,16 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      <footer className="max-w-6xl mx-auto py-8 border-t border-dusk-800 text-parchment-500 text-sm">
+        <p>EchoToCrowd — Oakville, Ontario, Canada</p>
+        <p>
+          Contact:{" "}
+          <a href="mailto:info@echotocrowd.com" className="text-signal-400 hover:text-signal-300">
+            info@echotocrowd.com
+          </a>
+        </p>
+      </footer>
     </main>
   );
 }
