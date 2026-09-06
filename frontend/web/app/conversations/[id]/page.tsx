@@ -7,6 +7,7 @@ import { AppNav } from "@/components/AppNav";
 import { LinkPreviewList } from "@/components/LinkPreviewCard";
 import { clientFetch } from "@/helpers/client-api";
 import { applyMention, mentionTriggerFromInput, splitMentionParts } from "@/helpers/mentions";
+import { FeedCardOverflowMenu } from "@/components/FeedCardOverflowMenu";
 import { promptAndSubmitReport } from "@/helpers/report-actions";
 import { formatMessageSentAt } from "@/helpers/time";
 import type { ConversationContext, MentionCandidate, Message, UserProfile } from "@/types/api";
@@ -207,7 +208,7 @@ export default function ConversationDetailPage() {
               return (
                 <div key={m.id} className={`flex w-full ${isMine ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`card py-2.5 px-3.5 w-fit max-w-[75%] ${
+                    className={`card overflow-visible py-2.5 px-3.5 w-fit max-w-[75%] ${
                       mentionedMe ? "border-signal-500 bg-signal-500/10" : ""
                     }`}
                   >
@@ -229,27 +230,28 @@ export default function ConversationDetailPage() {
                       )}
                     </p>
                     <LinkPreviewList previews={m.link_previews} />
-                    <div className="flex items-center justify-between gap-4 mt-2">
-                      {!isMine ? (
-                        <button
-                          className="text-[10px] font-mono text-rust-400 hover:text-rust-300"
-                          onClick={async () => {
-                            try {
-                              await promptAndSubmitReport("message", m.id, "this message");
-                              window.alert("Report submitted.");
-                            } catch {
-                              window.alert("Couldn't submit report.");
-                            }
-                          }}
-                        >
-                          Report
-                        </button>
-                      ) : (
-                        <span />
-                      )}
+                    <div className="flex items-center justify-end gap-2 mt-2">
                       <p className="text-parchment-500 text-[10px] font-mono">
                         {formatMessageSentAt(m.sent_at)}
                       </p>
+                      {!isMine && (
+                        <FeedCardOverflowMenu
+                          senderName={context?.other_participant_display_name ?? "this message"}
+                          actions={[
+                            {
+                              label: "Report",
+                              onSelect: async () => {
+                                try {
+                                  await promptAndSubmitReport("message", m.id, "this message");
+                                  window.alert("Report submitted.");
+                                } catch {
+                                  window.alert("Couldn't submit report.");
+                                }
+                              },
+                            },
+                          ]}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>

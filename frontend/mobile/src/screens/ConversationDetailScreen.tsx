@@ -6,6 +6,7 @@ import { applyMention, mentionTriggerFromInput, splitMentionParts } from "../hel
 import { pickReasonAndSubmitReport } from "../helpers/reportActions";
 import { formatMessageSentAt } from "../helpers/time";
 import { colors, radii } from "../theme/tokens";
+import { FeedCardOverflowMenu } from "../components/FeedCardOverflowMenu";
 import { LinkPreviewList } from "../components/LinkPreviewCard";
 import type { ConversationContext, MentionCandidate, Message, UserProfile } from "../types/api";
 
@@ -211,24 +212,28 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
                 </Text>
                 <LinkPreviewList previews={item.link_previews} />
                 <View style={styles.bubbleMetaRow}>
-                  {!isMine ? (
-                    <Pressable
-                      onPress={async () => {
-                        try {
-                          await pickReasonAndSubmitReport("message", item.id);
-                        } catch {
-                          // Keep conversation stable on failure.
-                        }
-                      }}
-                    >
-                      <Text style={styles.reportText}>Report</Text>
-                    </Pressable>
-                  ) : (
-                    <View />
-                  )}
                   <Text style={styles.bubbleTime}>
                     {formatMessageSentAt(item.sent_at)}
                   </Text>
+                  {!isMine && (
+                    <FeedCardOverflowMenu
+                      senderName={context?.other_participant_display_name ?? "this message"}
+                      actions={[
+                        {
+                          label: "Report",
+                          onSelect: () => {
+                            void (async () => {
+                              try {
+                                await pickReasonAndSubmitReport("message", item.id);
+                              } catch {
+                                // Keep conversation stable on failure.
+                              }
+                            })();
+                          },
+                        },
+                      ]}
+                    />
+                  )}
                 </View>
               </View>
             </View>
@@ -322,6 +327,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.beacon,
     padding: 10,
     maxWidth: "78%",
+    overflow: "visible",
   },
   bubbleMentioned: { borderColor: colors.signal500, backgroundColor: `${colors.signal500}1A` },
   mentionedLabel: { color: colors.signal400, fontSize: 10, fontFamily: "monospace", marginBottom: 4 },
@@ -344,9 +350,8 @@ const styles = StyleSheet.create({
   bubbleText: { color: colors.parchment100, fontSize: 14 },
   bubbleTextUnread: { fontWeight: "700" },
   bubbleTextRead: { fontWeight: "400" },
-  bubbleMetaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
-  bubbleTime: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace", marginLeft: 12 },
-  reportText: { color: colors.rust400, fontSize: 9, fontFamily: "monospace" },
+  bubbleMetaRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, marginTop: 6, overflow: "visible" },
+  bubbleTime: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
   composerRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 16, borderTopWidth: 1, borderTopColor: colors.dusk700 },
   input: {
     flex: 1,
