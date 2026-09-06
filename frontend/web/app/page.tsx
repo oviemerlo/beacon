@@ -8,16 +8,16 @@ export default async function HomePage() {
 
   return (
     <main className="min-h-screen px-6">
-      <header className="max-w-6xl mx-auto py-6 flex items-center justify-between">
-        <a href="/" className="flex items-center gap-3 text-signal-400">
-          <img src="/echotocrowd-favicon.png" alt="EchoToCrowd logo" className="h-12 w-12 rounded-md" />
-          <span className="font-display text-2xl font-bold tracking-tight">ECHOTOCROWD</span>
+      <header className="max-w-6xl mx-auto py-6 flex items-center justify-between gap-3">
+        <a href="/" className="flex min-w-0 items-center gap-2 sm:gap-3 text-signal-400">
+          <img src="/echotocrowd-favicon.png" alt="EchoToCrowd logo" className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-md shrink-0" />
+          <span className="font-display text-sm sm:text-lg md:text-2xl font-bold tracking-tight truncate">ECHOTOCROWD</span>
         </a>
-        <div className="flex items-center gap-3">
-          <a href="/login" className="px-4 py-2 rounded-beacon text-parchment-300 hover:text-parchment-100 transition-all duration-200 transform hover:scale-105 hover:text-base">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+          <a href="/login" className="whitespace-nowrap px-2 py-1.5 sm:px-4 sm:py-2 rounded-beacon text-xs sm:text-sm text-parchment-300 hover:text-parchment-100 transition-all duration-200">
             Join now
           </a>
-          <a href="/login" className="btn-primary px-6 py-2 text-sm transition-all duration-200 transform hover:scale-105 hover:text-base">
+          <a href="/login" className="btn-primary whitespace-nowrap px-3 py-1.5 sm:px-6 sm:py-2 text-xs sm:text-sm transition-all duration-200">
             Sign in
           </a>
         </div>
@@ -37,7 +37,7 @@ export default async function HomePage() {
             <span className="block">to nearby communities who share your culture, roots, and interests.</span>
           </p>
           <p className="tag-pill tag-pill-active mt-4">
-            + Find coursemates for assignments & study groups
+            + Find course mates for assignments & study groups
           </p>
         </div>
 
