@@ -264,6 +264,16 @@ export interface AdminStats {
   new_users_7d: number;
 }
 
+export interface AdminUser {
+  id: string;
+  username: string;
+  display_name: string;
+  email: string | null;
+  is_admin: boolean;
+  is_verified: boolean;
+  created_at: string;
+}
+
 export interface TokenPair {
   access_token: string;
   refresh_token: string;

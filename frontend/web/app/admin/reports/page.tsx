@@ -3,6 +3,7 @@ import { apiFetch, getCurrentUserOrNull } from "@/helpers/api";
 import { reasonLabel } from "@/helpers/reports";
 import type { AdminStats, ReportQueueItem } from "@/types/api";
 import { revalidatePath } from "next/cache";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 async function resolveReportAction(formData: FormData) {
@@ -34,7 +35,12 @@ export default async function AdminReportsPage() {
     <div className="min-h-screen">
       <AppNav />
       <main className="max-w-3xl mx-auto px-5 py-6">
-        <h1 className="font-display text-xl font-bold mb-5">Admin reports</h1>
+        <div className="flex items-center justify-between gap-3 mb-5">
+          <h1 className="font-display text-xl font-bold">Admin reports</h1>
+          <Link href="/admin/users" className="text-sm text-signal-400 hover:text-signal-300">
+            Manage admins
+          </Link>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
           <div className="card">
             <p className="text-parchment-500 text-xs font-mono">Total users</p>

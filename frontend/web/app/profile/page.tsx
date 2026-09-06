@@ -96,17 +96,6 @@ export default async function ProfilePage() {
           <p className="text-parchment-500 text-sm">{blockedCount} blocked</p>
         </div>
 
-        <div className="card">
-          <p className="font-medium">Discoverable in broadcasts</p>
-          <p className="text-parchment-500 text-sm mt-1">
-            Controls whether you're counted in aggregate "people near you" stats — like the weekly
-            digest — for others who share your tags. This never exposes your identity individually.
-          </p>
-          <p className="text-parchment-500 text-xs font-mono mt-3">
-            Current: {user.discoverable_in_broadcasts ? "On" : "Off"} — TODO: wire toggle to PATCH /users/me
-          </p>
-        </div>
-
         {user.is_admin && (
           <div className="card mt-4">
             <p className="font-medium mb-2">Moderation</p>

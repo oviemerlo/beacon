@@ -135,17 +135,6 @@ export function ProfileScreen({
         <Text style={styles.emptyText}>{blockedCount} blocked</Text>
       </Card>
 
-      <Card style={{ marginBottom: 24 }}>
-        <Text style={styles.sectionLabel}>Discoverable in broadcasts</Text>
-        <Text style={styles.emptyText}>
-          Controls whether you're counted in aggregate "people near you" stats — like the weekly
-          digest — for others who share your tags. This never exposes your identity individually.
-        </Text>
-        <Text style={styles.todo}>
-          Current: {user.discoverable_in_broadcasts ? "On" : "Off"} — TODO: wire toggle to PATCH /users/me
-        </Text>
-      </Card>
-
       {user.is_admin ? (
         <Card style={{ marginBottom: 24 }}>
           <Text style={styles.sectionLabel}>Moderation</Text>
@@ -195,7 +184,6 @@ const styles = StyleSheet.create({
   errorText: { color: colors.rust400, fontSize: 12, marginTop: 8 },
   sectionLabel: { color: colors.parchment100, fontWeight: "600", marginBottom: 8 },
   emptyText: { color: colors.parchment500, fontSize: 13, marginBottom: 8 },
-  todo: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace", marginTop: 10 },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
   pillText: { color: colors.parchment300, fontSize: 11, fontFamily: "monospace" },

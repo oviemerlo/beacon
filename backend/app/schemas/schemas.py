@@ -290,6 +290,23 @@ class AdminStatsOut(BaseModel):
     new_users_7d: int
 
 
+class AdminRoleIn(BaseModel):
+    is_admin: bool
+
+
+class AdminUserOut(BaseModel):
+    id: uuid.UUID
+    username: str
+    display_name: str
+    email: str | None = None
+    is_admin: bool = False
+    is_verified: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class SchoolSearchOut(BaseModel):
     id: int
     name: str

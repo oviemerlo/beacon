@@ -51,6 +51,16 @@ async def get_by_username(db: AsyncSession, username: str) -> User | None:
     return result.scalar_one_or_none()
 
 
+async def get_by_email(db: AsyncSession, email: str) -> User | None:
+    result = await db.execute(
+        select(User)
+        .join(OAuthAccount, OAuthAccount.user_id == User.id)
+        .where(func.lower(OAuthAccount.email) == email.lower())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def username_exists(db: AsyncSession, username: str) -> bool:
     result = await db.execute(select(User.id).where(User.username == username))
     return result.scalar_one_or_none() is not None
@@ -208,6 +218,35 @@ async def list_all(db: AsyncSession) -> list[User]:
     paginate this once the user count makes a single SELECT * impractical."""
     result = await db.execute(select(User))
     return list(result.scalars().all())
+
+
+async def list_admins(db: AsyncSession) -> list[User]:
+    result = await db.execute(select(User).where(User.is_admin.is_(True)).order_by(User.created_at.asc()))
+    return list(result.scalars().all())
+
+
+async def set_admin(db: AsyncSession, user_id: uuid.UUID, is_admin: bool) -> User | None:
+    user = await db.get(User, user_id)
+    if user is None:
+        return None
+    user.is_admin = is_admin
+    await db.flush()
+    return user
+
+
+async def oauth_emails_for_users(db: AsyncSession, user_ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
+    if not user_ids:
+        return {}
+    result = await db.execute(
+        select(OAuthAccount.user_id, OAuthAccount.email)
+        .where(OAuthAccount.user_id.in_(user_ids))
+        .where(OAuthAccount.email.is_not(None))
+    )
+    emails: dict[uuid.UUID, str] = {}
+    for user_id, email in result.all():
+        if user_id not in emails and email:
+            emails[user_id] = email
+    return emails
 
 
 async def admin_signup_stats(db: AsyncSession) -> tuple[int, int, int]:

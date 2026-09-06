@@ -97,5 +97,9 @@ class Settings(BaseSettings):
     MAX_IMAGE_UPLOAD_BYTES: int = 10 * 1024 * 1024
     MAX_DOCUMENT_UPLOAD_BYTES: int = 20 * 1024 * 1024
 
+    # Promotes this OAuth email to admin on startup if the user exists.
+    # Empty = no-op. Only ever grants admin; never removes it.
+    BOOTSTRAP_ADMIN_EMAIL: str = ""
+
 
 settings = Settings()

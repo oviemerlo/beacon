@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -11,9 +12,13 @@ from slowapi import _rate_limit_exceeded_handler
 from app.api.routes import admin, auth, blocks, broadcasts, feed, geocode, internal, messages, public, reports, schools, search, tags, uploads, users
 from app.api.routes.search import limiter
 from app.api.error_handlers import register_error_handlers
+from app.db.session import AsyncSessionLocal
+from app.repositories import user_repository
 from app.utils.config import settings
 from app.jobs.digest_job import run_weekly_digest
 from app.jobs.reverification_job import run_daily_reverification_check
+
+logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
@@ -26,6 +31,18 @@ async def lifespan(app: FastAPI):
     # Daily school reverification — 08:00 UTC. Windows are per-user (verified_at + 3 months).
     scheduler.add_job(run_daily_reverification_check, CronTrigger(hour=8))
     scheduler.start()
+    if settings.BOOTSTRAP_ADMIN_EMAIL:
+        async with AsyncSessionLocal() as db:
+            user = await user_repository.get_by_email(db, settings.BOOTSTRAP_ADMIN_EMAIL)
+            if user and not user.is_admin:
+                user.is_admin = True
+                await db.commit()
+                logger.info("Bootstrapped admin: %s", settings.BOOTSTRAP_ADMIN_EMAIL)
+            elif not user:
+                logger.warning(
+                    "BOOTSTRAP_ADMIN_EMAIL set but no user found yet for %s — will retry on next restart",
+                    settings.BOOTSTRAP_ADMIN_EMAIL,
+                )
     yield
     scheduler.shutdown()
 

@@ -19,6 +19,7 @@ cp .env.example .env
 # moderation (separate IAM user, AmazonRekognitionReadOnlyAccess only)
 # OPENAI_API_KEY for Echo text moderation (omni-moderation-latest)
 # INTERNAL_WEBHOOK_SECRET for the GuardDuty scan-result Lambda callback
+# BOOTSTRAP_ADMIN_EMAIL to auto-promote that OAuth email to admin on startup
 # DOCX/XLSX first-page thumbs need `soffice` on PATH (libreoffice-writer and
 # libreoffice-calc). The backend Dockerfile installs them; locally use
 # `brew install --cask libreoffice` or the distro packages.
