@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clientFetch } from "@/helpers/client-api";
 
@@ -244,6 +245,12 @@ function TagStep({ onDone }: { onDone: () => void }) {
       <button onClick={finish} disabled={saving} className="btn-primary w-full">
         {saving ? "Saving…" : "Finish setup"}
       </button>
+      <p className="text-xs text-parchment-500 mt-4 text-center">
+        By signing in, you agree to our{" "}
+        <Link href="/terms" className="underline hover:text-parchment-100">Terms</Link>
+        {" "}and{" "}
+        <Link href="/privacy" className="underline hover:text-parchment-100">Privacy Policy</Link>.
+      </p>
     </>
   );
 }

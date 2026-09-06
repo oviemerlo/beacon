@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getCurrentUserOrNull } from "@/helpers/api";
 import { SignalPing } from "@/components/SignalPing";
 
@@ -66,6 +67,11 @@ export default async function HomePage() {
           <a href="mailto:info@echotocrowd.com" className="text-signal-400 hover:text-signal-300">
             info@echotocrowd.com
           </a>
+        </p>
+        <p className="mt-2">
+          <Link href="/terms" className="hover:text-parchment-100 transition-colors">Terms of Service</Link>
+          {" · "}
+          <Link href="/privacy" className="hover:text-parchment-100 transition-colors">Privacy Policy</Link>
         </p>
       </footer>
     </main>

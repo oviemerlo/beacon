@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function LoginPage() {
@@ -22,6 +24,12 @@ export default function LoginPage() {
         <button className="btn-secondary w-full flex items-center justify-center gap-2" disabled>
           Continue with Apple (mobile app only for now)
         </button>
+        <p className="text-xs text-parchment-500 mt-4 text-center">
+          By signing in, you agree to our{" "}
+          <Link href="/terms" className="underline hover:text-parchment-100">Terms</Link>
+          {" "}and{" "}
+          <Link href="/privacy" className="underline hover:text-parchment-100">Privacy Policy</Link>.
+        </p>
       </div>
     </main>
   );
