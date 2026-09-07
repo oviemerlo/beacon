@@ -48,7 +48,6 @@ export default function NewBroadcastPage() {
   const activeRadiusIdx = reach === "local" ? localRadiusIdx : regionalRadiusIdx;
   const activeRadiusMeters = activeRadiusSteps[activeRadiusIdx];
   const activeRadiusLabel = radiusLabel(activeRadiusMeters);
-  const reachSummary = reach === "global" ? "Global" : `Reach ${activeRadiusLabel}`;
   const selectedTags = profileTags.filter((tag) => selectedTagIds.includes(tag.id));
   const availableProfileTags = profileTags.filter((tag) => !selectedTagIds.includes(tag.id));
   const availableCourses = myCourses.filter((course) => !selectedCourseCodes.includes(course));
@@ -148,8 +147,7 @@ export default function NewBroadcastPage() {
     <div className="min-h-screen">
       <AppNav />
       <main className="max-w-2xl mx-auto px-5 py-6">
-        <h1 className="font-display text-xl font-bold">New broadcast</h1>
-        <p className="text-parchment-500 text-sm mt-2 mb-8">{reachSummary}</p>
+        <h1 className="font-display text-xl font-bold mb-8">New broadcast</h1>
 
         <textarea
           className="input-field min-h-[120px] resize-none"
@@ -190,19 +188,28 @@ export default function NewBroadcastPage() {
           </button>
         </div>
         {!canUseRegional && <p className="text-parchment-500 text-xs mb-4">{REGIONAL_REACH_LOCKED_MESSAGE}</p>}
-        {reach !== "global" && (
-          <input
-            type="range"
-            min={0}
-            max={activeRadiusSteps.length - 1}
-            value={activeRadiusIdx}
-            onChange={(e) =>
-              reach === "local" ? setLocalRadiusIdx(Number(e.target.value)) : setRegionalRadiusIdx(Number(e.target.value))
-            }
-            className="w-full accent-signal-500 mb-10"
-          />
+        {reach === "global" ? (
+          <p className="text-signal-400 text-xs font-semibold font-mono mb-10">Global</p>
+        ) : (
+          <div className="relative mb-10 pt-6">
+            <span
+              className="pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap text-xs font-semibold font-mono text-signal-400"
+              style={{ left: `${(activeRadiusIdx / Math.max(activeRadiusSteps.length - 1, 1)) * 100}%` }}
+            >
+              {activeRadiusLabel}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={activeRadiusSteps.length - 1}
+              value={activeRadiusIdx}
+              onChange={(e) =>
+                reach === "local" ? setLocalRadiusIdx(Number(e.target.value)) : setRegionalRadiusIdx(Number(e.target.value))
+              }
+              className="w-full accent-signal-500"
+            />
+          </div>
         )}
-        {reach === "global" && <div className="mb-10" />}
 
         <div className="mb-10">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-4">

@@ -23,6 +23,53 @@ import { getMyCourses, getVerificationStatus } from "../helpers/schoolVerificati
 import { colors, radii } from "../theme/tokens";
 import type { BroadcastCreatePayload, Tag, UserProfile } from "../types/api";
 
+const SLIDER_THUMB = 28;
+
+function ReachValueSlider({
+  steps,
+  index,
+  onIndexChange,
+}: {
+  steps: readonly number[];
+  index: number;
+  onIndexChange: (index: number) => void;
+}) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const [labelWidth, setLabelWidth] = useState(0);
+  const max = Math.max(steps.length - 1, 1);
+  const pct = Math.min(1, Math.max(0, index / max));
+  const travel = Math.max(trackWidth - SLIDER_THUMB, 0);
+  const thumbCenter = SLIDER_THUMB / 2 + pct * travel;
+  const labelLeft =
+    trackWidth === 0
+      ? 0
+      : Math.min(Math.max(thumbCenter - labelWidth / 2, 0), Math.max(trackWidth - labelWidth, 0));
+
+  return (
+    <View style={styles.sliderWrap}>
+      <Text
+        onLayout={(event) => setLabelWidth(event.nativeEvent.layout.width)}
+        style={[styles.sliderValue, { left: labelLeft }]}
+      >
+        {radiusLabel(steps[index])}
+      </Text>
+      <View onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}>
+        <Slider
+          style={styles.slider}
+          minimumValue={0}
+          maximumValue={steps.length - 1}
+          step={1}
+          value={index}
+          onValueChange={(value) => onIndexChange(Math.round(value))}
+          minimumTrackTintColor={colors.signal500}
+          maximumTrackTintColor={colors.dusk700}
+          thumbTintColor={colors.signal500}
+        />
+      </View>
+    </View>
+  );
+}
+
 export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const tabBarHeight = useBottomTabBarHeight();
   const [content, setContent] = useState("");
@@ -43,8 +90,6 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const activeRadiusSteps = reach === "local" ? LOCAL_RADIUS_STEPS_M : REGIONAL_RADIUS_STEPS_M;
   const activeRadiusIdx = reach === "local" ? localRadiusIdx : regionalRadiusIdx;
   const activeRadiusMeters = activeRadiusSteps[activeRadiusIdx];
-  const activeRadiusLabel = radiusLabel(activeRadiusMeters);
-  const reachSummary = reach === "global" ? "Global" : `Reach ${activeRadiusLabel}`;
   const selectedTags = profileTags.filter((tag) => selectedTagIds.includes(tag.id));
   const availableProfileTags = profileTags.filter((tag) => !selectedTagIds.includes(tag.id));
   const availableCourses = myCourses.filter((course) => !selectedCourseCodes.includes(course));
@@ -159,7 +204,6 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
       scrollEnabled
     >
       <Text style={styles.title}>New broadcast</Text>
-      <Text style={styles.summary}>{reachSummary}</Text>
 
       <TextInput
         style={styles.textarea}
@@ -201,20 +245,15 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         </View>
       </View>
       {!canUseRegional && <Text style={styles.reachHint}>{REGIONAL_REACH_LOCKED_MESSAGE}</Text>}
-      {reach !== "global" && (
-        <Slider
-          style={styles.slider}
-          minimumValue={0}
-          maximumValue={activeRadiusSteps.length - 1}
-          step={1}
-          value={activeRadiusIdx}
-          onValueChange={(value) => (reach === "local" ? setLocalRadiusIdx(value) : setRegionalRadiusIdx(value))}
-          minimumTrackTintColor={colors.signal500}
-          maximumTrackTintColor={colors.dusk700}
-          thumbTintColor={colors.signal500}
+      {reach === "global" ? (
+        <Text style={styles.globalReachValue}>Global</Text>
+      ) : (
+        <ReachValueSlider
+          steps={activeRadiusSteps}
+          index={activeRadiusIdx}
+          onIndexChange={(value) => (reach === "local" ? setLocalRadiusIdx(value) : setRegionalRadiusIdx(value))}
         />
       )}
-      {reach === "global" && <View style={styles.sliderSpacer} />}
 
       <View style={styles.selectedHeader}>
         <Text style={styles.label}>Selected for this broadcast</Text>
@@ -309,8 +348,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950 },
   contentContainer: { padding: 16, flexGrow: 1 },
-  title: { color: colors.parchment100, fontSize: 20, fontWeight: "700" },
-  summary: { color: colors.parchment500, fontSize: 13, marginTop: 8, marginBottom: 24 },
+  title: { color: colors.parchment100, fontSize: 20, fontWeight: "700", marginBottom: 24 },
   textarea: {
     backgroundColor: colors.dusk800,
     borderColor: colors.dusk600,
@@ -332,8 +370,10 @@ const styles = StyleSheet.create({
   pillSlotStart: { flex: 1, alignItems: "flex-start" },
   pillSlotCenter: { flex: 1, alignItems: "center" },
   pillSlotEnd: { flex: 1, alignItems: "flex-end" },
-  slider: { marginBottom: 32 },
-  sliderSpacer: { marginBottom: 32 },
+  sliderWrap: { marginBottom: 32 },
+  sliderValue: { position: "absolute", top: 0, color: colors.signal400, fontSize: 12, fontWeight: "700", fontFamily: "monospace" },
+  slider: { marginTop: 20 },
+  globalReachValue: { color: colors.signal400, fontSize: 12, fontWeight: "700", fontFamily: "monospace", marginBottom: 32 },
   pill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 14, paddingVertical: 8 },
   pillActive: { borderColor: colors.signal500, backgroundColor: `${colors.signal500}1A` },
   pillDisabled: { opacity: 0.4 },
