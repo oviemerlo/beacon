@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Alert, View, Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
 import { applyMention, mentionTriggerFromInput, splitMentionParts } from "../helpers/mentions";
@@ -8,7 +8,7 @@ import { formatMessageSentAt } from "../helpers/time";
 import { colors, radii } from "../theme/tokens";
 import { FeedCardOverflowMenu } from "../components/FeedCardOverflowMenu";
 import { LinkPreviewList } from "../components/LinkPreviewCard";
-import type { ConversationContext, MentionCandidate, Message, UserProfile } from "../types/api";
+import type { ConversationContext, ConversationParticipant, MentionCandidate, Message, UserProfile } from "../types/api";
 
 export function ConversationDetailScreen({ conversationId }: { conversationId: string }) {
   const navigation = useNavigation<any>();
@@ -163,33 +163,116 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
   }
 
   const originWasMine = context?.origin_broadcast_sender_id === currentUserId;
+  const isGroup = Boolean(context?.name);
+  const participants = context?.participants ?? [];
+  const isAdmin = participants.some(
+    (participant) => participant.user_id === currentUserId && participant.role === "admin"
+  );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: isGroup ? context?.name ?? "Group" : "Conversation",
+      headerBackTitle: isGroup ? "Back to groups" : "Back to messages",
+    });
+  }, [context?.name, isGroup, navigation]);
+
+  function senderLabel(senderId: string): string {
+    if (String(senderId) === String(currentUserId)) return "You";
+    if (!isGroup) return context?.other_participant_display_name ?? "Unknown";
+    return participants.find((participant) => participant.user_id === senderId)?.display_name ?? "Unknown";
+  }
+
+  function leaveGroup() {
+    Alert.alert(
+      "Leave this group?",
+      "You can rejoin later if the invite link is still active.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              try {
+                await apiFetch(`/groups/${conversationId}/leave`, { method: "POST" });
+                navigation.navigate("Groups", { screen: "GroupsHome" });
+              } catch {
+                Alert.alert("Couldn't leave this group.");
+              }
+            })();
+          },
+        },
+      ]
+    );
+  }
+
+  async function promote(participant: ConversationParticipant) {
+    try {
+      await apiFetch(`/groups/${conversationId}/participants/${participant.user_id}/promote`, {
+        method: "POST",
+      });
+      await load();
+    } catch {
+      Alert.alert("Couldn't promote this member.");
+    }
+  }
 
   return (
     <View style={styles.container}>
       <Pressable
-        onPress={() => navigation.getParent()?.navigate("Messages", { screen: "ConversationsHome" })}
+        onPress={() =>
+          isGroup
+            ? navigation.navigate("Groups", { screen: "GroupsHome" })
+            : navigation.navigate("Messages", { screen: "ConversationsHome" })
+        }
         style={styles.backLink}
       >
-        <Text style={styles.backLinkText}>Back to messages</Text>
+        <Text style={styles.backLinkText}>{isGroup ? "Back to groups" : "Back to messages"}</Text>
       </Pressable>
+      {isGroup && (
+        <Pressable onPress={leaveGroup} style={styles.backLink}>
+          <Text style={styles.backLinkText}>Leave group</Text>
+        </Pressable>
+      )}
       <FlatList
         ref={listRef}
         data={messages}
         keyExtractor={(m) => m.id}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          context ? (
-            <View style={[styles.row, originWasMine ? styles.rowOutgoing : styles.rowIncoming]}>
-              <View style={styles.originHeader}>
-                <Text style={styles.contextLabel}>
-                  {originWasMine
-                    ? "Your broadcast:"
-                    : `Broadcast from ${context.origin_broadcast_sender_display_name}:`}
-                </Text>
-                <Text style={styles.contextPreview}>{context.origin_broadcast_preview}</Text>
+          <>
+            {context && !isGroup ? (
+              <View style={[styles.row, originWasMine ? styles.rowOutgoing : styles.rowIncoming]}>
+                <View style={styles.originHeader}>
+                  <Text style={styles.contextLabel}>
+                    {originWasMine
+                      ? "Your broadcast:"
+                      : `Broadcast from ${context.origin_broadcast_sender_display_name}:`}
+                  </Text>
+                  <Text style={styles.contextPreview}>{context.origin_broadcast_preview}</Text>
+                </View>
               </View>
-            </View>
-          ) : null
+            ) : null}
+            {isGroup && isAdmin ? (
+              <View style={styles.membersCard}>
+                <Text style={styles.membersTitle}>Members</Text>
+                {participants.map((participant) => (
+                  <View key={participant.user_id} style={styles.memberRow}>
+                    <Text style={styles.memberName}>
+                      {participant.display_name}
+                      {participant.user_id === currentUserId ? " (you)" : ""}
+                      {participant.role === "admin" ? " · admin" : ""}
+                    </Text>
+                    {participant.role !== "admin" ? (
+                      <Pressable onPress={() => void promote(participant)}>
+                        <Text style={styles.promoteText}>Make admin</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </>
         }
         renderItem={({ item }) => {
           if (!currentUserId) return null;
@@ -201,7 +284,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
               <View style={[styles.bubble, mentionedMe && styles.bubbleMentioned]}>
                 {mentionedMe && <Text style={styles.mentionedLabel}>You were mentioned</Text>}
                 <Text style={[styles.senderLabel, !isUnread && styles.senderLabelRead]}>
-                  {isMine ? "You:" : `${context?.other_participant_display_name ?? "Unknown"}:`}
+                  {senderLabel(item.sender_id)}:
                 </Text>
                 <Text style={[styles.bubbleText, isUnread ? styles.bubbleTextUnread : styles.bubbleTextRead]}>
                   {splitMentionParts(item.body).map((part, index) => (
@@ -217,7 +300,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
                   </Text>
                   {!isMine && (
                     <FeedCardOverflowMenu
-                      senderName={context?.other_participant_display_name ?? "this message"}
+                      senderName={senderLabel(item.sender_id)}
                       actions={[
                         {
                           label: "Report",
@@ -303,6 +386,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   backLinkText: { color: colors.parchment300, fontSize: 10, fontFamily: "monospace" },
+  membersCard: {
+    backgroundColor: colors.dusk900,
+    borderColor: colors.dusk700,
+    borderWidth: 1,
+    borderRadius: radii.beacon,
+    padding: 12,
+    marginBottom: 8,
+  },
+  membersTitle: { color: colors.parchment100, fontWeight: "600", marginBottom: 8 },
+  memberRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingVertical: 6 },
+  memberName: { color: colors.parchment100, fontSize: 14, flex: 1 },
+  promoteText: { color: colors.signal400, fontSize: 13, fontWeight: "600" },
   listContent: { padding: 16, gap: 10, paddingBottom: 12, flexGrow: 1 },
   originHeader: {
     maxWidth: "78%",

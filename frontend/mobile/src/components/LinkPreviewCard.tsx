@@ -1,4 +1,6 @@
 import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { parseJoinToken, setPendingJoinToken } from "../helpers/joinLink";
+import { openJoinToken } from "../navigation/rootNavigation";
 import { colors, radii } from "../theme/tokens";
 import type { LinkPreview } from "../types/api";
 
@@ -23,7 +25,14 @@ export function LinkPreviewCard({ preview }: { preview: LinkPreview }) {
     <Pressable
       accessibilityRole="link"
       accessibilityLabel={title}
-      onPress={() => void Linking.openURL(preview.normalized_url)}
+      onPress={() => {
+        const token = parseJoinToken(preview.normalized_url);
+        if (token) {
+          if (!openJoinToken(token)) setPendingJoinToken(token);
+          return;
+        }
+        void Linking.openURL(preview.normalized_url);
+      }}
       style={preview.image_url ? styles.imageCard : styles.textCard}
     >
       {preview.image_url ? (

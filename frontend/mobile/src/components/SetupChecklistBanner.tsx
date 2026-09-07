@@ -50,7 +50,7 @@ export function SetupChecklistBanner({ style }: { style?: ViewStyle }) {
       </View>
       <View style={styles.list}>
         {incompleteRequired.map((item) => (
-          <Pressable key={item.key} onPress={() => openSetupHref(item.action_href, navigation)}>
+          <Pressable key={item.key} onPress={() => openSetupHref(item.action_href, navigation as any)}>
             <Text style={styles.link}>{item.label}</Text>
           </Pressable>
         ))}
@@ -58,7 +58,7 @@ export function SetupChecklistBanner({ style }: { style?: ViewStyle }) {
       {optionalIncomplete ? (
         <>
           <View style={styles.divider} />
-          <Pressable style={styles.optionalRow} onPress={() => openSetupHref(optionalIncomplete.action_href, navigation)}>
+          <Pressable style={styles.optionalRow} onPress={() => openSetupHref(optionalIncomplete.action_href, navigation as any)}>
             <Text style={[styles.link, { flex: 1 }]}>{optionalIncomplete.label}</Text>
             <Text style={styles.optionalBadge}>Optional</Text>
           </Pressable>

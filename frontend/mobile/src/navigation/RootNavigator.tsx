@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavigationContainer, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, Image, Text, View } from "react-native";
+import { ActivityIndicator, Image, Linking, Text, View } from "react-native";
 
 import { TokenStore } from "../helpers/secureStore";
 import { apiFetch } from "../helpers/api";
+import { parseJoinToken, setPendingJoinToken, takePendingJoinToken } from "../helpers/joinLink";
 import { LoginScreen } from "../screens/LoginScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { FeedScreen } from "../screens/FeedScreen";
@@ -14,16 +15,21 @@ import { NewBroadcastScreen } from "../screens/NewBroadcastScreen";
 import { BroadcastDetailScreen } from "../screens/BroadcastDetailScreen";
 import { ConversationsScreen } from "../screens/ConversationsScreen";
 import { ConversationDetailScreen } from "../screens/ConversationDetailScreen";
+import { GroupsScreen } from "../screens/GroupsScreen";
+import { NewGroupScreen } from "../screens/NewGroupScreen";
+import { JoinGroupScreen } from "../screens/JoinGroupScreen";
 import { FollowTagsScreen } from "../screens/FollowTagsScreen";
 import { BlockedUsersScreen } from "../screens/BlockedUsersScreen";
 import { AdminReportsScreen } from "../screens/AdminReportsScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { colors } from "../theme/tokens";
 import type { UnreadCount, UserProfile } from "../types/api";
+import { navigationRef, openJoinToken } from "./rootNavigation";
 
 const RootStack = createNativeStackNavigator();
 const FeedStack = createNativeStackNavigator();
 const ConversationsStack = createNativeStackNavigator();
+const GroupsStack = createNativeStackNavigator();
 const ProfileStack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
 
@@ -77,6 +83,37 @@ function ConversationsStackNavigator() {
         {({ route }: any) => <ConversationDetailScreen conversationId={route.params.conversationId} />}
       </ConversationsStack.Screen>
     </ConversationsStack.Navigator>
+  );
+}
+
+function GroupsStackNavigator() {
+  return (
+    <GroupsStack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.dusk900 }, headerTintColor: colors.parchment100 }}>
+      <GroupsStack.Screen name="GroupsHome" options={{ title: "Groups" }}>
+        {({ navigation }: any) => (
+          <GroupsScreen
+            onOpenConversation={(conversationId) => navigation.navigate("ConversationDetail", { conversationId })}
+            onCreateGroup={() => navigation.navigate("NewGroup")}
+          />
+        )}
+      </GroupsStack.Screen>
+      <GroupsStack.Screen name="NewGroup" options={{ title: "New group" }}>
+        {({ navigation }: any) => (
+          <NewGroupScreen onDone={(conversationId) => navigation.replace("ConversationDetail", { conversationId })} />
+        )}
+      </GroupsStack.Screen>
+      <GroupsStack.Screen name="JoinGroup" options={{ title: "Join group" }}>
+        {({ route, navigation }: any) => (
+          <JoinGroupScreen
+            token={route.params.token}
+            onJoined={(conversationId) => navigation.replace("ConversationDetail", { conversationId })}
+          />
+        )}
+      </GroupsStack.Screen>
+      <GroupsStack.Screen name="ConversationDetail" options={{ title: "Conversation", headerBackTitle: "Back to groups" }}>
+        {({ route }: any) => <ConversationDetailScreen conversationId={route.params.conversationId} />}
+      </GroupsStack.Screen>
+    </GroupsStack.Navigator>
   );
 }
 
@@ -149,6 +186,7 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
             Feed: focused ? "radio" : "radio-outline",
             Broadcast: focused ? "megaphone" : "megaphone-outline",
             Messages: focused ? "chatbubbles" : "chatbubbles-outline",
+            Groups: focused ? "people" : "people-outline",
             Profile: focused ? "person" : "person-outline",
           } as const;
           return <Ionicons name={icons[route.name as keyof typeof icons]} size={size} color={color} />;
@@ -164,6 +202,7 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
         component={ConversationsStackNavigator}
         options={{ tabBarBadge: mentionUnread > 0 ? "@" : messageUnread > 0 ? messageUnread : undefined }}
       />
+      <Tabs.Screen name="Groups" component={GroupsStackNavigator} />
       <Tabs.Screen name="Profile">{() => <ProfileStackNavigator onSignOut={onSignOut} />}</Tabs.Screen>
     </Tabs.Navigator>
   );
@@ -171,12 +210,47 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
 
 type AuthState = "loading" | "signed-out" | "needs-onboarding" | "signed-in";
 
+function flushPendingJoin(signedIn: boolean) {
+  if (!signedIn) return;
+  const token = takePendingJoinToken();
+  if (token) openJoinToken(token);
+}
+
 export function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>("loading");
+  const authStateRef = useRef(authState);
+  authStateRef.current = authState;
 
   useEffect(() => {
     checkSession();
   }, []);
+
+  useEffect(() => {
+    void Linking.getInitialURL().then((url) => {
+      const token = parseJoinToken(url ?? "");
+      if (!token) return;
+      if (authStateRef.current === "signed-in") {
+        if (!openJoinToken(token)) setPendingJoinToken(token);
+      } else {
+        setPendingJoinToken(token);
+      }
+    });
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      const token = parseJoinToken(url);
+      if (!token) return;
+      if (authStateRef.current === "signed-in") {
+        if (!openJoinToken(token)) setPendingJoinToken(token);
+      } else {
+        setPendingJoinToken(token);
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (authState !== "signed-in" || !navigationRef.isReady()) return;
+    flushPendingJoin(true);
+  }, [authState]);
 
   async function checkSession() {
     const hasSession = await TokenStore.hasSession();
@@ -201,7 +275,11 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navTheme}
+      onReady={() => flushPendingJoin(authStateRef.current === "signed-in")}
+    >
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         {authState === "signed-out" && (
           <RootStack.Screen name="Login">
