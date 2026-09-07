@@ -238,10 +238,6 @@ function TagStep({ onDone }: { onDone: () => void }) {
       <p className="text-parchment-500 text-sm mt-2 mb-5">
         Tags boost what shows up first in your feed — they never restrict who can see your broadcasts.
       </p>
-      <p className="text-parchment-500 text-xs font-mono mb-4">
-        TODO: wire to GET /tags once that endpoint exists — render as selectable tag-pill grid
-        (nationality tags + hobby tags), POST selected IDs via PATCH /users/me.
-      </p>
       <button onClick={finish} disabled={saving} className="btn-primary w-full">
         {saving ? "Saving…" : "Finish setup"}
       </button>
