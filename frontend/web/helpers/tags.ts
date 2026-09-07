@@ -11,13 +11,14 @@ export const FREE_REACH_LABEL = "10 km reach";
 export const COUNTRY_COMMUNITY_LIMIT = 2;
 export const COUNTRY_SLOT_CHANGE_DAYS = 30;
 export const AMPLIFY_LABEL = "AMPLIFY";
-export const AMPLIFY_BLURB = "Reach related communities across multiple countries with one selection.";
+export const AMPLIFY_BLURB =
+  "Amplify: advanced audience targeting for Regional Communities — reach up to 100 km, matched by region.";
 export const AMPLIFY_EXAMPLES = ["Sub-Saharan Africa", "Caribbean", "South Asia"] as const;
 export const AMPLIFY_PRICE_HINT = "Available with Amplify · $30/mo";
 export const PAID_REACH_LABEL = "Up to 100 km reach";
 export const AMPLIFY_AUDIENCE_LABEL = "Amplify audience";
-export const CAMPUS_SCHOOL_BLURB = "Connect with students from your verified institution.";
-export const CAMPUS_PLAN_HINT = "Campus · $5/mo";
+export const CAMPUS_SCHOOL_BLURB = "Connect with students from your verified institution — free to join.";
+export const CAMPUS_PLAN_HINT = "Campus · $5/mo to extend reach to 100 km";
 export function countrySlotLimit(plan: PlanId): number | null {
   if (plan === "amplify") return null;
   if (plan === "free") return 1;
@@ -72,7 +73,7 @@ export const PLANS: Record<PlanId, { name: string; price: string; meaning: strin
   free: { name: "Free", price: "$0", meaning: "Try EchoToCrowd locally" },
   campus: { name: "Campus", price: "$5/mo", meaning: "Connect for verified students" },
   connect: { name: "Connect", price: "$7/mo", meaning: "Full individual experience" },
-  amplify: { name: "Amplify", price: "$30/mo", meaning: "Advanced audience targeting" },
+  amplify: { name: "Amplify", price: "$30/mo", meaning: AMPLIFY_BLURB },
 };
 
 export function resolvePlan(isVerified: boolean, isAdmin = false, accountType: AccountType = "individual"): PlanId {
@@ -93,6 +94,15 @@ export function planDetailLine(plan: PlanId): string {
   if (plan === "free") return `${PLANS.free.price} · ${FREE_REACH_LABEL} · 1 country community`;
   if (plan === "amplify") return `${PLANS.amplify.price} · ${PAID_REACH_LABEL} · ${AMPLIFY_AUDIENCE_LABEL}`;
   return `${PLANS[plan].price} · ${PAID_REACH_LABEL} · 2 country communities`;
+}
+
+/** Amplify pricing/upsell lives on the Regional Communities card, not a standalone plan card. */
+export function followTagsShowsPlanCard(plan: PlanId): boolean {
+  return plan !== "amplify";
+}
+
+export function regionalCommunitiesPriceLine(canFollowRegion: boolean): string {
+  return canFollowRegion ? planDetailLine("amplify") : AMPLIFY_PRICE_HINT;
 }
 
 export function countrySelectionLine(count: number, limit: number | null, isAdmin: boolean): string {

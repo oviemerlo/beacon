@@ -10,7 +10,6 @@ import { apiFetch } from "../helpers/api";
 import {
   AMPLIFY_BLURB,
   AMPLIFY_EXAMPLES,
-  AMPLIFY_PRICE_HINT,
   CAMPUS_PLAN_HINT,
   CAMPUS_SCHOOL_BLURB,
   countryChangeHint,
@@ -22,7 +21,9 @@ import {
   countrySelectionLine,
   formatNextChangeAvailable,
   lockedCountryIds,
+  followTagsShowsPlanCard,
   planDetailLine,
+  regionalCommunitiesPriceLine,
   ECHO_TAGS_SUBTITLE,
   EMPTY_SECTION_QUERIES,
   EMPTY_TAG_GROUPS,
@@ -216,11 +217,13 @@ export function FollowTagsScreen() {
         <Text style={styles.title}>Echo Tags</Text>
         <Text style={styles.subtitle}>{ECHO_TAGS_SUBTITLE}</Text>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{planCopy.name}</Text>
-          <Text style={styles.planStatus}>{planCopy.meaning}</Text>
-          <Text style={styles.planMeta}>{planDetailLine(plan)}</Text>
-        </View>
+        {followTagsShowsPlanCard(plan) ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>{planCopy.name}</Text>
+            <Text style={styles.planStatus}>{planCopy.meaning}</Text>
+            <Text style={styles.planMeta}>{planDetailLine(plan)}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>{countrySectionTitle(countryLimit)}</Text>
@@ -286,9 +289,10 @@ export function FollowTagsScreen() {
               <Text style={styles.premiumBadge}>{REGIONAL_TAGS_PREMIUM_LABEL}</Text>
             </View>
           )}
+          <Text style={canFollowRegion ? styles.hint : styles.body}>{AMPLIFY_BLURB}</Text>
           {canFollowRegion ? (
             <>
-              <Text style={styles.hint}>{AMPLIFY_BLURB}</Text>
+              <Text style={styles.planMeta}>{regionalCommunitiesPriceLine(canFollowRegion)}</Text>
               {selectedTagsForSection("region", tagGroups, followedTagIds).length > 0 ? (
                 <View style={styles.selectedGroup}>
                   <Text style={styles.selectedLabel}>Selected</Text>
@@ -316,14 +320,13 @@ export function FollowTagsScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.body}>{AMPLIFY_BLURB}</Text>
               <Text style={styles.examples}>{AMPLIFY_EXAMPLES.map(displayTagLabel).join(" · ")}</Text>
               <View style={styles.actionRow}>
                 <Pressable style={styles.secondaryButton} onPress={() => setShowLockedRegions((open) => !open)}>
                   <Text style={styles.secondaryButtonText}>{showLockedRegions ? "Hide regions" : "View regions"}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.hint}>{AMPLIFY_PRICE_HINT}</Text>
+              <Text style={styles.hint}>{regionalCommunitiesPriceLine(canFollowRegion)}</Text>
               {showLockedRegions ? (
                 <View style={{ marginTop: 12 }}>
                   <TagChipRow
@@ -341,8 +344,8 @@ export function FollowTagsScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>School Community</Text>
-          <Text style={styles.planMeta}>{CAMPUS_PLAN_HINT}</Text>
           <Text style={styles.body}>{CAMPUS_SCHOOL_BLURB}</Text>
+          <Text style={[styles.planMeta, { marginBottom: 10 }]}>{CAMPUS_PLAN_HINT}</Text>
           <SchoolVerification
             onVerifiedChange={(verified) => {
               setSchoolVerified(verified);

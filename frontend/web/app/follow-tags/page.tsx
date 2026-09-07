@@ -11,7 +11,6 @@ import { clientFetch } from "@/helpers/client-api";
 import {
   AMPLIFY_BLURB,
   AMPLIFY_EXAMPLES,
-  AMPLIFY_PRICE_HINT,
   CAMPUS_PLAN_HINT,
   CAMPUS_SCHOOL_BLURB,
   type AccountType,
@@ -23,7 +22,9 @@ import {
   countrySlotLimit,
   formatNextChangeAvailable,
   lockedCountryIds,
+  followTagsShowsPlanCard,
   planDetailLine,
+  regionalCommunitiesPriceLine,
   ECHO_TAGS_SUBTITLE,
   EMPTY_SECTION_QUERIES,
   EMPTY_TAG_GROUPS,
@@ -226,11 +227,13 @@ export default function FollowTagsPage() {
           <p className="text-parchment-500 font-mono text-sm">Loading tags…</p>
         ) : (
           <div className="space-y-4">
-            <div className="card">
-              <p className="text-sm font-medium">{planCopy.name}</p>
-              <p className="text-parchment-500 text-xs mt-1">{planCopy.meaning}</p>
-              <p className="text-parchment-500 text-xs font-mono mt-1">{planDetailLine(plan)}</p>
-            </div>
+            {followTagsShowsPlanCard(plan) && (
+              <div className="card">
+                <p className="text-sm font-medium">{planCopy.name}</p>
+                <p className="text-parchment-500 text-xs mt-1">{planCopy.meaning}</p>
+                <p className="text-parchment-500 text-xs font-mono mt-1">{planDetailLine(plan)}</p>
+              </div>
+            )}
 
             <div className="card">
               <p className="text-sm font-medium">{countrySectionTitle(countryLimit)}</p>
@@ -296,9 +299,10 @@ export default function FollowTagsPage() {
                   </span>
                 </div>
               )}
+              <p className={`text-parchment-500 mb-3 ${canFollowRegion ? "text-xs" : "text-sm"}`}>{AMPLIFY_BLURB}</p>
               {canFollowRegion ? (
                 <>
-                  <p className="text-parchment-500 text-xs mb-3">{AMPLIFY_BLURB}</p>
+                  <p className="text-parchment-500 text-xs font-mono mb-3">{regionalCommunitiesPriceLine(canFollowRegion)}</p>
                   {selectedTagsForSection("region", tagGroups, followedTagIds).length > 0 && (
                     <div className="mb-3">
                       <p className="text-parchment-500 text-xs font-mono mb-2">Selected</p>
@@ -324,7 +328,6 @@ export default function FollowTagsPage() {
                 </>
               ) : (
                 <>
-                  <p className="text-parchment-500 text-sm mb-3">{AMPLIFY_BLURB}</p>
                   <p className="text-parchment-300 text-xs font-mono mb-4">
                     {AMPLIFY_EXAMPLES.map(displayTagLabel).join(" · ")}
                   </p>
@@ -333,7 +336,7 @@ export default function FollowTagsPage() {
                       {showLockedRegions ? "Hide regions" : "View regions"}
                     </button>
                   </div>
-                  <p className="text-parchment-500 text-xs">{AMPLIFY_PRICE_HINT}</p>
+                  <p className="text-parchment-500 text-xs">{regionalCommunitiesPriceLine(canFollowRegion)}</p>
                   {showLockedRegions && (
                     <div className="mt-4">
                       <TagChipRow
@@ -350,8 +353,8 @@ export default function FollowTagsPage() {
 
             <div id="school-community" className="card">
               <p className="text-sm font-medium mb-1">School Community</p>
-              <p className="text-parchment-500 text-xs font-mono mb-1">{CAMPUS_PLAN_HINT}</p>
-              <p className="text-parchment-500 text-sm mb-3">{CAMPUS_SCHOOL_BLURB}</p>
+              <p className="text-parchment-500 text-sm mb-1">{CAMPUS_SCHOOL_BLURB}</p>
+              <p className="text-parchment-500 text-xs font-mono mb-3">{CAMPUS_PLAN_HINT}</p>
               <SchoolVerification
                 onVerifiedChange={(verified) => {
                   setSchoolVerified(verified);
