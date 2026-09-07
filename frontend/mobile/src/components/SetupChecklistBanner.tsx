@@ -20,7 +20,13 @@ function openSetupHref(href: string, navigation: { getParent?: () => unknown; na
   tabs.navigate("Profile");
 }
 
-export function SetupChecklistBanner({ style }: { style?: ViewStyle }) {
+export function SetupChecklistBanner({
+  style,
+  surface = "feed",
+}: {
+  style?: ViewStyle;
+  surface?: "feed" | "profile";
+}) {
   const navigation = useNavigation();
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -48,22 +54,30 @@ export function SetupChecklistBanner({ style }: { style?: ViewStyle }) {
           <Text style={styles.dismiss}>×</Text>
         </Pressable>
       </View>
-      <View style={styles.list}>
-        {incompleteRequired.map((item) => (
-          <Pressable key={item.key} onPress={() => openSetupHref(item.action_href, navigation as any)}>
-            <Text style={styles.link}>{item.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {optionalIncomplete ? (
+      {surface === "feed" ? (
+        <Pressable onPress={() => openSetupHref("/profile", navigation as any)} style={styles.list}>
+          <Text style={styles.link}>Go to Profile to finish setting up</Text>
+        </Pressable>
+      ) : (
         <>
-          <View style={styles.divider} />
-          <Pressable style={styles.optionalRow} onPress={() => openSetupHref(optionalIncomplete.action_href, navigation as any)}>
-            <Text style={[styles.link, { flex: 1 }]}>{optionalIncomplete.label}</Text>
-            <Text style={styles.optionalBadge}>Optional</Text>
-          </Pressable>
+          <View style={styles.list}>
+            {incompleteRequired.map((item) => (
+              <Pressable key={item.key} onPress={() => openSetupHref(item.action_href, navigation as any)}>
+                <Text style={styles.link}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {optionalIncomplete ? (
+            <>
+              <View style={styles.divider} />
+              <Pressable style={styles.optionalRow} onPress={() => openSetupHref(optionalIncomplete.action_href, navigation as any)}>
+                <Text style={[styles.link, { flex: 1 }]}>{optionalIncomplete.label}</Text>
+                <Text style={styles.optionalBadge}>Optional</Text>
+              </Pressable>
+            </>
+          ) : null}
         </>
-      ) : null}
+      )}
     </Card>
   );
 }

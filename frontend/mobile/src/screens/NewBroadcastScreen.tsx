@@ -182,6 +182,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         }}
       />
 
+      <Text style={styles.reachReminder}>Remember to adjust the reach distance for this specific inquiry?</Text>
       <View style={styles.pillRow}>
         <View style={styles.pillSlotStart}>
           <Pressable onPress={() => selectReach("local")} style={[styles.pill, localReachColors]}>
@@ -325,6 +326,7 @@ const styles = StyleSheet.create({
   selectedHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 },
   selectedActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   emptyText: { color: colors.parchment500, fontSize: 13, marginBottom: 8 },
+  reachReminder: { color: colors.signal400, fontSize: 12, fontWeight: "600", marginBottom: 12 },
   reachHint: { color: colors.parchment500, fontSize: 11, marginBottom: 16 },
   pillRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   pillSlotStart: { flex: 1, alignItems: "flex-start" },

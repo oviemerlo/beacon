@@ -130,7 +130,7 @@ export function FeedScreen({
 
   return (
     <View style={styles.container}>
-      {user ? <SetupChecklistBanner style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 8 }} /> : null}
+      {user ? <SetupChecklistBanner surface="feed" style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 8 }} /> : null}
       <LocationDriftBanner
         registeredLatitude={user?.latitude ?? null}
         registeredLongitude={user?.longitude ?? null}

@@ -40,7 +40,7 @@ export default async function ProfilePage() {
       <main className="max-w-2xl mx-auto px-5 py-6">
         <h1 className="font-display text-xl font-bold mb-5">Your profile</h1>
 
-        <SetupChecklistBanner />
+        <SetupChecklistBanner surface="profile" />
 
         <div className="card mb-4">
           <div className="flex items-start justify-between gap-4">

@@ -298,46 +298,30 @@ async def replace_followed_tags(db: AsyncSession, user_id: uuid.UUID, payload: F
 async def get_setup_status(db: AsyncSession, user: User) -> SetupStatusOut:
     has_posted = await broadcast_repository.user_has_posted(db, user.id)
     avatar = await upload_repository.get_latest_avatar_for_user(db, user.id)
-    verification = await school_repository.get_verification(db, user.id)
-    school_verified = verification is not None and verification.verified_at is not None
     items = [
         SetupChecklistItemOut(
             key="photo",
-            label="Click Profile, then add a profile photo",
+            label="Upload your profile photo",
             done=avatar is not None,
             action_href="/profile",
         ),
         SetupChecklistItemOut(
             key="tags",
-            label="Choose your tags",
+            label="Click on tags to select your country tags/school (optional)",
             done=user.country_slot_1_tag_id is not None,
             action_href="/follow-tags",
         ),
         SetupChecklistItemOut(
-            key="location",
-            label="Click Profile, then confirm your location",
-            done=user.location_label is not None,
-            action_href="/profile",
-        ),
-        SetupChecklistItemOut(
             key="broadcast",
-            label="Click Broadcast, then send your first broadcast — pick a tag to target and set how far it reaches",
+            label="Save and go to Broadcast to send your first broadcast to your chosen tags",
             done=has_posted,
             action_href="/broadcasts/new",
         ),
-        SetupChecklistItemOut(
-            key="school",
-            label="Verify your school (optional)",
-            done=school_verified,
-            optional=True,
-            action_href="/follow-tags",
-        ),
     ]
-    required = [item for item in items if not item.optional]
-    completed = sum(1 for item in required if item.done)
+    completed = sum(1 for item in items if item.done)
     return SetupStatusOut(
         items=items,
         completed_required=completed,
-        total_required=len(required),
-        all_required_done=completed == len(required),
+        total_required=len(items),
+        all_required_done=completed == len(items),
     )

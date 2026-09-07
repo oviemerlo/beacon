@@ -118,7 +118,7 @@ export default function FeedPage() {
     <div className="min-h-screen">
       <AppNav />
       <main className="max-w-2xl mx-auto px-5 py-6">
-        {user && <SetupChecklistBanner />}
+        {user && <SetupChecklistBanner surface="feed" />}
         <LocationDriftBanner
           registeredLatitude={user?.latitude ?? null}
           registeredLongitude={user?.longitude ?? null}

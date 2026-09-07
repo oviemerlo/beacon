@@ -79,7 +79,7 @@ export function ProfileScreen({
     >
       <Text style={styles.title}>Your profile</Text>
 
-      <SetupChecklistBanner style={{ marginBottom: 12 }} />
+      <SetupChecklistBanner surface="profile" style={{ marginBottom: 12 }} />
 
       <Card style={{ marginBottom: 12 }}>
         <View style={styles.identityRow}>
