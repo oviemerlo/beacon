@@ -40,6 +40,21 @@ class UserProfileOut(BaseModel):
         from_attributes = True
 
 
+class SetupChecklistItemOut(BaseModel):
+    key: str
+    label: str
+    done: bool
+    optional: bool = False
+    action_href: str
+
+
+class SetupStatusOut(BaseModel):
+    items: list[SetupChecklistItemOut]
+    completed_required: int
+    total_required: int
+    all_required_done: bool
+
+
 class PublicProfileOut(BaseModel):
     """
     What ANY other user can see about a profile — via search result or a

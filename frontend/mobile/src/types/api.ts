@@ -29,6 +29,21 @@ export interface UserProfile {
   avatar_scan_status?: string | null;
 }
 
+export interface SetupChecklistItem {
+  key: string;
+  label: string;
+  done: boolean;
+  optional: boolean;
+  action_href: string;
+}
+
+export interface SetupStatus {
+  items: SetupChecklistItem[];
+  completed_required: number;
+  total_required: number;
+  all_required_done: boolean;
+}
+
 export interface CountrySlot {
   slot: number;
   tag_id: number | null;

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.schemas import FollowedTagsOut, FollowedTagsReplaceIn, ProfileUpdateIn, UserProfileOut
+from app.schemas.schemas import FollowedTagsOut, FollowedTagsReplaceIn, ProfileUpdateIn, SetupStatusOut, UserProfileOut
 from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -44,3 +44,8 @@ async def unfollow_tag(tag_id: int, current_user: User = Depends(get_current_use
 @router.get("/me/followed-tags", response_model=FollowedTagsOut)
 async def list_followed_tags(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await user_service.get_followed_tags(db, current_user.id)
+
+
+@router.get("/me/setup-status", response_model=SetupStatusOut)
+async def get_my_setup_status(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await user_service.get_setup_status(db, current_user)

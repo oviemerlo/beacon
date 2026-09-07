@@ -10,6 +10,7 @@ import { BroadcastCard } from "../components/BroadcastCard";
 import { SearchHitCard } from "../components/SearchHitCard";
 import { startPrivateConversation } from "../components/FeedCardActionRow";
 import { LocationDriftBanner } from "../components/LocationDriftBanner";
+import { SetupChecklistBanner } from "../components/SetupChecklistBanner";
 import type { FeedBroadcast, FeedSearchHit, UserProfile } from "../types/api";
 
 export function FeedScreen({
@@ -129,6 +130,7 @@ export function FeedScreen({
 
   return (
     <View style={styles.container}>
+      {user ? <SetupChecklistBanner style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 8 }} /> : null}
       <LocationDriftBanner
         registeredLatitude={user?.latitude ?? null}
         registeredLongitude={user?.longitude ?? null}

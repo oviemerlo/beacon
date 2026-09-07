@@ -8,6 +8,7 @@ import { echoAudienceLabels } from "../helpers/tags";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
 import { ProfileAvatar } from "../components/ProfileAvatar";
+import { SetupChecklistBanner } from "../components/SetupChecklistBanner";
 import type { BlockedUsersList, UserProfile } from "../types/api";
 
 export function ProfileScreen({
@@ -77,6 +78,8 @@ export function ProfileScreen({
       keyboardDismissMode="on-drag"
     >
       <Text style={styles.title}>Your profile</Text>
+
+      <SetupChecklistBanner style={{ marginBottom: 12 }} />
 
       <Card style={{ marginBottom: 12 }}>
         <View style={styles.identityRow}>

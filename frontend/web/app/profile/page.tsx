@@ -1,6 +1,7 @@
 import { apiFetch, getCurrentUserOrNull } from "@/helpers/api";
 import { AppNav } from "@/components/AppNav";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { SetupChecklistBanner } from "@/components/SetupChecklistBanner";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -38,6 +39,8 @@ export default async function ProfilePage() {
       <AppNav />
       <main className="max-w-2xl mx-auto px-5 py-6">
         <h1 className="font-display text-xl font-bold mb-5">Your profile</h1>
+
+        <SetupChecklistBanner />
 
         <div className="card mb-4">
           <div className="flex items-start justify-between gap-4">

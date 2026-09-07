@@ -543,6 +543,13 @@ async def has_impression(db: AsyncSession, broadcast_id: uuid.UUID, viewer_id: u
     return result.scalar_one_or_none() is not None
 
 
+async def user_has_posted(db: AsyncSession, user_id: uuid.UUID) -> bool:
+    result = await db.execute(
+        select(Broadcast.id).where(Broadcast.sender_id == user_id, _not_deleted()).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def record_impression(db: AsyncSession, broadcast_id: uuid.UUID, viewer_id: uuid.UUID) -> None:
     """Idempotent — call freely each time a broadcast is served into a feed."""
     await db.execute(

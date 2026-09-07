@@ -12,6 +12,7 @@ import { buildFeedCardActions, FeedCardOverflowMenu } from "@/components/FeedCar
 import { SenderAvatar } from "@/components/SenderAvatar";
 import { VerifiedMark } from "@/components/VerifiedMark";
 import { LocationDriftBanner } from "@/components/LocationDriftBanner";
+import { SetupChecklistBanner } from "@/components/SetupChecklistBanner";
 import { reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
 import { audienceFilterActive, echoAudienceLabels, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "@/helpers/tags";
@@ -116,6 +117,7 @@ export default function FeedPage() {
     <div className="min-h-screen">
       <AppNav />
       <main className="max-w-2xl mx-auto px-5 py-6">
+        {user && <SetupChecklistBanner />}
         <LocationDriftBanner
           registeredLatitude={user?.latitude ?? null}
           registeredLongitude={user?.longitude ?? null}
