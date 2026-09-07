@@ -395,13 +395,13 @@ function BroadcastCard({
             <p className="text-parchment-500 text-sm font-normal truncate">{echoPreview(broadcast.content)}</p>
           </div>
         )}
-        <EchoBody className="text-parchment-100 text-base font-normal leading-snug mt-2 mb-1">
+        <EchoBody className="font-body text-parchment-100 text-base font-normal leading-relaxed mt-2 mb-1">
           {featuredReply ? featuredReply.content : broadcast.content}
         </EchoBody>
         <LinkPreviewList previews={featuredReply ? featuredReply.link_previews : broadcast.link_previews} />
       </EchoMediaLayout>
       <div className="mt-auto pt-5">
-      <div className="flex items-center flex-nowrap gap-2 text-[10px] leading-tight font-mono text-parchment-500">
+      <div className="flex items-center flex-nowrap gap-2 text-[9px] leading-tight font-light text-parchment-500/80">
         <span className="feed-card-time whitespace-nowrap">
           {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
           {!isOwn ? `  ·  ${formatDistance(broadcast.distance_m)} away` : ""}

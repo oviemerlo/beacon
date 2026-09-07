@@ -258,7 +258,7 @@ function ThreadItem({
         <LinkPreviewList previews={item.link_previews} />
       </EchoMediaLayout>
         <div className="flex items-center gap-2 mt-auto pt-2">
-          <span className="text-parchment-500 text-xs font-mono">{formatBroadcastSentAt(item.created_at)}</span>
+          <span className="text-parchment-500/80 text-[11px] font-light">{formatBroadcastSentAt(item.created_at)}</span>
           {isParent && (
             <span className="feed-card-reach">{reachLabel}</span>
           )}

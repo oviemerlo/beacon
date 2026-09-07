@@ -33,7 +33,7 @@ export function EchoBody({
             event.stopPropagation();
             setExpanded((open) => !open);
           }}
-          className="mt-1 text-[11px] font-mono text-parchment-500 hover:text-parchment-100"
+          className="mt-1 text-[11px] font-body text-parchment-500 hover:text-parchment-100"
         >
           {expanded ? "Show less" : "Show more"}
         </button>
@@ -45,7 +45,7 @@ export function EchoBody({
 export function CharacterCountdown({ value, max = BROADCAST_CONTENT_MAX }: { value: string; max?: number }) {
   const left = Math.max(0, max - value.length);
   return (
-    <p className={`text-right font-mono text-[11px] mt-1 ${left <= 20 ? "text-signal-400" : "text-parchment-500"}`}>
+    <p className={`text-right font-body text-[11px] mt-1 ${left <= 20 ? "text-signal-400" : "text-parchment-500"}`}>
       {left} left
     </p>
   );
