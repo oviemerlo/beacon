@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import AsyncSessionLocal
 from app.repositories import link_preview_repository
-from app.services.link_preview import facebook, generic, tiktok, twitter
+from app.services.link_preview import facebook, generic, join as join_preview, tiktok, twitter
 from app.services.link_preview.result import LinkPreviewResult
 
 logger = logging.getLogger(__name__)
@@ -129,11 +129,9 @@ async def attach_previews(
         return
     now = datetime.now(timezone.utc)
     for index, url in enumerate(urls):
-        existing = await link_preview_repository.get_by_normalized_url(db, url)
-        if existing is not None and _fresh(existing.fetched_at, existing.status):
-            row = existing
-        else:
-            result = await fetch_preview(url)
+        token = join_preview.invite_token_from_url(url)
+        if token is not None:
+            result = await join_preview.fetch(db, url, token)
             row = await link_preview_repository.upsert(
                 db,
                 normalized_url=result.normalized_url,
@@ -145,6 +143,23 @@ async def attach_previews(
                 status=result.status,
                 fetched_at=now,
             )
+        else:
+            existing = await link_preview_repository.get_by_normalized_url(db, url)
+            if existing is not None and _fresh(existing.fetched_at, existing.status):
+                row = existing
+            else:
+                result = await fetch_preview(url)
+                row = await link_preview_repository.upsert(
+                    db,
+                    normalized_url=result.normalized_url,
+                    title=result.title,
+                    description=result.description,
+                    image_url=result.image_url,
+                    site_name=result.site_name,
+                    favicon_url=result.favicon_url,
+                    status=result.status,
+                    fetched_at=now,
+                )
         if row.status != "ok":
             continue
         if broadcast_id is not None:

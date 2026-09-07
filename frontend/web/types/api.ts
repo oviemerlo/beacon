@@ -212,12 +212,45 @@ export interface ConversationThread {
 
 export interface ConversationContext {
   id: string;
-  origin_broadcast_id: string;
+  origin_broadcast_id: string | null;
   origin_broadcast_preview: string;
   origin_broadcast_sender_id: string | null;
   origin_broadcast_sender_display_name: string;
-  other_participant_id: string;
+  other_participant_id: string | null;
   other_participant_display_name: string;
+  name?: string | null;
+  max_participants?: number | null;
+  participant_count?: number | null;
+  participants?: ConversationParticipant[];
+}
+
+export interface ConversationParticipant {
+  user_id: string;
+  display_name: string;
+  role: "admin" | "member" | string;
+}
+
+export interface GroupSummary {
+  id: string;
+  name: string | null;
+  max_participants: number | null;
+  participant_count: number;
+  last_message: string;
+  last_message_at: string;
+  unread_count: number;
+}
+
+export interface GroupCreateResult {
+  conversation_id: string;
+  invite_url: string;
+}
+
+export interface InvitePreview {
+  conversation_name: string;
+  description: string | null;
+  participant_count: number;
+  max_participants: number | null;
+  is_full: boolean;
 }
 
 export interface Message {

@@ -39,7 +39,9 @@ export async function GET(req: NextRequest) {
     // spot either way and will no-op if the user already has a location.
   }
 
-  const destination = needsOnboarding ? "/onboarding" : "/feed";
+  const destination = needsOnboarding
+    ? "/onboarding"
+    : safeJoinNext(req.cookies.get("beacon_login_next")?.value) ?? "/feed";
   const res = NextResponse.redirect(new URL(destination, req.url));
   const isProd = process.env.NODE_ENV === "production";
 
@@ -57,6 +59,13 @@ export async function GET(req: NextRequest) {
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
   });
+  res.cookies.set("beacon_login_next", "", { path: "/", maxAge: 0 });
 
   return res;
+}
+
+function safeJoinNext(value: string | undefined): string | null {
+  if (!value) return null;
+  const next = decodeURIComponent(value);
+  return /^\/join\/[A-Za-z0-9_-]+$/.test(next) ? next : null;
 }

@@ -15,6 +15,7 @@ import { LocationDriftBanner } from "@/components/LocationDriftBanner";
 import { SetupChecklistBanner } from "@/components/SetupChecklistBanner";
 import { reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
+import { formatDistance } from "@/helpers/distance";
 import { audienceFilterActive, echoAudienceLabels, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "@/helpers/tags";
 import { echoPreview, formatBroadcastSentAt } from "@/helpers/time";
 import { usePolling } from "@/helpers/usePolling";
@@ -318,7 +319,6 @@ function BroadcastCard({
   onBlocked: (senderId: string) => void;
   onRemoved: (broadcastId: string) => void;
 }) {
-  const km = (broadcast.distance_m / 1000).toFixed(1);
   const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
   const isOwn = currentUserId === broadcast.sender_id;
   const featuredReply = broadcast.latest_reply ?? null;
@@ -404,7 +404,7 @@ function BroadcastCard({
       <div className="flex items-center flex-nowrap gap-2 text-[10px] leading-tight font-mono text-parchment-500">
         <span className="feed-card-time whitespace-nowrap">
           {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
-          {!isOwn ? `  ·  ${km} km away` : ""}
+          {!isOwn ? `  ·  ${formatDistance(broadcast.distance_m)} away` : ""}
         </span>
         <span className="feed-card-reach">{reachLabel}</span>
         <Link

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
 import { LinkPreviewList } from "@/components/LinkPreviewCard";
@@ -10,10 +10,11 @@ import { applyMention, mentionTriggerFromInput, splitMentionParts } from "@/help
 import { FeedCardOverflowMenu } from "@/components/FeedCardOverflowMenu";
 import { promptAndSubmitReport } from "@/helpers/report-actions";
 import { formatMessageSentAt } from "@/helpers/time";
-import type { ConversationContext, MentionCandidate, Message, UserProfile } from "@/types/api";
+import type { ConversationContext, ConversationParticipant, MentionCandidate, Message, UserProfile } from "@/types/api";
 
 export default function ConversationDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [context, setContext] = useState<ConversationContext | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -171,21 +172,68 @@ export default function ConversationDetailPage() {
   }
 
   const originWasMine = context?.origin_broadcast_sender_id === currentUserId;
+  const isGroup = Boolean(context?.name);
+  const participants = context?.participants ?? [];
+  const isAdmin = participants.some(
+    (participant) => participant.user_id === currentUserId && participant.role === "admin"
+  );
+
+  function senderLabel(senderId: string): string {
+    if (String(senderId) === String(currentUserId)) return "You";
+    if (!isGroup) return context?.other_participant_display_name ?? "Unknown";
+    return participants.find((participant) => participant.user_id === senderId)?.display_name ?? "Unknown";
+  }
+
+  async function leaveGroup() {
+    const confirmed = window.confirm(
+      "Leave this group? You can rejoin later if the invite link is still active."
+    );
+    if (!confirmed || !conversationId) return;
+    try {
+      await clientFetch(`/groups/${conversationId}/leave`, { method: "POST" });
+      router.push("/groups");
+    } catch {
+      window.alert("Couldn't leave this group.");
+    }
+  }
+
+  async function promote(participant: ConversationParticipant) {
+    if (!conversationId) return;
+    try {
+      await clientFetch(`/groups/${conversationId}/participants/${participant.user_id}/promote`, {
+        method: "POST",
+      });
+      await load();
+    } catch {
+      window.alert("Couldn't promote this member.");
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
       <AppNav />
       <main className="max-w-2xl mx-auto w-full px-5 py-6 flex-1 flex flex-col min-h-0">
         <div className="flex items-center gap-1 mb-5">
-          <h1 className="px-3 py-1.5 rounded-beacon text-sm font-medium text-parchment-100">Conversation</h1>
+          <h1 className="px-3 py-1.5 rounded-beacon text-sm font-medium text-parchment-100">
+            {isGroup ? context?.name : "Conversation"}
+          </h1>
           <Link
-            href="/conversations"
+            href={isGroup ? "/groups" : "/conversations"}
             className="px-3 py-1.5 rounded-beacon text-sm font-medium text-parchment-500 hover:text-parchment-100 whitespace-nowrap"
           >
-            Back to messages
+            {isGroup ? "Back to groups" : "Back to messages"}
           </Link>
+          {isGroup && (
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-beacon text-sm font-medium text-parchment-500 hover:text-parchment-100 whitespace-nowrap"
+              onClick={() => void leaveGroup()}
+            >
+              Leave group
+            </button>
+          )}
         </div>
-        {context && (
+        {context && !isGroup && (
           <div className={`mb-4 flex w-full ${originWasMine ? "justify-end" : "justify-start"}`}>
             <div className="max-w-[min(75%,28rem)] rounded-beacon border border-dusk-600 border-l-4 border-l-signal-500 bg-dusk-800/70 px-3 py-2.5">
               <p className="text-signal-400 font-semibold text-xs">
@@ -195,6 +243,31 @@ export default function ConversationDetailPage() {
               </p>
               <p className="text-parchment-300 text-sm mt-1 italic">{context.origin_broadcast_preview}</p>
             </div>
+          </div>
+        )}
+        {isGroup && isAdmin && (
+          <div className="card mb-4">
+            <p className="text-sm font-medium mb-2">Members</p>
+            <ul className="flex flex-col gap-2">
+              {participants.map((participant) => (
+                <li key={participant.user_id} className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-parchment-100">
+                    {participant.display_name}
+                    {participant.user_id === currentUserId ? " (you)" : ""}
+                    {participant.role === "admin" ? " · admin" : ""}
+                  </p>
+                  {participant.role !== "admin" && (
+                    <button
+                      type="button"
+                      className="text-sm text-signal-400 hover:text-signal-300"
+                      onClick={() => void promote(participant)}
+                    >
+                      Make admin
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         <div className="flex-1 flex flex-col gap-3 overflow-y-auto mb-4 w-full min-h-0">
@@ -216,7 +289,7 @@ export default function ConversationDetailPage() {
                       <p className="text-signal-400 text-[10px] font-mono mb-1">You were mentioned</p>
                     )}
                     <p className={`text-sm mb-1 ${isUnread ? "font-semibold" : "font-normal"}`}>
-                      {isMine ? "You:" : `${context?.other_participant_display_name ?? "Unknown"}:`}
+                      {senderLabel(m.sender_id)}:
                     </p>
                     <p className={`text-sm break-words ${isUnread ? "font-semibold" : "font-normal"}`}>
                       {splitMentionParts(m.body).map((part, index) =>
@@ -236,7 +309,7 @@ export default function ConversationDetailPage() {
                       </p>
                       {!isMine && (
                         <FeedCardOverflowMenu
-                          senderName={context?.other_participant_display_name ?? "this message"}
+                          senderName={senderLabel(m.sender_id)}
                           actions={[
                             {
                               label: "Report",

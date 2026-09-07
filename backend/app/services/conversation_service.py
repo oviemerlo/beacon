@@ -13,7 +13,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.broadcast import Broadcast
-from app.models.conversation import Conversation, Message
+from app.models.conversation import Conversation, ConversationInvite, Message
 from app.repositories import (
     block_repository,
     broadcast_repository,
@@ -69,7 +69,7 @@ async def start_conversation(db: AsyncSession, initiator_id: uuid.UUID, broadcas
 
 async def _assert_participant(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> Conversation:
     conversation = await conversation_repository.get_by_id(db, conversation_id)
-    if conversation is None or user_id not in (conversation.initiator_id, conversation.recipient_id):
+    if conversation is None or not await conversation_repository.is_participant(db, conversation.id, user_id):
         raise NotFoundError("Conversation not found")
     return conversation
 
@@ -92,12 +92,18 @@ async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: s
 
 async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: str, body: str) -> Message:
     conversation = await _assert_participant(db, user_id, conversation_id)
-    other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
-    await _assert_messaging_allowed(db, user_id, other_user_id)
-    root_echo_id = await conversation_repository.resolve_root_echo_id(db, conversation.origin_broadcast_id)
-    if root_echo_id is None:
-        raise NotFoundError("Broadcast not found")
-    mentioned_user_ids = await mention_service.validate_mentions_for_echo(db, body, root_echo_id, user_id)
+    mentioned_user_ids: list[uuid.UUID] = []
+    if conversation.name is None:
+        if conversation.initiator_id is None or conversation.recipient_id is None:
+            raise NotFoundError("Conversation not found")
+        other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
+        await _assert_messaging_allowed(db, user_id, other_user_id)
+        if conversation.origin_broadcast_id is None:
+            raise NotFoundError("Broadcast not found")
+        root_echo_id = await conversation_repository.resolve_root_echo_id(db, conversation.origin_broadcast_id)
+        if root_echo_id is None:
+            raise NotFoundError("Broadcast not found")
+        mentioned_user_ids = await mention_service.validate_mentions_for_echo(db, body, root_echo_id, user_id)
     message = await conversation_repository.add_message(db, conversation_id, user_id, body, mentioned_user_ids)
     await _notify_mentions(db, message)
     await db.commit()
@@ -120,14 +126,26 @@ async def _notify_mentions(db: AsyncSession, message: Message) -> None:
 
 async def list_mention_candidates(db: AsyncSession, user_id: uuid.UUID, conversation_id: str, query: str | None = None):
     conversation = await _assert_participant(db, user_id, conversation_id)
-    other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
-    root_echo_id = await conversation_repository.resolve_root_echo_id(db, conversation.origin_broadcast_id)
-    if root_echo_id is None:
-        users = []
+    other_user_id = None
+    root_echo_id = None
+    if conversation.name is None and conversation.initiator_id is not None and conversation.recipient_id is not None:
+        other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
+        if conversation.origin_broadcast_id is not None:
+            root_echo_id = await conversation_repository.resolve_root_echo_id(db, conversation.origin_broadcast_id)
+        if root_echo_id is None:
+            users = []
+        else:
+            users = await conversation_repository.list_mention_candidates(db, root_echo_id, user_id)
     else:
-        users = await conversation_repository.list_mention_candidates(db, root_echo_id, user_id)
+        participant_rows = await conversation_repository.get_participants(db, conversation.id)
+        participant_ids = [row.user_id for row in participant_rows if row.user_id != user_id]
+        users = []
+        for participant_id in participant_ids:
+            other = await user_repository.get_by_id(db, participant_id)
+            if other is not None and not other.is_suspended:
+                users.append(other)
     seen = {user.id for user in users}
-    if other_user_id != user_id and other_user_id not in seen:
+    if other_user_id is not None and other_user_id != user_id and other_user_id not in seen:
         other = await user_repository.get_by_id(db, other_user_id)
         if other is not None and not other.is_suspended:
             users.append(other)
@@ -162,7 +180,7 @@ async def list_unread_mentions(db: AsyncSession, user_id: uuid.UUID) -> list[dic
                 "body": message.body,
                 "origin_broadcast_preview": origin_preview[:160] if origin_preview else "Original broadcast unavailable.",
                 "created_at": notification.created_at,
-                "is_own_conversation": user_id in (conversation.initiator_id, conversation.recipient_id),
+                "is_own_conversation": await conversation_repository.is_participant(db, conversation.id, user_id),
             }
         )
     return items
@@ -273,14 +291,123 @@ async def get_conversation_context(db: AsyncSession, user_id: uuid.UUID, convers
         raise NotFoundError("Conversation not found")
     origin_preview = (conversation.origin_broadcast.content if conversation.origin_broadcast is not None else "").strip()
     origin_sender = conversation.origin_broadcast.sender if conversation.origin_broadcast is not None else None
-    other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
-    other_user = await user_repository.get_by_id(db, other_user_id)
+    other_user_id = _other_participant_id(conversation, user_id)
+    other_user = await user_repository.get_by_id(db, other_user_id) if other_user_id is not None else None
+    participant_count = await conversation_repository.participant_count(db, conversation.id)
+    participants: list[dict] = []
+    if conversation.name is not None:
+        participant_rows = await conversation_repository.get_participants(db, conversation.id)
+        for row in participant_rows:
+            member = await user_repository.get_by_id(db, row.user_id)
+            participants.append(
+                {
+                    "user_id": str(row.user_id),
+                    "display_name": member.display_name if member is not None else "Unknown",
+                    "role": row.role,
+                }
+            )
     return {
         "id": str(conversation.id),
-        "origin_broadcast_id": str(conversation.origin_broadcast_id),
+        "name": conversation.name,
+        "max_participants": conversation.max_participants,
+        "participant_count": participant_count,
+        "participants": participants,
+        "origin_broadcast_id": str(conversation.origin_broadcast_id) if conversation.origin_broadcast_id is not None else None,
         "origin_broadcast_preview": origin_preview[:220] if origin_preview else "Original broadcast unavailable.",
         "origin_broadcast_sender_id": str(origin_sender.id) if origin_sender is not None else None,
         "origin_broadcast_sender_display_name": origin_sender.display_name if origin_sender is not None else "Unknown",
-        "other_participant_id": str(other_user_id),
-        "other_participant_display_name": other_user.display_name if other_user is not None else "Unknown",
+        "other_participant_id": str(other_user_id) if other_user_id is not None else None,
+        "other_participant_display_name": other_user.display_name if other_user is not None else (conversation.name or "Unknown"),
     }
+
+
+def _other_participant_id(conversation: Conversation, user_id: uuid.UUID) -> uuid.UUID | None:
+    if conversation.initiator_id is None or conversation.recipient_id is None:
+        return None
+    return conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
+
+
+async def create_group_conversation(
+    db: AsyncSession, user_id: uuid.UUID, name: str, max_participants: int | None
+) -> tuple[Conversation, ConversationInvite]:
+    trimmed = name.strip()
+    if not trimmed:
+        raise ValidationError("Group name is required")
+    conversation = await conversation_repository.create_group(db, trimmed, max_participants, user_id)
+    invite = await conversation_repository.create_invite(db, conversation.id, user_id, description=None)
+    await db.commit()
+    return conversation, invite
+
+
+async def get_invite_preview(db: AsyncSession, token: str) -> dict:
+    invite = await conversation_repository.get_invite_by_token(db, token)
+    if invite is None or invite.revoked_at is not None:
+        raise NotFoundError("This invite is no longer active")
+    conversation = await conversation_repository.get_by_id(db, invite.conversation_id)
+    if conversation is None:
+        raise NotFoundError("This invite is no longer active")
+    count = await conversation_repository.participant_count(db, conversation.id)
+    is_full = conversation.max_participants is not None and count >= conversation.max_participants
+    return {
+        "conversation_name": conversation.name or "",
+        "description": invite.description,
+        "participant_count": count,
+        "max_participants": conversation.max_participants,
+        "is_full": is_full,
+    }
+
+
+async def join_via_invite(db: AsyncSession, user_id: uuid.UUID, token: str) -> Conversation:
+    invite = await conversation_repository.get_invite_by_token(db, token)
+    if invite is None or invite.revoked_at is not None:
+        raise NotFoundError("This invite is no longer active")
+    conversation = await conversation_repository.get_by_id(db, invite.conversation_id)
+    if conversation is None:
+        raise NotFoundError("This invite is no longer active")
+    if await conversation_repository.is_participant(db, conversation.id, user_id):
+        return conversation
+    # Capacity check + insert run under SELECT ... FOR UPDATE inside add_participant.
+    await conversation_repository.add_participant(db, conversation.id, user_id)
+    await db.commit()
+    return conversation
+
+
+async def list_groups_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[dict]:
+    conversations = await conversation_repository.list_groups_for_user(db, user_id)
+    items: list[dict] = []
+    for conversation in conversations:
+        latest = await conversation_repository.latest_message_for_conversation(db, conversation.id)
+        items.append(
+            {
+                "id": str(conversation.id),
+                "name": conversation.name,
+                "max_participants": conversation.max_participants,
+                "participant_count": await conversation_repository.participant_count(db, conversation.id),
+                "last_message": latest.body if latest else "",
+                "last_message_at": latest.sent_at if latest else conversation.created_at,
+                "unread_count": await conversation_repository.count_unread_in_conversation(db, user_id, conversation.id),
+            }
+        )
+    return items
+
+
+async def leave_group(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> None:
+    conversation = await _assert_participant(db, user_id, conversation_id)
+    if conversation.name is None:
+        raise ForbiddenError("Can't leave a direct conversation — delete it instead")
+    await conversation_repository.remove_participant(db, conversation.id, user_id)
+    await db.commit()
+
+
+async def promote_to_admin(
+    db: AsyncSession, acting_user_id: uuid.UUID, conversation_id: str, target_user_id: uuid.UUID
+) -> None:
+    conversation = await _assert_participant(db, acting_user_id, conversation_id)
+    if conversation.name is None:
+        raise ForbiddenError("Can't promote members in a direct conversation")
+    if not await conversation_repository.is_admin(db, conversation.id, acting_user_id):
+        raise ForbiddenError("Only admins can promote other members")
+    if not await conversation_repository.is_participant(db, conversation.id, target_user_id):
+        raise NotFoundError("That user isn't in this group")
+    await conversation_repository.promote_many(db, conversation.id, [target_user_id])
+    await db.commit()

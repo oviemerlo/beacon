@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { reachBadgeLabel } from "../helpers/broadcastReach";
+import { formatDistance } from "../helpers/distance";
 import { echoAudienceLabels } from "../helpers/tags";
 import { echoPreview, formatBroadcastSentAt } from "../helpers/time";
 import { colors, radii } from "../theme/tokens";
@@ -102,7 +103,7 @@ export function BroadcastCard({
         <View style={styles.metaRow}>
           <Text style={styles.cardMeta} numberOfLines={1}>
             {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
-            {!isOwn ? `  ·  ${(broadcast.distance_m / 1000).toFixed(1)} km away` : ""}
+            {!isOwn ? `  ·  ${formatDistance(broadcast.distance_m)} away` : ""}
           </Text>
           <View style={styles.reachPill}>
             <Text style={styles.reachPillText}>{reachLabel}</Text>

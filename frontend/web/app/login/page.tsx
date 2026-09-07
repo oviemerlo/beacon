@@ -1,8 +1,7 @@
 import Link from "next/link";
+import { GoogleLoginLink } from "@/components/GoogleLoginLink";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-export default function LoginPage() {
+export default function LoginPage({ searchParams }: { searchParams: { next?: string } }) {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-6">
       <div className="card w-full max-w-sm">
@@ -14,9 +13,7 @@ export default function LoginPage() {
           Your identity stays private until you choose to connect.
         </p>
 
-        <a href={`${API_URL}/auth/google/login`} className="btn-secondary w-full flex items-center justify-center gap-2 mb-3">
-          Continue with Google
-        </a>
+        <GoogleLoginLink next={searchParams.next} />
 
         {/* Apple Sign-In requires the native SDK / JS SDK for a real popup flow.
             Wire this up with AppleID.auth.signIn() and POST the identity_token

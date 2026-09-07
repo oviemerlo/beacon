@@ -219,14 +219,64 @@ class ConversationStartIn(BaseModel):
     first_message: str = Field(min_length=1, max_length=2000)
 
 
+class ConversationParticipantOut(BaseModel):
+    user_id: uuid.UUID
+    display_name: str
+    role: str
+
+
+class ParticipantOut(BaseModel):
+    user_id: uuid.UUID
+    display_name: str
+    avatar_file_id: uuid.UUID | None = None
+    role: str  # "admin" | "member"
+    joined_at: datetime
+
+
+class PromoteParticipantsIn(BaseModel):
+    user_ids: list[uuid.UUID]
+
+
 class ConversationContextOut(BaseModel):
     id: uuid.UUID
-    origin_broadcast_id: uuid.UUID
+    origin_broadcast_id: uuid.UUID | None = None
     origin_broadcast_preview: str
     origin_broadcast_sender_id: uuid.UUID | None
     origin_broadcast_sender_display_name: str
-    other_participant_id: uuid.UUID
+    other_participant_id: uuid.UUID | None = None
     other_participant_display_name: str
+    name: str | None = None
+    max_participants: int | None = None
+    participant_count: int | None = None
+    participants: list[ConversationParticipantOut] = []
+
+
+class GroupCreateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    max_participants: int | None = Field(default=None, ge=2)
+
+
+class GroupCreateOut(BaseModel):
+    conversation_id: uuid.UUID
+    invite_url: str
+
+
+class GroupOut(BaseModel):
+    id: uuid.UUID
+    name: str | None
+    max_participants: int | None
+    participant_count: int
+    last_message: str
+    last_message_at: datetime
+    unread_count: int
+
+
+class InvitePreviewOut(BaseModel):
+    conversation_name: str
+    description: str | None
+    participant_count: int
+    max_participants: int | None
+    is_full: bool
 
 
 class MessageIn(BaseModel):

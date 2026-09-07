@@ -9,6 +9,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import AsyncSessionLocal
 from app.models.broadcast import Broadcast
 from app.models.tag import Tag
 from app.repositories import broadcast_repository, link_preview_repository, upload_repository
@@ -163,11 +164,45 @@ async def attach_link_previews(db: AsyncSession, cards: list[dict], broadcasts: 
     ids = [b.id for b in broadcasts]
     reply_ids = [uuid.UUID(str(card["latest_reply"]["id"])) for card in cards if card.get("latest_reply")]
     by_id = await link_preview_repository.list_ok_for_broadcasts(db, ids + reply_ids)
+    await _backfill_join_invite_previews(db, cards, broadcasts, by_id)
+    by_id = await link_preview_repository.list_ok_for_broadcasts(db, ids + reply_ids)
     for card, broadcast in zip(cards, broadcasts):
         card["link_previews"] = [_link_preview_payload(p) for p in by_id.get(broadcast.id, [])]
         latest = card.get("latest_reply")
         if latest is not None:
             latest["link_previews"] = [_link_preview_payload(p) for p in by_id.get(uuid.UUID(str(latest["id"])), [])]
+
+
+async def _backfill_join_invite_previews(
+    db: AsyncSession,
+    cards: list[dict],
+    broadcasts: list[Broadcast],
+    by_id: dict,
+) -> None:
+    """Rebuild join-link cards for posts whose OG scrape failed (localhost SSRF)."""
+    from app.services.link_preview.join import invite_token_from_url
+    from app.services.link_preview_service import attach_previews, extract_urls
+
+    jobs: list[tuple[uuid.UUID, str]] = []
+    for card, broadcast in zip(cards, broadcasts):
+        known = {p.normalized_url for p in by_id.get(broadcast.id, [])}
+        text = broadcast.content or ""
+        if any(invite_token_from_url(url) and url not in known for url in extract_urls(text)):
+            jobs.append((broadcast.id, text))
+        latest = card.get("latest_reply")
+        if latest is None:
+            continue
+        reply_id = uuid.UUID(str(latest["id"]))
+        reply_known = {p.normalized_url for p in by_id.get(reply_id, [])}
+        reply_text = latest.get("content") or ""
+        if any(invite_token_from_url(url) and url not in reply_known for url in extract_urls(reply_text)):
+            jobs.append((reply_id, reply_text))
+    if not jobs:
+        return
+    async with AsyncSessionLocal() as extra:
+        for target_id, text in jobs:
+            await attach_previews(extra, text, broadcast_id=target_id)
+        await extra.commit()
 
 
 async def serialize_echo_rows(db: AsyncSession, viewer_id, rows) -> list[dict]:
