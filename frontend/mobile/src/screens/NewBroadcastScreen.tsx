@@ -226,7 +226,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         }}
       />
 
-      <Text style={styles.reachReminder}>Remember to adjust the reach distance for this specific inquiry?</Text>
+      <Text style={styles.reachReminder}>Remember to adjust the reach distance for this specific echo/broadcast</Text>
       <View style={styles.pillRow}>
         <View style={styles.pillSlotStart}>
           <Pressable onPress={() => selectReach("local")} style={[styles.pill, localReachColors]}>

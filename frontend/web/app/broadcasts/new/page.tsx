@@ -169,7 +169,7 @@ export default function NewBroadcastPage() {
         />
 
         <p className="text-signal-400 text-xs font-semibold mb-3">
-          Remember to adjust the reach distance for this specific inquiry?
+          Remember to adjust the reach distance for this specific echo/broadcast
         </p>
         <div className="grid grid-cols-3 items-center mb-4">
           <button type="button" onClick={() => selectReach("local")} className="tag-pill justify-self-start" style={reachSelectorColors("local", reach === "local")}>
