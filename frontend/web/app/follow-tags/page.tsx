@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { AppNav } from "@/components/AppNav";
 import { CourseTags } from "@/components/CourseTags";
+import { DisciplineProgram } from "@/components/DisciplineProgram";
 import { SchoolVerification } from "@/components/SchoolVerification";
 import { TagChipRow } from "@/components/TagChip";
 import { clientFetch } from "@/helpers/client-api";
@@ -361,9 +362,12 @@ export default function FollowTagsPage() {
                 }}
               />
               {schoolVerified && (
-                <div className="mt-4">
-                  <p className="text-sm font-medium mb-2">Course tags</p>
-                  <CourseTags />
+                <div className="mt-4 space-y-4">
+                  <DisciplineProgram />
+                  <div>
+                    <p className="text-sm font-medium mb-2">Course tags</p>
+                    <CourseTags />
+                  </div>
                 </div>
               )}
             </div>

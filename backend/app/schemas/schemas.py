@@ -112,6 +112,10 @@ class CountrySlotOut(BaseModel):
     locked: bool = False
 
 
+class SetDisciplineIn(BaseModel):
+    program_name: str = Field(min_length=1, max_length=100)
+
+
 class FollowedTagsOut(BaseModel):
     tag_ids: list[int]
     country_slot_limit: int | None = None

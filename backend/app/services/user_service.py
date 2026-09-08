@@ -108,6 +108,8 @@ async def _followable_tag(db: AsyncSession, tag_id: int) -> Tag:
         raise NotFoundError("Tag not found")
     if tag.tag_type == "school":
         raise ForbiddenError("School tags can only be added via verification")
+    if tag.tag_type == "discipline":
+        raise ForbiddenError("Program tags can only be set from your school profile")
     if tag.tag_type not in FOLLOWABLE_TYPES:
         raise ValidationError("This tag cannot be followed")
     return tag
@@ -144,7 +146,8 @@ async def update_profile(db: AsyncSession, user: User, payload: ProfileUpdateIn)
     if payload.nationality_tag_ids is not None or payload.hobby_tag_ids is not None:
         new_tag_ids = list(dict.fromkeys((payload.nationality_tag_ids or []) + (payload.hobby_tag_ids or [])))
         school_ids = await user_repository.school_tag_ids(db, user.id)
-        await user_repository.replace_tags(db, user.id, [*school_ids, *new_tag_ids])
+        discipline_ids = await user_repository.list_identity_tag_ids_of_types(db, user.id, ("discipline",))
+        await user_repository.replace_tags(db, user.id, [*school_ids, *discipline_ids, *new_tag_ids])
 
     await db.commit()
     return await _load_profile(db, user.id)
@@ -185,6 +188,8 @@ async def unfollow_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> Non
     tag = await tag_repository.get_by_id(db, tag_id)
     if tag is not None and tag.tag_type == "school":
         raise ForbiddenError("School tags can only be added via verification")
+    if tag is not None and tag.tag_type == "discipline":
+        raise ForbiddenError("Program tags can only be set from your school profile")
     if tag is not None and tag.tag_type == "nationality":
         user = await user_repository.get_by_id(db, user_id)
         if user is None:
@@ -293,6 +298,22 @@ async def replace_followed_tags(db: AsyncSession, user_id: uuid.UUID, payload: F
     await db.commit()
     tag_ids = await user_repository.list_followed_tag_ids(db, user_id, FOLLOWABLE_TYPES)
     return _followed_tags_out(user, tag_ids)
+
+
+async def set_discipline(db: AsyncSession, user: User, program_name: str) -> Tag:
+    verification = await school_repository.get_verification(db, user.id)
+    if verification is None or not school_service.is_currently_verified(verification):
+        raise ValidationError("You must verify your school before adding a program")
+    cleaned = " ".join(program_name.strip().split())
+    if not cleaned:
+        raise ValidationError("Program name is required")
+    if len(cleaned) > 100:
+        raise ValidationError("Program name must be at most 100 characters")
+    tag = await tag_repository.get_or_create(db, "discipline", program_name)
+    await user_repository.remove_tags_by_type(db, user.id, "discipline")
+    await user_repository.add_tag(db, user.id, tag.id)
+    await db.commit()
+    return tag
 
 
 async def get_setup_status(db: AsyncSession, user: User) -> SetupStatusOut:

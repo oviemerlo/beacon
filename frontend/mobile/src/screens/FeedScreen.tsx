@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, TextInput, ScrollView } from "react-native";
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, TextInput } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
 import { audienceFilterActive, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "../helpers/tags";
@@ -158,7 +158,7 @@ export function FeedScreen({
         {chips.length > 0 && (
           <>
             <Text style={styles.searchByTags}>Search by tags</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            <View style={styles.chipRow}>
               {chips.map((chip) => (
                 <Pressable
                   key={chip.key}
@@ -171,7 +171,7 @@ export function FeedScreen({
                   <Text style={[styles.filterChipText, chip.selected && styles.filterChipTextActive]}>{chip.label}</Text>
                 </Pressable>
               ))}
-            </ScrollView>
+            </View>
           </>
         )}
       </View>
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  chipRow: { gap: 8, paddingVertical: 2 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: 2 },
   filterChip: {
     borderColor: colors.dusk600,
     borderWidth: 1,

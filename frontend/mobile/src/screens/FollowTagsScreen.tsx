@@ -3,6 +3,7 @@ import { useNavigation } from "@react-navigation/native";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, TextInput, Alert } from "react-native";
 
 import { CourseTags } from "../components/CourseTags";
+import { DisciplineProgram } from "../components/DisciplineProgram";
 import { RegionCountriesSheet } from "../components/RegionCountriesSheet";
 import { SchoolVerification } from "../components/SchoolVerification";
 import { TagChipRow } from "../components/TagChip";
@@ -352,9 +353,12 @@ export function FollowTagsScreen() {
             }}
           />
           {schoolVerified ? (
-            <View style={{ marginTop: 16 }}>
-              <Text style={styles.sectionTitle}>Course tags</Text>
-              <CourseTags />
+            <View style={{ marginTop: 16, gap: 16 }}>
+              <DisciplineProgram />
+              <View>
+                <Text style={styles.sectionTitle}>Course tags</Text>
+                <CourseTags />
+              </View>
             </View>
           ) : null}
         </View>

@@ -130,14 +130,14 @@ async def unfollow_tag(db: AsyncSession, user_id: uuid.UUID, tag_id: int) -> Non
 
 
 async def replace_followed_tags(db: AsyncSession, user_id: uuid.UUID, tag_ids: list[int]) -> None:
-    """Replace follows and owned tags together. School verification tags are kept."""
+    """Replace follows and owned tags together. School and discipline tags are kept."""
     existing_result = await db.execute(select(UserFollowedTag).where(UserFollowedTag.user_id == user_id))
     existing_by_id = {row.tag_id: row for row in existing_result.scalars().all()}
     desired = set(tag_ids)
-    school_ids = set(await school_tag_ids(db, user_id))
+    protected_ids = set(await list_identity_tag_ids_of_types(db, user_id, ("school", "discipline")))
 
     for tag_id, row in existing_by_id.items():
-        if tag_id in school_ids:
+        if tag_id in protected_ids:
             continue
         if tag_id not in desired:
             await db.delete(row)
@@ -146,8 +146,13 @@ async def replace_followed_tags(db: AsyncSession, user_id: uuid.UUID, tag_ids: l
         if tag_id not in existing_by_id:
             db.add(UserFollowedTag(user_id=user_id, tag_id=tag_id, notifications_enabled=False))
 
-    await replace_tags(db, user_id, list(dict.fromkeys([*school_ids, *tag_ids])))
+    await replace_tags(db, user_id, list(dict.fromkeys([*protected_ids, *tag_ids])))
     await db.flush()
+
+
+async def remove_tags_by_type(db: AsyncSession, user_id: uuid.UUID, tag_type: str) -> None:
+    for tag_id in await list_identity_tag_ids_of_types(db, user_id, (tag_type,)):
+        await unfollow_and_disown(db, user_id, tag_id)
 
 
 async def follow_and_own(db: AsyncSession, user_id: uuid.UUID, tag_id: int, notifications_enabled: bool) -> None:

@@ -107,12 +107,18 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const activeRadiusSteps = reach === "local" ? LOCAL_RADIUS_STEPS_M : REGIONAL_RADIUS_STEPS_M;
   const activeRadiusIdx = reach === "local" ? localRadiusIdx : regionalRadiusIdx;
   const activeRadiusMeters = activeRadiusSteps[activeRadiusIdx];
+  const disciplineTag = profileTags.find((tag) => tag.tag_type === "discipline") ?? null;
+  const generalProfileTags = profileTags.filter((tag) => tag.tag_type !== "discipline");
+  const schoolSelected = profileTags.some((tag) => tag.tag_type === "school" && selectedTagIds.includes(tag.id));
   const selectedTags = profileTags.filter((tag) => selectedTagIds.includes(tag.id));
-  const availableProfileTags = profileTags.filter((tag) => !selectedTagIds.includes(tag.id));
+  const availableProfileTags = generalProfileTags.filter((tag) => !selectedTagIds.includes(tag.id));
   const availableCourses = myCourses.filter((course) => !selectedCourseCodes.includes(course));
-  const allProfileTagsSelected = profileTags.length > 0 && availableProfileTags.length === 0;
+  const disciplineAvailable = Boolean(disciplineTag && schoolSelected && !selectedTagIds.includes(disciplineTag.id));
+  const allProfileTagsSelected = generalProfileTags.length > 0 && availableProfileTags.length === 0 && !disciplineAvailable;
   const allCoursesSelected = myCourses.length === 0 || availableCourses.length === 0;
-  const canSelectAll = (profileTags.length > 0 || myCourses.length > 0) && (!allProfileTagsSelected || !allCoursesSelected);
+  const canSelectAll =
+    (generalProfileTags.length > 0 || myCourses.length > 0 || disciplineAvailable) &&
+    (!allProfileTagsSelected || !allCoursesSelected || disciplineAvailable);
   const canClearAll = selectedTagIds.length > 0 || selectedCourseCodes.length > 0;
   const localReachColors = reachSelectorColors("local", reach === "local");
   const regionalReachColors = reachSelectorColors("regional", reach === "regional", !canUseRegional);
@@ -166,13 +172,23 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   }, []);
 
   function selectAllTargeting() {
-    setSelectedTagIds(profileTags.map((tag) => tag.id));
+    const hasSchool = profileTags.some((tag) => tag.tag_type === "school");
+    setSelectedTagIds(profileTags.filter((tag) => tag.tag_type !== "discipline" || hasSchool).map((tag) => tag.id));
     setSelectedCourseCodes([...myCourses]);
   }
 
   function clearAllTargeting() {
     setSelectedTagIds([]);
     setSelectedCourseCodes([]);
+  }
+
+  function toggleTargetTag(tagId: number) {
+    setSelectedTagIds((prev) => {
+      const next = toggleItem(prev, tagId);
+      const schoolStillOn = profileTags.some((tag) => tag.tag_type === "school" && next.includes(tag.id));
+      if (schoolStillOn) return next;
+      return next.filter((id) => profileTags.find((tag) => tag.id === id)?.tag_type !== "discipline");
+    });
   }
 
   function toggleCourse(course: string) {
@@ -333,7 +349,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
           {selectedTags.map((tag) => (
             <Pressable
               key={tag.id}
-              onPress={() => setSelectedTagIds((prev) => toggleItem(prev, tag.id))}
+              onPress={() => toggleTargetTag(tag.id)}
               style={[styles.pill, styles.pillActive]}
             >
               <Text style={[styles.pillText, styles.pillTextActive]}>{tag.label}</Text>
@@ -348,7 +364,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
       )}
 
       <Text style={styles.profileLabel}>Your profile tags</Text>
-      {profileTags.length === 0 ? (
+      {generalProfileTags.length === 0 ? (
         <Text style={styles.emptyText}>No profile tags yet. Add tags from your profile.</Text>
       ) : availableProfileTags.length === 0 ? (
         <Text style={styles.emptyText}>All of your profile tags are selected above.</Text>
@@ -357,7 +373,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
           {availableProfileTags.map((tag) => (
             <Pressable
               key={tag.id}
-              onPress={() => setSelectedTagIds((prev) => toggleItem(prev, tag.id))}
+              onPress={() => toggleTargetTag(tag.id)}
               style={styles.pill}
             >
               <Text style={styles.pillText}>{tag.label}</Text>
@@ -365,6 +381,28 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
           ))}
         </View>
       )}
+
+      {disciplineTag ? (
+        <View style={styles.courseWrap}>
+          <Text style={[styles.label, { marginBottom: 8 }]}>Your program</Text>
+          <Text style={styles.emptyText}>
+            Program tags AND with your school tag. Select your school first to target classmates in your department.
+          </Text>
+          <Pressable
+            onPress={() => toggleTargetTag(disciplineTag.id)}
+            disabled={!schoolSelected && !selectedTagIds.includes(disciplineTag.id)}
+            style={[
+              styles.pill,
+              selectedTagIds.includes(disciplineTag.id) && styles.pillActive,
+              !schoolSelected && !selectedTagIds.includes(disciplineTag.id) && styles.pillDisabled,
+            ]}
+          >
+            <Text style={[styles.pillText, selectedTagIds.includes(disciplineTag.id) && styles.pillTextActive]}>
+              {disciplineTag.label}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {schoolVerified && (
         <View style={styles.courseWrap}>

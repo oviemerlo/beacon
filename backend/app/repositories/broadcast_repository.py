@@ -266,6 +266,7 @@ def _targeting_gates(
     nationality_gate = (~has_tag_type("nationality")) | (matching_tag_count_for_type("nationality", viewer_location_tag_ids) > 0)
     region_gate = (~has_tag_type("region")) | (matching_tag_count_for_type("region", viewer_location_tag_ids) > 0)
     school_gate = (~has_tag_type("school")) | (matching_tag_count_for_type("school", viewer_profile_tag_ids) > 0)
+    discipline_gate = (~has_tag_type("discipline")) | (matching_tag_count_for_type("discipline", viewer_profile_tag_ids) > 0)
 
     draft_course_codes = list(course_codes or [])
     if draft:
@@ -362,8 +363,9 @@ def _targeting_gates(
     tag_gate = untagged_reply | (~has_location_audience_tag) | any_mode_match | all_mode_match
 
     # School or course targeting ANDs every selected dimension (country, region, school, hobby, course).
-    type_and_gates = nationality_gate & region_gate & school_gate & hobby_gate & course_gate
-    legacy_gates = nationality_gate & region_gate & school_gate & course_gate & tag_gate
+    # Discipline ANDs like school — it is never pooled with nationality/region/hobby.
+    type_and_gates = nationality_gate & region_gate & school_gate & hobby_gate & course_gate & discipline_gate
+    legacy_gates = nationality_gate & region_gate & school_gate & course_gate & discipline_gate & tag_gate
     return (uses_school_or_course & type_and_gates) | (~uses_school_or_course & legacy_gates)
 
 

@@ -65,12 +65,18 @@ export default function NewBroadcastPage() {
   const activeRadiusIdx = reach === "local" ? localRadiusIdx : regionalRadiusIdx;
   const activeRadiusMeters = activeRadiusSteps[activeRadiusIdx];
   const activeRadiusLabel = radiusLabel(activeRadiusMeters);
+  const disciplineTag = profileTags.find((tag) => tag.tag_type === "discipline") ?? null;
+  const generalProfileTags = profileTags.filter((tag) => tag.tag_type !== "discipline");
+  const schoolSelected = profileTags.some((tag) => tag.tag_type === "school" && selectedTagIds.includes(tag.id));
   const selectedTags = profileTags.filter((tag) => selectedTagIds.includes(tag.id));
-  const availableProfileTags = profileTags.filter((tag) => !selectedTagIds.includes(tag.id));
+  const availableProfileTags = generalProfileTags.filter((tag) => !selectedTagIds.includes(tag.id));
   const availableCourses = myCourses.filter((course) => !selectedCourseCodes.includes(course));
-  const allProfileTagsSelected = profileTags.length > 0 && availableProfileTags.length === 0;
+  const disciplineAvailable = Boolean(disciplineTag && schoolSelected && !selectedTagIds.includes(disciplineTag.id));
+  const allProfileTagsSelected = generalProfileTags.length > 0 && availableProfileTags.length === 0 && !disciplineAvailable;
   const allCoursesSelected = myCourses.length === 0 || availableCourses.length === 0;
-  const canSelectAll = (profileTags.length > 0 || myCourses.length > 0) && (!allProfileTagsSelected || !allCoursesSelected);
+  const canSelectAll =
+    (generalProfileTags.length > 0 || myCourses.length > 0 || disciplineAvailable) &&
+    (!allProfileTagsSelected || !allCoursesSelected || disciplineAvailable);
   const canClearAll = selectedTagIds.length > 0 || selectedCourseCodes.length > 0;
 
   useEffect(() => {
@@ -121,13 +127,23 @@ export default function NewBroadcastPage() {
   }, []);
 
   function selectAllTargeting() {
-    setSelectedTagIds(profileTags.map((tag) => tag.id));
+    const hasSchool = profileTags.some((tag) => tag.tag_type === "school");
+    setSelectedTagIds(profileTags.filter((tag) => tag.tag_type !== "discipline" || hasSchool).map((tag) => tag.id));
     setSelectedCourseCodes([...myCourses]);
   }
 
   function clearAllTargeting() {
     setSelectedTagIds([]);
     setSelectedCourseCodes([]);
+  }
+
+  function toggleTargetTag(tagId: number) {
+    setSelectedTagIds((prev) => {
+      const next = toggleItem(prev, tagId);
+      const schoolStillOn = profileTags.some((tag) => tag.tag_type === "school" && next.includes(tag.id));
+      if (schoolStillOn) return next;
+      return next.filter((id) => profileTags.find((tag) => tag.id === id)?.tag_type !== "discipline");
+    });
   }
 
   function toggleCourse(course: string) {
@@ -292,7 +308,7 @@ export default function NewBroadcastPage() {
               {selectedTags.map((tag) => (
                 <button
                   key={tag.id}
-                  onClick={() => setSelectedTagIds((prev) => toggleItem(prev, tag.id))}
+                  onClick={() => toggleTargetTag(tag.id)}
                   className="tag-pill tag-pill-active"
                 >
                   {tag.label}
@@ -309,7 +325,7 @@ export default function NewBroadcastPage() {
 
         <div className="mb-10">
           <p className="text-sm font-medium mb-4">Your profile tags</p>
-          {profileTags.length === 0 ? (
+          {generalProfileTags.length === 0 ? (
             <p className="text-parchment-500 text-sm">
               No profile tags yet.{" "}
               <Link href="/follow-tags" className="text-signal-400 hover:text-signal-300">
@@ -323,7 +339,7 @@ export default function NewBroadcastPage() {
               {availableProfileTags.map((tag) => (
                 <button
                   key={tag.id}
-                  onClick={() => setSelectedTagIds((prev) => toggleItem(prev, tag.id))}
+                  onClick={() => toggleTargetTag(tag.id)}
                   className="tag-pill"
                 >
                   {tag.label}
@@ -332,6 +348,23 @@ export default function NewBroadcastPage() {
             </div>
           )}
         </div>
+
+        {disciplineTag && (
+          <div className="mb-10">
+            <p className="text-sm font-medium mb-2">Your program</p>
+            <p className="text-parchment-500 text-sm mb-4">
+              Program tags AND with your school tag. Select your school first to target classmates in your department.
+            </p>
+            <button
+              type="button"
+              onClick={() => toggleTargetTag(disciplineTag.id)}
+              disabled={!schoolSelected && !selectedTagIds.includes(disciplineTag.id)}
+              className={`tag-pill disabled:opacity-40 ${selectedTagIds.includes(disciplineTag.id) ? "tag-pill-active" : ""}`}
+            >
+              {disciplineTag.label}
+            </button>
+          </div>
+        )}
 
         {schoolVerified && (
           <div className="mb-10">

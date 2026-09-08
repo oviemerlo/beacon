@@ -1,5 +1,5 @@
 export type CountedTagType = "nationality" | "region" | "hobby";
-export type TagType = CountedTagType | "school";
+export type TagType = CountedTagType | "school" | "discipline";
 
 export interface Tag {
   id: number;
