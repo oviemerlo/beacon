@@ -82,8 +82,6 @@ export function NewGroupScreen({
           value={name}
           onChangeText={setName}
           maxLength={200}
-          placeholder="Study group"
-          placeholderTextColor={colors.parchment500}
           autoFocus
         />
         <Text style={styles.label}>Max participants (optional)</Text>
