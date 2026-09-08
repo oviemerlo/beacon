@@ -8,7 +8,7 @@ place distance is ever compared against a broadcast's radius.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, case, func, select, union
+from sqlalchemy import and_, case, false, func, literal, select, true, union
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
@@ -203,11 +203,30 @@ def apply_audience_filters(stmt, echo_id_col, tag_ids: list[int] | None, course_
     return stmt
 
 
-def _visibility_clause(user_id: uuid.UUID):
-    viewer_profile_tag_ids = select(UserTag.tag_id).where(UserTag.user_id == user_id).subquery()
-    viewer_location_tag_ids = _viewer_match_tag_ids(user_id)
+def _targeting_gates(
+    viewer_id,
+    *,
+    tag_ids: list[int] | None = None,
+    tag_match_mode: str | None = None,
+    course_codes: list[str] | None = None,
+    school_id: int | None = None,
+):
+    """
+    Audience gates shared by live feed visibility and compose-time reach estimate.
+
+    When tag_ids is None, tag/course/mode inputs are read from the correlated
+    Broadcast row. When tag_ids is a list (including empty), those inputs are
+    the hypothetical composer draft instead.
+    """
+    draft = tag_ids is not None
+    viewer_profile_tag_ids = select(UserTag.tag_id).where(UserTag.user_id == viewer_id).subquery()
+    viewer_location_tag_ids = _viewer_match_tag_ids(viewer_id)
 
     def has_tag_type(tag_type: str):
+        if draft:
+            if not tag_ids:
+                return false()
+            return select(Tag.id).where(Tag.id.in_(tag_ids), Tag.tag_type == tag_type).exists()
         return (
             select(BroadcastTag.tag_id)
             .join(Tag, Tag.id == BroadcastTag.tag_id)
@@ -220,6 +239,18 @@ def _visibility_clause(user_id: uuid.UUID):
         )
 
     def matching_tag_count_for_type(tag_type: str, viewer_tag_ids_subquery):
+        if draft:
+            if not tag_ids:
+                return literal(0)
+            return (
+                select(func.count(Tag.id))
+                .where(
+                    Tag.id.in_(tag_ids),
+                    Tag.tag_type == tag_type,
+                    Tag.id.in_(select(viewer_tag_ids_subquery.c.tag_id)),
+                )
+                .scalar_subquery()
+            )
         return (
             select(func.count(BroadcastTag.tag_id))
             .join(Tag, Tag.id == BroadcastTag.tag_id)
@@ -235,72 +266,148 @@ def _visibility_clause(user_id: uuid.UUID):
     nationality_gate = (~has_tag_type("nationality")) | (matching_tag_count_for_type("nationality", viewer_location_tag_ids) > 0)
     region_gate = (~has_tag_type("region")) | (matching_tag_count_for_type("region", viewer_location_tag_ids) > 0)
     school_gate = (~has_tag_type("school")) | (matching_tag_count_for_type("school", viewer_profile_tag_ids) > 0)
-    targeted_course_count = (
-        select(func.count())
-        .select_from(BroadcastCourse)
-        .where(BroadcastCourse.broadcast_id == Broadcast.id)
-        .correlate(Broadcast)
-        .scalar_subquery()
-    )
-    matched_course_count = (
-        select(func.count())
-        .select_from(BroadcastCourse)
-        .join(
-            UserCourseEnrollment,
-            (UserCourseEnrollment.user_id == user_id)
-            & (UserCourseEnrollment.school_id == Broadcast.school_id)
-            & (UserCourseEnrollment.course_code == BroadcastCourse.course_code),
-        )
-        .where(BroadcastCourse.broadcast_id == Broadcast.id)
-        .correlate(Broadcast)
-        .scalar_subquery()
-    )
-    legacy_course_match = (
-        Broadcast.course_code.is_not(None)
-        & (targeted_course_count == 0)
-        & (
-            select(UserCourseEnrollment.user_id)
+
+    draft_course_codes = list(course_codes or [])
+    if draft:
+        targeted_course_count = literal(len(draft_course_codes))
+        matched_course_count = (
+            select(func.count())
+            .select_from(UserCourseEnrollment)
             .where(
-                UserCourseEnrollment.user_id == user_id,
-                UserCourseEnrollment.school_id == Broadcast.school_id,
-                UserCourseEnrollment.course_code == Broadcast.course_code,
+                UserCourseEnrollment.user_id == viewer_id,
+                UserCourseEnrollment.school_id == school_id,
+                UserCourseEnrollment.course_code.in_(draft_course_codes),
             )
-            .correlate(Broadcast)
-            .exists()
+            .scalar_subquery()
+            if draft_course_codes
+            else literal(0)
         )
-    )
+        legacy_course_absent = true()
+        legacy_course_match = false()
+    else:
+        targeted_course_count = (
+            select(func.count())
+            .select_from(BroadcastCourse)
+            .where(BroadcastCourse.broadcast_id == Broadcast.id)
+            .correlate(Broadcast)
+            .scalar_subquery()
+        )
+        matched_course_count = (
+            select(func.count())
+            .select_from(BroadcastCourse)
+            .join(
+                UserCourseEnrollment,
+                (UserCourseEnrollment.user_id == viewer_id)
+                & (UserCourseEnrollment.school_id == Broadcast.school_id)
+                & (UserCourseEnrollment.course_code == BroadcastCourse.course_code),
+            )
+            .where(BroadcastCourse.broadcast_id == Broadcast.id)
+            .correlate(Broadcast)
+            .scalar_subquery()
+        )
+        legacy_course_absent = Broadcast.course_code.is_(None)
+        legacy_course_match = (
+            Broadcast.course_code.is_not(None)
+            & (targeted_course_count == 0)
+            & (
+                select(UserCourseEnrollment.user_id)
+                .where(
+                    UserCourseEnrollment.user_id == viewer_id,
+                    UserCourseEnrollment.school_id == Broadcast.school_id,
+                    UserCourseEnrollment.course_code == Broadcast.course_code,
+                )
+                .correlate(Broadcast)
+                .exists()
+            )
+        )
     course_gate = (
-        ((targeted_course_count == 0) & Broadcast.course_code.is_(None))
+        ((targeted_course_count == 0) & legacy_course_absent)
         | ((targeted_course_count > 0) & (matched_course_count == targeted_course_count))
         | legacy_course_match
     )
 
     hobby_gate = (~has_tag_type("hobby")) | (matching_tag_count_for_type("hobby", viewer_location_tag_ids) > 0)
-    has_course_target = (targeted_course_count > 0) | Broadcast.course_code.is_not(None)
+    has_course_target = (targeted_course_count > 0) | (~legacy_course_absent)
     uses_school_or_course = has_tag_type("school") | has_course_target
 
-    broadcast_tag_count = (
-        select(func.count(BroadcastTag.tag_id))
-        .where(BroadcastTag.broadcast_id == Broadcast.id)
-        .correlate(Broadcast)
-        .scalar_subquery()
-    )
-    matching_tag_count = _audience_overlap_count(viewer_location_tag_ids)
-    any_mode_match = (Broadcast.tag_match_mode != "all") & (matching_tag_count > 0)
-    all_mode_match = (
-        (Broadcast.tag_match_mode == "all")
-        & (broadcast_tag_count > 0)
-        & (matching_tag_count == broadcast_tag_count)
-    )
+    if draft:
+        broadcast_tag_count = literal(len(tag_ids or []))
+        matching_tag_count = (
+            literal(0)
+            if not tag_ids
+            else (
+                select(func.count())
+                .select_from(viewer_location_tag_ids)
+                .where(viewer_location_tag_ids.c.tag_id.in_(tag_ids))
+                .scalar_subquery()
+            )
+        )
+        mode = literal(tag_match_mode or "any")
+        untagged_reply = false()
+    else:
+        broadcast_tag_count = (
+            select(func.count(BroadcastTag.tag_id))
+            .where(BroadcastTag.broadcast_id == Broadcast.id)
+            .correlate(Broadcast)
+            .scalar_subquery()
+        )
+        matching_tag_count = _audience_overlap_count(viewer_location_tag_ids)
+        mode = Broadcast.tag_match_mode
+        untagged_reply = Broadcast.parent_broadcast_id.is_not(None) & (broadcast_tag_count == 0)
+
+    any_mode_match = (mode != "all") & (matching_tag_count > 0)
+    all_mode_match = (mode == "all") & (broadcast_tag_count > 0) & (matching_tag_count == broadcast_tag_count)
     # Untagged in-feed replies stay visible so existing threads don't disappear.
-    untagged_reply = Broadcast.parent_broadcast_id.is_not(None) & (broadcast_tag_count == 0)
     has_location_audience_tag = has_tag_type("nationality") | has_tag_type("region") | has_tag_type("hobby")
     tag_gate = untagged_reply | (~has_location_audience_tag) | any_mode_match | all_mode_match
 
     # School or course targeting ANDs every selected dimension (country, region, school, hobby, course).
     type_and_gates = nationality_gate & region_gate & school_gate & hobby_gate & course_gate
     legacy_gates = nationality_gate & region_gate & school_gate & course_gate & tag_gate
-    return (Broadcast.sender_id == user_id) | ((uses_school_or_course & type_and_gates) | (~uses_school_or_course & legacy_gates))
+    return (uses_school_or_course & type_and_gates) | (~uses_school_or_course & legacy_gates)
+
+
+def _visibility_clause(user_id: uuid.UUID):
+    return (Broadcast.sender_id == user_id) | _targeting_gates(user_id)
+
+
+def bucket_count(n: int) -> str:
+    if n < 20:
+        return "Fewer than 20"
+    if n < 100:
+        return "20–100"
+    if n < 500:
+        return "100–500"
+    return "500+"
+
+
+def estimate_reach_clause(
+    sender_id: uuid.UUID,
+    sender_location,
+    radius_meters: int,
+    tag_ids: list[int],
+    *,
+    tag_match_mode: str = "any",
+    course_codes: list[str] | None = None,
+    school_id: int | None = None,
+    is_global: bool = False,
+):
+    """Same targeting gates as feed visibility, plus compose-time reach filters."""
+    targeting = _targeting_gates(
+        User.id,
+        tag_ids=tag_ids,
+        tag_match_mode=tag_match_mode,
+        course_codes=course_codes,
+        school_id=school_id,
+    )
+    distance_clause = true() if is_global else func.ST_DWithin(User.location, sender_location, radius_meters)
+    return and_(
+        targeting,
+        distance_clause,
+        User.discoverable_in_broadcasts.is_(True),
+        User.is_suspended.is_(False),
+        User.id != sender_id,
+    )
 
 
 def _blocked_sender_ids(user_id: uuid.UUID):

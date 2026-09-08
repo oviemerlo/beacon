@@ -155,6 +155,10 @@ export interface FeedReply {
   reply_count?: number;
 }
 
+export interface ReachEstimate {
+  bucket: string;
+}
+
 export interface BroadcastCreatePayload {
   content: string;
   latitude: number;

@@ -118,6 +118,10 @@ class FollowedTagsOut(BaseModel):
     country_slots: list[CountrySlotOut] = []
 
 
+class ReachEstimateOut(BaseModel):
+    bucket: str
+
+
 class BroadcastCreateIn(BaseModel):
     content: str = Field(min_length=1, max_length=200)
     latitude: float

@@ -4,10 +4,12 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.config import settings
 from app.models.broadcast import Broadcast
+from app.models.user import User
 from app.repositories import broadcast_repository, report_repository, school_repository, tag_repository, user_repository
 from app.schemas.schemas import BroadcastCreateIn, PublicBroadcastOut, PublicProfileOut
 from app.services.broadcast_tags import serialize_echo_rows, tag_payload
@@ -204,3 +206,43 @@ async def get_broadcast_thread(db: AsyncSession, user_id: uuid.UUID, broadcast_i
     replies = await broadcast_repository.list_visible_replies(db, user_id, root_id)
     cards = await serialize_echo_rows(db, user_id, [parent_row, *replies])
     return {"parent": cards[0], "replies": cards[1:]}
+
+
+async def estimate_reach(
+    db: AsyncSession,
+    sender: User,
+    tag_ids: list[int],
+    radius_meters: int,
+    *,
+    tag_match_mode: str = "any",
+    course_codes: list[str] | None = None,
+    is_global: bool = False,
+) -> dict:
+    if not sender.location:
+        raise ValidationError("Your location must be set to estimate reach")
+    if not is_global:
+        if radius_meters < settings.MIN_RADIUS_METERS:
+            raise ValidationError(f"radius_meters must be at least {settings.MIN_RADIUS_METERS}")
+        if radius_meters > settings.MAX_BROADCAST_RADIUS_METERS:
+            raise ValidationError(f"radius_meters cannot exceed {settings.MAX_BROADCAST_RADIUS_METERS}")
+
+    requested_courses = [prepare_course_tag(code) for code in (course_codes or []) if code and str(code).strip()]
+    requested_courses = list(dict.fromkeys(requested_courses))
+    school_id: int | None = None
+    if requested_courses:
+        verification = await school_repository.get_verification(db, sender.id)
+        if verification is not None and is_currently_verified(verification):
+            school_id = verification.school_id
+
+    clause = broadcast_repository.estimate_reach_clause(
+        sender.id,
+        sender.location,
+        radius_meters,
+        tag_ids,
+        tag_match_mode=tag_match_mode,
+        course_codes=requested_courses,
+        school_id=school_id,
+        is_global=is_global,
+    )
+    count = await db.scalar(select(func.count(User.id)).where(clause))
+    return {"bucket": broadcast_repository.bucket_count(count or 0)}

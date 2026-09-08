@@ -25,7 +25,22 @@ import {
   REGIONAL_RADIUS_STEPS_M,
   REGIONAL_REACH_LOCKED_MESSAGE,
 } from "@/helpers/broadcast-reach";
-import type { BroadcastCreatePayload, Tag, UserProfile } from "@/types/api";
+import type { BroadcastCreatePayload, ReachEstimate, Tag, UserProfile } from "@/types/api";
+
+function estimateReachPath(
+  tagIds: number[],
+  radiusMeters: number,
+  isGlobal: boolean,
+  courseCodes: string[],
+): string {
+  const params = new URLSearchParams();
+  params.set("radius_meters", String(radiusMeters));
+  params.set("is_global", isGlobal ? "true" : "false");
+  params.set("tag_match_mode", "any");
+  for (const id of tagIds) params.append("tag_ids", String(id));
+  for (const code of courseCodes) params.append("course_codes", code);
+  return `/broadcasts/estimate-reach?${params}`;
+}
 
 export default function NewBroadcastPage() {
   const router = useRouter();
@@ -43,6 +58,8 @@ export default function NewBroadcastPage() {
   const [canAttach, setCanAttach] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reachBucket, setReachBucket] = useState<string | null>(null);
+  const [estimatingReach, setEstimatingReach] = useState(false);
 
   const activeRadiusSteps = reach === "local" ? LOCAL_RADIUS_STEPS_M : REGIONAL_RADIUS_STEPS_M;
   const activeRadiusIdx = reach === "local" ? localRadiusIdx : regionalRadiusIdx;
@@ -55,6 +72,32 @@ export default function NewBroadcastPage() {
   const allCoursesSelected = myCourses.length === 0 || availableCourses.length === 0;
   const canSelectAll = (profileTags.length > 0 || myCourses.length > 0) && (!allProfileTagsSelected || !allCoursesSelected);
   const canClearAll = selectedTagIds.length > 0 || selectedCourseCodes.length > 0;
+
+  useEffect(() => {
+    if (selectedTagIds.length === 0) {
+      setReachBucket(null);
+      setEstimatingReach(false);
+      return;
+    }
+    let cancelled = false;
+    setEstimatingReach(true);
+    const handle = window.setTimeout(async () => {
+      try {
+        const result = await clientFetch<ReachEstimate>(
+          estimateReachPath(selectedTagIds, activeRadiusMeters, reach === "global", selectedCourseCodes)
+        );
+        if (!cancelled) setReachBucket(result.bucket);
+      } catch {
+        if (!cancelled) setReachBucket(null);
+      } finally {
+        if (!cancelled) setEstimatingReach(false);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [selectedTagIds, selectedCourseCodes, activeRadiusMeters, reach]);
 
   useEffect(() => {
     clientFetch<UserProfile>("/users/me")
@@ -189,9 +232,9 @@ export default function NewBroadcastPage() {
         </div>
         {!canUseRegional && <p className="text-parchment-500 text-xs mb-4">{REGIONAL_REACH_LOCKED_MESSAGE}</p>}
         {reach === "global" ? (
-          <p className="text-signal-400 text-xs font-semibold font-mono mb-10">Global</p>
+          <p className="text-signal-400 text-xs font-semibold font-mono mb-3">Global</p>
         ) : (
-          <div className="relative mb-10 pt-6">
+          <div className="relative mb-3 pt-6">
             <span
               className="pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap text-xs font-semibold font-mono text-signal-400"
               style={{ left: `${(activeRadiusIdx / Math.max(activeRadiusSteps.length - 1, 1)) * 100}%` }}
@@ -210,6 +253,15 @@ export default function NewBroadcastPage() {
             />
           </div>
         )}
+        <p className="text-xs text-parchment-500 min-h-4 mb-10">
+          {selectedTagIds.length === 0
+            ? "\u00a0"
+            : estimatingReach
+              ? "Estimating…"
+              : reachBucket
+                ? `Estimated reach: ${reachBucket} people`
+                : "\u00a0"}
+        </p>
 
         <div className="mb-10">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-4">

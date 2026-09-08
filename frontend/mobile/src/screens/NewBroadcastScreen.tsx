@@ -21,7 +21,22 @@ import {
 import { toggleItem } from "../helpers/tags";
 import { getMyCourses, getVerificationStatus } from "../helpers/schoolVerification";
 import { colors, radii } from "../theme/tokens";
-import type { BroadcastCreatePayload, Tag, UserProfile } from "../types/api";
+import type { BroadcastCreatePayload, ReachEstimate, Tag, UserProfile } from "../types/api";
+
+function estimateReachPath(
+  tagIds: number[],
+  radiusMeters: number,
+  isGlobal: boolean,
+  courseCodes: string[],
+): string {
+  const params = new URLSearchParams();
+  params.set("radius_meters", String(radiusMeters));
+  params.set("is_global", isGlobal ? "true" : "false");
+  params.set("tag_match_mode", "any");
+  for (const id of tagIds) params.append("tag_ids", String(id));
+  for (const code of courseCodes) params.append("course_codes", code);
+  return `/broadcasts/estimate-reach?${params}`;
+}
 
 const SLIDER_THUMB = 28;
 
@@ -86,6 +101,8 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const [canAttach, setCanAttach] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reachBucket, setReachBucket] = useState<string | null>(null);
+  const [estimatingReach, setEstimatingReach] = useState(false);
 
   const activeRadiusSteps = reach === "local" ? LOCAL_RADIUS_STEPS_M : REGIONAL_RADIUS_STEPS_M;
   const activeRadiusIdx = reach === "local" ? localRadiusIdx : regionalRadiusIdx;
@@ -100,6 +117,32 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const localReachColors = reachSelectorColors("local", reach === "local");
   const regionalReachColors = reachSelectorColors("regional", reach === "regional", !canUseRegional);
   const globalReachColors = reachSelectorColors("global", reach === "global");
+
+  useEffect(() => {
+    if (selectedTagIds.length === 0) {
+      setReachBucket(null);
+      setEstimatingReach(false);
+      return;
+    }
+    let cancelled = false;
+    setEstimatingReach(true);
+    const handle = setTimeout(async () => {
+      try {
+        const result = await apiFetch<ReachEstimate>(
+          estimateReachPath(selectedTagIds, activeRadiusMeters, reach === "global", selectedCourseCodes)
+        );
+        if (!cancelled) setReachBucket(result.bucket);
+      } catch {
+        if (!cancelled) setReachBucket(null);
+      } finally {
+        if (!cancelled) setEstimatingReach(false);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [selectedTagIds, selectedCourseCodes, activeRadiusMeters, reach]);
 
   useEffect(() => {
     apiFetch<UserProfile>("/users/me")
@@ -254,6 +297,15 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
           onIndexChange={(value) => (reach === "local" ? setLocalRadiusIdx(value) : setRegionalRadiusIdx(value))}
         />
       )}
+      <Text style={styles.reachEstimate}>
+        {selectedTagIds.length === 0
+          ? " "
+          : estimatingReach
+            ? "Estimating…"
+            : reachBucket
+              ? `Estimated reach: ${reachBucket} people`
+              : " "}
+      </Text>
 
       <View style={styles.selectedHeader}>
         <Text style={styles.label}>Selected for this broadcast</Text>
@@ -370,10 +422,11 @@ const styles = StyleSheet.create({
   pillSlotStart: { flex: 1, alignItems: "flex-start" },
   pillSlotCenter: { flex: 1, alignItems: "center" },
   pillSlotEnd: { flex: 1, alignItems: "flex-end" },
-  sliderWrap: { marginBottom: 32 },
+  sliderWrap: { marginBottom: 8 },
   sliderValue: { position: "absolute", top: 0, color: colors.signal400, fontSize: 12, fontWeight: "700", fontFamily: "monospace" },
   slider: { marginTop: 20 },
-  globalReachValue: { color: colors.signal400, fontSize: 12, fontWeight: "700", fontFamily: "monospace", marginBottom: 32 },
+  globalReachValue: { color: colors.signal400, fontSize: 12, fontWeight: "700", fontFamily: "monospace", marginBottom: 8 },
+  reachEstimate: { color: colors.parchment500, fontSize: 12, minHeight: 16, marginBottom: 32 },
   pill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 14, paddingVertical: 8 },
   pillActive: { borderColor: colors.signal500, backgroundColor: `${colors.signal500}1A` },
   pillDisabled: { opacity: 0.4 },
