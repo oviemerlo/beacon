@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 
 from app.api.deps import get_current_user
-from app.api.routes.search import limiter
+from app.utils.rate_limit import limiter
 from app.models.user import User
 from app.services.geocoding_service import reverse_geocode
 

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.services import upload_service
+from app.utils.rate_limit import limiter
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -25,12 +26,15 @@ async def upload_avatar(
 
 
 @router.post("/broadcasts/{broadcast_id}/attachments")
+@limiter.limit("20/hour")
 async def upload_broadcast_attachment(
+    request: Request,
     broadcast_id: str,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    _ = request
     file_bytes, filename = await _read_upload(file, "attachment")
     row = await upload_service.upload_broadcast_attachment(
         db, current_user, broadcast_id, file_bytes, filename

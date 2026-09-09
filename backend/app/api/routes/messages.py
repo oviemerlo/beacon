@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.schemas import ConversationContextOut, ConversationStartIn, MessageIn, MessageOut
 from app.services import conversation_service
+from app.utils.rate_limit import limiter
 
 router = APIRouter(prefix="/conversations", tags=["messages"])
 
@@ -74,5 +75,13 @@ async def list_messages(conversation_id: str, current_user: User = Depends(get_c
 
 
 @router.post("/{conversation_id}/messages", status_code=201, response_model=MessageOut)
-async def send_message(conversation_id: str, payload: MessageIn, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@limiter.limit("60/hour")
+async def send_message(
+    request: Request,
+    conversation_id: str,
+    payload: MessageIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ = request
     return await conversation_service.send_message(db, current_user.id, conversation_id, payload.body)

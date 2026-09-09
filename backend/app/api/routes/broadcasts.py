@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.schemas import BroadcastCreateIn, BroadcastThreadOut, ReachEstimateOut
 from app.services import broadcast_service
+from app.utils.rate_limit import limiter
 
 router = APIRouter(prefix="/broadcasts", tags=["broadcasts"])
 
@@ -32,7 +33,14 @@ async def get_estimate_reach(
 
 
 @router.post("", status_code=201)
-async def create_broadcast(payload: BroadcastCreateIn, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@limiter.limit("15/hour")
+async def create_broadcast(
+    request: Request,
+    payload: BroadcastCreateIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ = request
     broadcast = await broadcast_service.create_broadcast(db, current_user.id, payload)
     return {"id": str(broadcast.id), "created_at": broadcast.created_at}
 

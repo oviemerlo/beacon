@@ -10,7 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
 from app.api.routes import admin, auth, blocks, broadcasts, feed, geocode, groups, internal, join, messages, public, reports, schools, search, tags, uploads, users
-from app.api.routes.search import limiter
+from app.utils.rate_limit import limiter
 from app.api.error_handlers import register_error_handlers
 from app.db.session import AsyncSessionLocal
 from app.repositories import user_repository

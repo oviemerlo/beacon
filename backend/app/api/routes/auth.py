@@ -16,12 +16,12 @@ registration, redirect construction, request parsing).
 """
 
 from authlib.integrations.starlette_client import OAuth
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from starlette.requests import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.config import settings
+from app.utils.rate_limit import limiter
 from app.utils.oauth_exchange import consume_exchange_code, create_exchange_code
 from app.utils.oauth_verify import TokenVerificationError, verify_apple_identity_token, verify_google_id_token
 from app.db.session import get_db
@@ -60,7 +60,9 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/exchange", response_model=TokenPairOut)
-async def exchange_code(code: str):
+@limiter.limit("10/minute")
+async def exchange_code(request: Request, code: str):
+    _ = request
     result = consume_exchange_code(code)
     if result is None:
         raise HTTPException(400, "Invalid or expired exchange code")
@@ -69,7 +71,9 @@ async def exchange_code(code: str):
 
 
 @router.post("/google/token-exchange", response_model=TokenPairOut)
-async def google_token_exchange(id_token: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def google_token_exchange(request: Request, id_token: str, db: AsyncSession = Depends(get_db)):
+    _ = request
     try:
         claims = verify_google_id_token(id_token)
     except TokenVerificationError as e:
@@ -82,7 +86,14 @@ async def google_token_exchange(id_token: str, db: AsyncSession = Depends(get_db
 
 
 @router.post("/apple/token-exchange", response_model=TokenPairOut)
-async def apple_token_exchange(identity_token: str, full_name: str | None = None, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def apple_token_exchange(
+    request: Request,
+    identity_token: str,
+    full_name: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    _ = request
     try:
         claims = await verify_apple_identity_token(identity_token)
     except TokenVerificationError as e:
@@ -95,5 +106,7 @@ async def apple_token_exchange(identity_token: str, full_name: str | None = None
 
 
 @router.post("/refresh", response_model=TokenPairOut)
-async def refresh_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit("30/minute")
+async def refresh_token(request: Request, refresh_token: str, db: AsyncSession = Depends(get_db)):
+    _ = request
     return await auth_service.refresh_token_pair(db, refresh_token)
