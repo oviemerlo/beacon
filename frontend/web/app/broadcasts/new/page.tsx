@@ -8,22 +8,16 @@ import { BroadcastAttachments } from "@/components/BroadcastAttachments";
 import { CharacterCountdown } from "@/components/EchoBody";
 import { BROADCAST_CONTENT_MAX } from "@/helpers/broadcast-content";
 import { clientFetch } from "@/helpers/client-api";
-import {
-  ATTACHMENT_LOCKED_MESSAGE,
-  canAttachFiles,
-  uploadBroadcastAttachment,
-} from "@/helpers/uploads";
+import { uploadBroadcastAttachment } from "@/helpers/uploads";
 import { getMyCourses, getVerificationStatus } from "@/helpers/school-verification";
 import { toggleItem } from "@/helpers/tags";
 import {
   buildReachPayload,
-  canUseRegionalReach,
   LOCAL_RADIUS_STEPS_M,
   radiusLabel,
   ReachCategory,
   reachSelectorColors,
   REGIONAL_RADIUS_STEPS_M,
-  REGIONAL_REACH_LOCKED_MESSAGE,
 } from "@/helpers/broadcast-reach";
 import type { BroadcastCreatePayload, ReachEstimate, Tag, UserProfile } from "@/types/api";
 
@@ -50,12 +44,10 @@ export default function NewBroadcastPage() {
   const [regionalRadiusIdx, setRegionalRadiusIdx] = useState(1); // 25km default
   const [profileTags, setProfileTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
-  const [canUseRegional, setCanUseRegional] = useState(false);
   const [schoolVerified, setSchoolVerified] = useState(false);
   const [myCourses, setMyCourses] = useState<string[]>([]);
   const [selectedCourseCodes, setSelectedCourseCodes] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [canAttach, setCanAttach] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reachBucket, setReachBucket] = useState<string | null>(null);
@@ -109,8 +101,6 @@ export default function NewBroadcastPage() {
     clientFetch<UserProfile>("/users/me")
       .then((me) => {
         setProfileTags(me.tags ?? []);
-        setCanUseRegional(canUseRegionalReach(me.is_verified, me.is_admin, me.account_type));
-        setCanAttach(canAttachFiles(me.is_verified, me.is_admin));
       })
       .catch(() => setProfileTags([]));
     getVerificationStatus()
@@ -151,20 +141,12 @@ export default function NewBroadcastPage() {
   }
 
   function selectReach(next: ReachCategory) {
-    if (next === "regional" && !canUseRegional) {
-      setError(REGIONAL_REACH_LOCKED_MESSAGE);
-      return;
-    }
     setError(null);
     setReach(next);
   }
 
   async function publish() {
     if (!content.trim() || selectedTagIds.length === 0) return;
-    if (reach === "regional" && !canUseRegional) {
-      setError(REGIONAL_REACH_LOCKED_MESSAGE);
-      return;
-    }
     setPosting(true);
     setError(null);
     try {
@@ -222,8 +204,6 @@ export default function NewBroadcastPage() {
         <BroadcastAttachments
           files={attachments}
           onChange={setAttachments}
-          canAttach={canAttach}
-          onLocked={() => setError(ATTACHMENT_LOCKED_MESSAGE)}
           onError={setError}
         />
 
@@ -238,7 +218,7 @@ export default function NewBroadcastPage() {
             type="button"
             onClick={() => selectReach("regional")}
             className="tag-pill justify-self-center"
-            style={reachSelectorColors("regional", reach === "regional", !canUseRegional)}
+            style={reachSelectorColors("regional", reach === "regional")}
           >
             Regional
           </button>
@@ -246,7 +226,6 @@ export default function NewBroadcastPage() {
             Global
           </button>
         </div>
-        {!canUseRegional && <p className="text-parchment-500 text-xs mb-4">{REGIONAL_REACH_LOCKED_MESSAGE}</p>}
         {reach === "global" ? (
           <p className="text-signal-400 text-xs font-semibold font-mono mb-3">Global</p>
         ) : (

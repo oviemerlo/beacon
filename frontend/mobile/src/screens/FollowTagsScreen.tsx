@@ -13,12 +13,12 @@ import {
   AMPLIFY_EXAMPLES,
   CAMPUS_PLAN_HINT,
   CAMPUS_SCHOOL_BLURB,
+  COUNTRY_COMMUNITY_LIMIT,
   countryChangeHint,
   countryChangeLockedMessage,
   countryLimitMessage,
   countrySectionTitle,
   countrySlotForTag,
-  countrySlotLimit,
   countrySelectionLine,
   formatNextChangeAvailable,
   lockedCountryIds,
@@ -39,6 +39,8 @@ import {
   isNationalityTagId,
   isRegionTagId,
   knownTagIdsFromGroups,
+  regionLimitMessage,
+  regionSlotLimit,
   resolvePlan,
   REGIONAL_TAGS_LOCKED_MESSAGE,
   REGIONAL_TAGS_PREMIUM_LABEL,
@@ -46,6 +48,7 @@ import {
   retainKnown,
   sameTagIdSet,
   selectedCountryCount,
+  selectedRegionCount,
   selectedTagsForSection,
   toggleItem,
   UNSAVED_TAG_CHANGES_PROMPT,
@@ -84,11 +87,15 @@ export function FollowTagsScreen() {
   const canSave = dirty && !saving;
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
-  const countedFollowedIds = followedTagIds.filter((id) => !isNationalityTagId(tagGroups, id));
+  const countedFollowedIds = followedTagIds.filter(
+    (id) => !isNationalityTagId(tagGroups, id) && !isRegionTagId(tagGroups, id)
+  );
   const atTagLimit = !isAdmin && countedFollowedIds.length >= tagLimit;
   const countryCount = selectedCountryCount(tagGroups, followedTagIds);
-  const plan = resolvePlan(schoolVerified, isAdmin, accountType);
-  const countryLimit = isAdmin ? null : countrySlotLimit(plan);
+  const plan = resolvePlan(isAdmin, accountType);
+  const countryLimit = isAdmin ? null : COUNTRY_COMMUNITY_LIMIT;
+  const regionLimit = isAdmin ? null : regionSlotLimit(plan);
+  const regionCount = selectedRegionCount(tagGroups, followedTagIds);
   const canFollowRegion = plan === "amplify";
   const planCopy = PLANS[plan];
   const lockedCountryTagIds = lockedCountryIds(countrySlots);
@@ -105,7 +112,6 @@ export function FollowTagsScreen() {
         const ids = followedIdsWithoutLockedRegions(
           retainKnown(followed.tag_ids, knownTagIdsFromGroups(groups)),
           groups,
-          me.is_verified,
           me.is_admin,
           me.account_type
         );
@@ -153,6 +159,19 @@ export function FollowTagsScreen() {
       Alert.alert("Regional targeting locked", REGIONAL_TAGS_LOCKED_MESSAGE);
       return;
     }
+    if (
+      !isAdmin &&
+      regionLimit != null &&
+      isRegionTagId(tagGroups, tagId) &&
+      !followedTagIds.includes(tagId) &&
+      selectedRegionCount(tagGroups, followedTagIds) >= regionLimit
+    ) {
+      const message = regionLimitMessage(regionLimit);
+      setError(message);
+      setSuccess(null);
+      Alert.alert("Region limit reached", message);
+      return;
+    }
     if (isNationalityTagId(tagGroups, tagId) && followedTagIds.includes(tagId)) {
       const slot = countrySlotForTag(countrySlots, tagId);
       if (slot?.locked) {
@@ -176,8 +195,15 @@ export function FollowTagsScreen() {
       Alert.alert("Country limit reached", message);
       return;
     }
-    const countedIds = followedTagIds.filter((id) => !isNationalityTagId(tagGroups, id));
-    if (!isAdmin && !isNationalityTagId(tagGroups, tagId) && !canAddFollowedTag(countedIds, tagId, tagLimit)) {
+    const countedIds = followedTagIds.filter(
+      (id) => !isNationalityTagId(tagGroups, id) && !isRegionTagId(tagGroups, id)
+    );
+    if (
+      !isAdmin &&
+      !isNationalityTagId(tagGroups, tagId) &&
+      !isRegionTagId(tagGroups, tagId) &&
+      !canAddFollowedTag(countedIds, tagId, tagLimit)
+    ) {
       const message = followedTagLimitReachedMessage(tagLimit);
       setError(message);
       setSuccess(null);
@@ -318,6 +344,9 @@ export function FollowTagsScreen() {
                 onToggle={toggleFollow}
                 onShowCountries={setInfoTag}
               />
+              <Text style={[styles.limitHint, regionLimit != null && regionCount >= regionLimit && !isAdmin ? styles.limitHintReached : styles.limitHintIdle]}>
+                {regionLimit == null ? `${regionCount} selected` : `${regionCount} of ${regionLimit} selected`}
+              </Text>
             </>
           ) : (
             <>

@@ -14,13 +14,13 @@ import {
   AMPLIFY_EXAMPLES,
   CAMPUS_PLAN_HINT,
   CAMPUS_SCHOOL_BLURB,
+  COUNTRY_COMMUNITY_LIMIT,
   type AccountType,
   countryChangeHint,
   countryChangeLockedMessage,
   countryLimitMessage,
   countrySectionTitle,
   countrySlotForTag,
-  countrySlotLimit,
   formatNextChangeAvailable,
   lockedCountryIds,
   followTagsShowsPlanCard,
@@ -40,12 +40,15 @@ import {
   isNationalityTagId,
   isRegionTagId,
   knownTagIdsFromGroups,
+  regionLimitMessage,
+  regionSlotLimit,
   resolvePlan,
   REGIONAL_TAGS_LOCKED_MESSAGE,
   REGIONAL_TAGS_PREMIUM_LABEL,
   retainKnown,
   sameTagIdSet,
   selectedCountryCount,
+  selectedRegionCount,
   selectedTagsForSection,
   toggleItem,
   UNSAVED_TAG_CHANGES_PROMPT,
@@ -78,11 +81,15 @@ export default function FollowTagsPage() {
     [followedTagIds, savedFollowedTagIds]
   );
   const canSave = dirty && !saving;
-  const countedFollowedIds = followedTagIds.filter((id) => !isNationalityTagId(tagGroups, id));
+  const countedFollowedIds = followedTagIds.filter(
+    (id) => !isNationalityTagId(tagGroups, id) && !isRegionTagId(tagGroups, id)
+  );
   const atTagLimit = !isAdmin && countedFollowedIds.length >= tagLimit;
   const countryCount = selectedCountryCount(tagGroups, followedTagIds);
-  const plan = resolvePlan(schoolVerified, isAdmin, accountType);
-  const countryLimit = isAdmin ? null : countrySlotLimit(plan);
+  const plan = resolvePlan(isAdmin, accountType);
+  const countryLimit = isAdmin ? null : COUNTRY_COMMUNITY_LIMIT;
+  const regionLimit = isAdmin ? null : regionSlotLimit(plan);
+  const regionCount = selectedRegionCount(tagGroups, followedTagIds);
   const canFollowRegion = plan === "amplify";
   const planCopy = PLANS[plan];
   const lockedCountryTagIds = lockedCountryIds(countrySlots);
@@ -99,7 +106,6 @@ export default function FollowTagsPage() {
         const ids = followedIdsWithoutLockedRegions(
           retainKnown(followed.tag_ids, knownTagIdsFromGroups(groups)),
           groups,
-          me.is_verified,
           me.is_admin,
           me.account_type
         );
@@ -161,6 +167,17 @@ export default function FollowTagsPage() {
       setSuccess(null);
       return;
     }
+    if (
+      !isAdmin &&
+      regionLimit != null &&
+      isRegionTagId(tagGroups, tagId) &&
+      !followedTagIds.includes(tagId) &&
+      selectedRegionCount(tagGroups, followedTagIds) >= regionLimit
+    ) {
+      setError(regionLimitMessage(regionLimit));
+      setSuccess(null);
+      return;
+    }
     if (isNationalityTagId(tagGroups, tagId) && followedTagIds.includes(tagId)) {
       const slot = countrySlotForTag(countrySlots, tagId);
       if (slot?.locked) {
@@ -180,8 +197,15 @@ export default function FollowTagsPage() {
       setSuccess(null);
       return;
     }
-    const countedIds = followedTagIds.filter((id) => !isNationalityTagId(tagGroups, id));
-    if (!isAdmin && !isNationalityTagId(tagGroups, tagId) && !canAddFollowedTag(countedIds, tagId, tagLimit)) {
+    const countedIds = followedTagIds.filter(
+      (id) => !isNationalityTagId(tagGroups, id) && !isRegionTagId(tagGroups, id)
+    );
+    if (
+      !isAdmin &&
+      !isNationalityTagId(tagGroups, tagId) &&
+      !isRegionTagId(tagGroups, tagId) &&
+      !canAddFollowedTag(countedIds, tagId, tagLimit)
+    ) {
       setError(followedTagLimitReachedMessage(tagLimit));
       setSuccess(null);
       return;
@@ -326,6 +350,9 @@ export default function FollowTagsPage() {
                     selectedIds={followedTagIds}
                     onToggle={toggleFollow}
                   />
+                  <p className={`text-xs font-mono mt-3 ${regionLimit != null && regionCount >= regionLimit && !isAdmin ? "text-signal-400" : "text-parchment-500"}`}>
+                    {regionLimit == null ? `${regionCount} selected` : `${regionCount} of ${regionLimit} selected`}
+                  </p>
                 </>
               ) : (
                 <>

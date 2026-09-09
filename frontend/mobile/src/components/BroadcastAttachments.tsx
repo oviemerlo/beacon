@@ -1,7 +1,6 @@
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import {
-  ATTACHMENT_LOCKED_MESSAGE,
   isAllowedAttachment,
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS,
@@ -12,21 +11,13 @@ import { colors, radii } from "../theme/tokens";
 export function BroadcastAttachments({
   files,
   onChange,
-  canAttach,
-  onLocked,
   compact = false,
 }: {
   files: PickedUpload[];
   onChange: (files: PickedUpload[]) => void;
-  canAttach: boolean;
-  onLocked: () => void;
   compact?: boolean;
 }) {
   async function pickPhoto() {
-    if (!canAttach) {
-      onLocked();
-      return;
-    }
     if (files.length >= MAX_ATTACHMENTS) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -62,15 +53,11 @@ export function BroadcastAttachments({
           onPress={() => void pickPhoto()}
           disabled={files.length >= MAX_ATTACHMENTS}
           accessibilityLabel="Attach a photo"
-          style={[styles.clip, !canAttach && styles.clipLocked]}
+          style={styles.clip}
         >
           <Text style={styles.clipMark}>📎</Text>
         </Pressable>
-        {!compact && (
-          <Text style={styles.hint}>
-            {canAttach ? "JPEG or PNG — 20 MB max" : ATTACHMENT_LOCKED_MESSAGE}
-          </Text>
-        )}
+        {!compact && <Text style={styles.hint}>JPEG or PNG — 20 MB max</Text>}
       </View>
       {files.map((file) => (
         <View key={`${file.uri}-${file.name}`} style={styles.fileRow}>
@@ -100,7 +87,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  clipLocked: { opacity: 0.4 },
   clipMark: { fontSize: 16 },
   hint: { flex: 1, color: colors.parchment500, fontSize: 11, fontFamily: "monospace" },
   fileRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },

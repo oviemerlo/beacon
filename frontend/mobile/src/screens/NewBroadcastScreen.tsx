@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView, Alert } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import Slider from "@react-native-community/slider";
 import * as Location from "expo-location";
@@ -7,16 +7,14 @@ import { BroadcastAttachments } from "../components/BroadcastAttachments";
 import { CharacterCountdown } from "../components/EchoBody";
 import { BROADCAST_CONTENT_MAX } from "../helpers/broadcastContent";
 import { apiFetch } from "../helpers/api";
-import { ATTACHMENT_LOCKED_MESSAGE, canAttachFiles, uploadBroadcastAttachment, type PickedUpload } from "../helpers/uploads";
+import { uploadBroadcastAttachment, type PickedUpload } from "../helpers/uploads";
 import {
   buildReachPayload,
-  canUseRegionalReach,
   LOCAL_RADIUS_STEPS_M,
   radiusLabel,
   ReachCategory,
   reachSelectorColors,
   REGIONAL_RADIUS_STEPS_M,
-  REGIONAL_REACH_LOCKED_MESSAGE,
 } from "../helpers/broadcastReach";
 import { toggleItem } from "../helpers/tags";
 import { getMyCourses, getVerificationStatus } from "../helpers/schoolVerification";
@@ -93,12 +91,10 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   const [regionalRadiusIdx, setRegionalRadiusIdx] = useState(1); // 25km default
   const [profileTags, setProfileTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
-  const [canUseRegional, setCanUseRegional] = useState(false);
   const [schoolVerified, setSchoolVerified] = useState(false);
   const [myCourses, setMyCourses] = useState<string[]>([]);
   const [selectedCourseCodes, setSelectedCourseCodes] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<PickedUpload[]>([]);
-  const [canAttach, setCanAttach] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reachBucket, setReachBucket] = useState<string | null>(null);
@@ -121,7 +117,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
     (!allProfileTagsSelected || !allCoursesSelected || disciplineAvailable);
   const canClearAll = selectedTagIds.length > 0 || selectedCourseCodes.length > 0;
   const localReachColors = reachSelectorColors("local", reach === "local");
-  const regionalReachColors = reachSelectorColors("regional", reach === "regional", !canUseRegional);
+  const regionalReachColors = reachSelectorColors("regional", reach === "regional");
   const globalReachColors = reachSelectorColors("global", reach === "global");
 
   useEffect(() => {
@@ -154,8 +150,6 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
     apiFetch<UserProfile>("/users/me")
       .then((me) => {
         setProfileTags(me.tags ?? []);
-        setCanUseRegional(canUseRegionalReach(me.is_verified, me.is_admin, me.account_type));
-        setCanAttach(canAttachFiles(me.is_verified, me.is_admin));
       })
       .catch(() => setProfileTags([]));
     getVerificationStatus()
@@ -196,22 +190,12 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
   }
 
   function selectReach(next: ReachCategory) {
-    if (next === "regional" && !canUseRegional) {
-      setError(REGIONAL_REACH_LOCKED_MESSAGE);
-      Alert.alert("Regional reach locked", REGIONAL_REACH_LOCKED_MESSAGE);
-      return;
-    }
     setError(null);
     setReach(next);
   }
 
   async function publish() {
     if (!content.trim() || selectedTagIds.length === 0) return;
-    if (reach === "regional" && !canUseRegional) {
-      setError(REGIONAL_REACH_LOCKED_MESSAGE);
-      Alert.alert("Regional reach locked", REGIONAL_REACH_LOCKED_MESSAGE);
-      return;
-    }
     setPosting(true);
     setError(null);
     try {
@@ -275,15 +259,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
       />
       <CharacterCountdown value={content} />
 
-      <BroadcastAttachments
-        files={attachments}
-        onChange={setAttachments}
-        canAttach={canAttach}
-        onLocked={() => {
-          setError(ATTACHMENT_LOCKED_MESSAGE);
-          Alert.alert("Attachments locked", ATTACHMENT_LOCKED_MESSAGE);
-        }}
-      />
+      <BroadcastAttachments files={attachments} onChange={setAttachments} />
 
       <Text style={styles.reachReminder}>Remember to adjust the reach distance for this specific echo/broadcast</Text>
       <View style={styles.pillRow}>
@@ -303,7 +279,6 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
           </Pressable>
         </View>
       </View>
-      {!canUseRegional && <Text style={styles.reachHint}>{REGIONAL_REACH_LOCKED_MESSAGE}</Text>}
       {reach === "global" ? (
         <Text style={styles.globalReachValue}>Global</Text>
       ) : (
@@ -455,7 +430,6 @@ const styles = StyleSheet.create({
   selectedActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   emptyText: { color: colors.parchment500, fontSize: 13, marginBottom: 8 },
   reachReminder: { color: colors.signal400, fontSize: 12, fontWeight: "600", marginBottom: 12 },
-  reachHint: { color: colors.parchment500, fontSize: 11, marginBottom: 16 },
   pillRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   pillSlotStart: { flex: 1, alignItems: "flex-start" },
   pillSlotCenter: { flex: 1, alignItems: "center" },

@@ -36,7 +36,7 @@ def can_use_regional_reach(user: User) -> bool:
 
 
 def can_attach_files(user: User) -> bool:
-    return user.is_admin or user.is_verified
+    return True
 
 
 def followed_tag_limit(account_type: str, is_admin: bool = False) -> int:

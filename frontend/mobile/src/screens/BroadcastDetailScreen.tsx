@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator, ScrollView, Alert } from "react-native";
+import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import * as Location from "expo-location";
 import { apiFetch } from "../helpers/api";
 import { reachBadgeLabel } from "../helpers/broadcastReach";
@@ -7,7 +7,7 @@ import { splitMentionParts } from "../helpers/mentions";
 import { usePolling } from "../helpers/usePolling";
 import { echoAudienceLabels } from "../helpers/tags";
 import { formatBroadcastSentAt } from "../helpers/time";
-import { canAttachFiles, REPLY_MEDIA_LOCKED_MESSAGE, uploadBroadcastAttachment, type PickedUpload } from "../helpers/uploads";
+import { uploadBroadcastAttachment, type PickedUpload } from "../helpers/uploads";
 import { colors, radii } from "../theme/tokens";
 import { BroadcastAttachments } from "../components/BroadcastAttachments";
 import { CharacterCountdown, EchoBody } from "../components/EchoBody";
@@ -37,7 +37,6 @@ export function BroadcastDetailScreen({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canAttach = canAttachFiles(Boolean(currentUser?.is_verified), Boolean(currentUser?.is_admin));
   const currentUserId = currentUser?.id ?? null;
 
   function onReplyRemoved(broadcastIdToRemove: string) {
@@ -178,12 +177,7 @@ export function BroadcastDetailScreen({
           <BroadcastAttachments
             files={attachments}
             onChange={setAttachments}
-            canAttach={canAttach}
             compact
-            onLocked={() => {
-              setError(REPLY_MEDIA_LOCKED_MESSAGE);
-              Alert.alert("Attachments locked", REPLY_MEDIA_LOCKED_MESSAGE);
-            }}
           />
         </View>
         {error && <Text style={styles.error}>{error}</Text>}

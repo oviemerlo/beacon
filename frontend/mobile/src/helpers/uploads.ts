@@ -5,11 +5,9 @@ const SCAN_POLL_MS = 1500;
 
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 export const MAX_ATTACHMENTS = 4;
-export const ATTACHMENT_LOCKED_MESSAGE = "Verify your account to attach files to broadcasts";
-export const REPLY_MEDIA_LOCKED_MESSAGE = "Verify your account to attach files to replies";
 
-export function canAttachFiles(isVerified: boolean, isAdmin = false): boolean {
-  return isAdmin || isVerified;
+export function canAttachFiles(): boolean {
+  return true;
 }
 
 export function isImageAttachment(contentType: string, filename = ""): boolean {

@@ -49,13 +49,6 @@ export function reachSelectorColors(category: ReachCategory, selected: boolean, 
   };
 }
 
-export const REGIONAL_REACH_LOCKED_MESSAGE =
-  "Up to 100 km reach is available on Campus, Connect, and Amplify. Free accounts can send Local echoes.";
-
-export function canUseRegionalReach(
-  isVerified: boolean,
-  isAdmin = false,
-  accountType: "individual" | "business" = "individual"
-): boolean {
-  return isAdmin || isVerified || accountType === "business";
+export function canUseRegionalReach(): boolean {
+  return true; // 100 km reach is now the free-tier baseline for everyone
 }

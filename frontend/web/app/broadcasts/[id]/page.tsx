@@ -17,7 +17,7 @@ import { clientFetch } from "@/helpers/client-api";
 import { splitMentionParts } from "@/helpers/mentions";
 import { echoAudienceLabels } from "@/helpers/tags";
 import { formatBroadcastSentAt } from "@/helpers/time";
-import { canAttachFiles, REPLY_MEDIA_LOCKED_MESSAGE, uploadBroadcastAttachment } from "@/helpers/uploads";
+import { uploadBroadcastAttachment } from "@/helpers/uploads";
 import { usePolling } from "@/helpers/usePolling";
 import type { BroadcastThread, FeedBroadcast, UserProfile } from "@/types/api";
 
@@ -33,7 +33,6 @@ export default function BroadcastDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [threadError, setThreadError] = useState<string | null>(null);
 
-  const canAttach = canAttachFiles(Boolean(me?.is_verified), Boolean(me?.is_admin));
   const currentUserId = me?.id ?? null;
 
   function onReplyRemoved(broadcastId: string) {
@@ -174,9 +173,7 @@ export default function BroadcastDetailPage() {
             <BroadcastAttachments
               files={attachments}
               onChange={setAttachments}
-              canAttach={canAttach}
               compact
-              onLocked={() => setError(REPLY_MEDIA_LOCKED_MESSAGE)}
               onError={setError}
             />
           </div>

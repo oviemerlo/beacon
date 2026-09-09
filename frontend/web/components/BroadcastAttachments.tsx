@@ -3,7 +3,6 @@
 import { useRef } from "react";
 import {
   ATTACHMENT_ACCEPT,
-  ATTACHMENT_LOCKED_MESSAGE,
   isAllowedAttachment,
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS,
@@ -12,15 +11,11 @@ import {
 export function BroadcastAttachments({
   files,
   onChange,
-  canAttach,
-  onLocked,
   onError,
   compact = false,
 }: {
   files: File[];
   onChange: (files: File[]) => void;
-  canAttach: boolean;
-  onLocked: () => void;
   onError: (message: string) => void;
   compact?: boolean;
 }) {
@@ -56,21 +51,13 @@ export function BroadcastAttachments({
           type="button"
           aria-label="Attach a file"
           disabled={files.length >= MAX_ATTACHMENTS}
-          onClick={() => {
-            if (!canAttach) {
-              onLocked();
-              return;
-            }
-            inputRef.current?.click();
-          }}
-          className={`flex h-9 w-9 items-center justify-center rounded-beacon border border-dusk-600 bg-dusk-800 text-parchment-300 hover:text-parchment-100 hover:border-parchment-500 ${!canAttach ? "opacity-40" : ""}`}
+          onClick={() => inputRef.current?.click()}
+          className="flex h-9 w-9 items-center justify-center rounded-beacon border border-dusk-600 bg-dusk-800 text-parchment-300 hover:text-parchment-100 hover:border-parchment-500"
         >
           <PaperclipIcon />
         </button>
         {!compact && (
-          <p className="text-parchment-500 text-xs font-mono">
-            {canAttach ? "JPEG, PNG, PDF, DOCX, or XLSX — 20 MB max" : ATTACHMENT_LOCKED_MESSAGE}
-          </p>
+          <p className="text-parchment-500 text-xs font-mono">JPEG, PNG, PDF, DOCX, or XLSX — 20 MB max</p>
         )}
       </div>
       <input
