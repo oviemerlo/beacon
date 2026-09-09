@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Text, View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import * as Location from "expo-location";
 import { colors, radii } from "../theme/tokens";
-import { distanceMeters } from "../helpers/distance";
+import { distanceMeters, formatDistance } from "../helpers/distance";
 
 const LOCATION_DRIFT_THRESHOLD_METERS = 50000;
 let dismissedForSession = false;
@@ -67,7 +67,7 @@ export function LocationDriftBanner({
   return (
     <View style={styles.banner}>
       <Text style={styles.text}>
-        You seem to be about {Math.round(distance)}m from your registered location.
+        You seem to be about {formatDistance(distance)} from your registered location.
         Update location for more accurate nearby results?
       </Text>
       <View style={styles.actionsRow}>

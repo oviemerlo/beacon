@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { distanceMeters } from "@/helpers/distance";
+import { distanceMeters, formatDistance } from "@/helpers/distance";
 
 const LOCATION_DRIFT_THRESHOLD_METERS = 50000;
 const DISMISS_KEY = "beacon.locationDrift.dismissed";
@@ -71,7 +71,7 @@ export function LocationDriftBanner({ registeredLatitude, registeredLongitude, o
   return (
     <div className="card border-rust-400/50 bg-rust-400/10 mb-4">
       <p className="text-rust-200 text-sm">
-        You seem to be about <strong>{Math.round(distance)}m</strong> from your registered location.
+        You seem to be about <strong>{formatDistance(distance)}</strong> from your registered location.
         Update your location for more accurate nearby results?
       </p>
       <div className="mt-3 flex gap-2">
