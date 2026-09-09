@@ -59,3 +59,11 @@ async def put_discipline(
 @router.get("/me/setup-status", response_model=SetupStatusOut)
 async def get_my_setup_status(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await user_service.get_setup_status(db, current_user)
+
+
+@router.delete("/me", status_code=204)
+async def delete_my_account(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await user_service.delete_account(db, current_user)

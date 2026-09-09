@@ -1,5 +1,6 @@
 """Profile read/update and tag-follow business logic."""
 
+import logging
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,8 @@ from app.services.country_slots import (
     serialize_slots,
 )
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
+
+logger = logging.getLogger(__name__)
 
 FOLLOWABLE_TYPES = ("nationality", "region", "hobby")
 
@@ -346,3 +349,21 @@ async def get_setup_status(db: AsyncSession, user: User) -> SetupStatusOut:
         total_required=len(items),
         all_required_done=completed == len(items),
     )
+
+
+async def delete_account(db: AsyncSession, user: User) -> None:
+    user_id = user.id
+    uploaded = await upload_repository.list_for_user(db, user_id)
+    s3_keys = [file.s3_key for file in uploaded]
+    s3_keys.extend(file.thumbnail_s3_key for file in uploaded if file.thumbnail_s3_key)
+    try:
+        await user_repository.delete_account(db, user)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    from app.services.upload_service import delete_stored_object
+
+    for key in s3_keys:
+        delete_stored_object(key)
+    logger.info("account_deleted user_id=%s", user_id)

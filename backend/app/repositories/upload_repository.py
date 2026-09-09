@@ -74,6 +74,11 @@ async def list_clean_attachments_for_broadcasts(
     return grouped
 
 
+async def list_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[UploadedFile]:
+    result = await db.execute(select(UploadedFile).where(UploadedFile.uploader_user_id == user_id))
+    return list(result.scalars().all())
+
+
 async def get_latest_avatar_for_user(db: AsyncSession, user_id: uuid.UUID) -> UploadedFile | None:
     result = await db.execute(
         select(UploadedFile)

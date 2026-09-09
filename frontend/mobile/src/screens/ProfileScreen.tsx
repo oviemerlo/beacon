@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput, ScrollView } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput, ScrollView, Alert } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { apiFetch } from "../helpers/api";
@@ -27,6 +27,8 @@ export function ProfileScreen({
   const [displayNameDraft, setDisplayNameDraft] = useState("");
   const [savingDisplayName, setSavingDisplayName] = useState(false);
   const [displayNameError, setDisplayNameError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const tabBarHeight = useBottomTabBarHeight();
 
   useFocusEffect(
@@ -64,6 +66,31 @@ export function ProfileScreen({
     } finally {
       setSavingDisplayName(false);
     }
+  }
+
+  async function confirmDeleteAccount() {
+    setDeletingAccount(true);
+    setDeleteAccountError(null);
+    try {
+      await apiFetch("/users/me", { method: "DELETE" });
+      await signOut();
+      onSignedOut();
+    } catch (error) {
+      setDeleteAccountError(error instanceof Error ? error.message : "Could not delete your account.");
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
+
+  function requestDeleteAccount() {
+    Alert.alert(
+      "Delete account?",
+      "This is permanent. Your profile, echoes, private messages, uploads, and sign-in will be removed. Groups you created stay for remaining members. Replies other people left on your echoes will also be removed.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete account", style: "destructive", onPress: () => void confirmDeleteAccount() },
+      ]
+    );
   }
 
   if (!user) return <ActivityIndicator color={colors.signal500} style={{ marginTop: 40 }} />;
@@ -156,6 +183,18 @@ export function ProfileScreen({
       >
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
+      {deleteAccountError ? <Text style={styles.errorText}>{deleteAccountError}</Text> : null}
+      <Pressable
+        style={[styles.deleteAccountButton, deletingAccount && styles.deleteAccountButtonDisabled]}
+        onPress={requestDeleteAccount}
+        disabled={deletingAccount}
+      >
+        {deletingAccount ? (
+          <ActivityIndicator color={colors.parchment100} />
+        ) : (
+          <Text style={styles.deleteAccountText}>Delete account</Text>
+        )}
+      </Pressable>
     </ScrollView>
   );
 }
@@ -194,4 +233,13 @@ const styles = StyleSheet.create({
   followTagsButtonText: { color: colors.signal400, fontWeight: "600" },
   signOutButton: { borderColor: colors.rust400, borderWidth: 1, borderRadius: radii.beacon, paddingVertical: 12, alignItems: "center" },
   signOutText: { color: colors.rust400, fontWeight: "600" },
+  deleteAccountButton: {
+    backgroundColor: colors.rust400,
+    borderRadius: radii.beacon,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  deleteAccountButtonDisabled: { opacity: 0.6 },
+  deleteAccountText: { color: colors.parchment100, fontWeight: "700" },
 });

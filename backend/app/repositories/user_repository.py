@@ -15,9 +15,11 @@ repository calls that either all succeed or all roll back together.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select, text, union
+from sqlalchemy import delete, func, select, text, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.conversation import Conversation, ConversationInvite, ConversationParticipant
+from app.models.report import Report
 from app.models.tag import Tag, UserFollowedTag, UserTag
 from app.models.user import OAuthAccount, User
 from sqlalchemy.orm import selectinload
@@ -307,3 +309,43 @@ async def count_users_sharing_tags_created_since(db: AsyncSession, user_id: uuid
     )
     result = await db.execute(stmt)
     return result.scalar_one() or 0
+
+
+async def delete_account(db: AsyncSession, user: User) -> None:
+    """Remove FK rows that would block deleting the user, then delete the User.
+
+    Most user-owned rows cascade in Postgres. conversations.created_by_user_id
+    and conversation_invites.created_by_user_id have no ON DELETE and must be
+    cleared first. Reports targeting this user have no FK and would otherwise
+    become orphans.
+    """
+    user_id = user.id
+
+    created_conversations = await db.execute(select(Conversation).where(Conversation.created_by_user_id == user_id))
+    for conversation in created_conversations.scalars():
+        if conversation.name:
+            others = await db.execute(
+                select(ConversationParticipant.user_id, ConversationParticipant.role)
+                .where(ConversationParticipant.conversation_id == conversation.id)
+                .where(ConversationParticipant.user_id != user_id)
+            )
+            remaining = list(others.all())
+            if remaining:
+                next_owner = next((row.user_id for row in remaining if row.role == "admin"), remaining[0].user_id)
+                conversation.created_by_user_id = next_owner
+                continue
+        await db.delete(conversation)
+
+    leftover_invites = await db.execute(
+        select(ConversationInvite).where(ConversationInvite.created_by_user_id == user_id)
+    )
+    for invite in leftover_invites.scalars():
+        conversation = await db.get(Conversation, invite.conversation_id)
+        if conversation is None or conversation.created_by_user_id == user_id:
+            await db.delete(invite)
+        else:
+            invite.created_by_user_id = conversation.created_by_user_id
+
+    await db.execute(delete(Report).where(Report.target_type == "user", Report.target_id == user_id))
+    await db.delete(user)
+    await db.flush()

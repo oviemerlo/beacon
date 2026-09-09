@@ -209,6 +209,10 @@ def _delete_object(s3_key: str) -> None:
         logger.error("S3 delete_object failed for %s: %s", s3_key, exc)
 
 
+def delete_stored_object(s3_key: str) -> None:
+    _delete_object(s3_key)
+
+
 def _map_scan_status(raw: str) -> str:
     token = raw.strip()
     mapped = (
