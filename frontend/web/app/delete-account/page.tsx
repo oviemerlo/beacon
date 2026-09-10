@@ -1,9 +1,13 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
+import { DeleteAccountButton } from "@/components/DeleteAccountButton";
+import { getCurrentUserOrNull } from "@/helpers/api";
+
 export const metadata = { title: "Delete your account — EchoToCrowd" };
 
-export default function DeleteAccountPage() {
+export default async function DeleteAccountPage() {
+  const user = await getCurrentUserOrNull();
   return (
     <main className="min-h-screen px-6 pb-24">
       <header className="max-w-3xl mx-auto py-6 flex items-center justify-between">
@@ -21,13 +25,25 @@ export default function DeleteAccountPage() {
         <p className="text-parchment-500 text-sm mb-10">Last updated: September 9, 2026</p>
 
         <div className="space-y-8 text-parchment-300 leading-relaxed">
-          <Section title="Delete from the app">
-            <p>
-              If you have EchoToCrowd installed, open <strong className="text-parchment-100">Profile</strong>,
-              then tap <strong className="text-parchment-100">Delete account</strong>. You will be asked to
-              confirm. This uses Google sign-in only — there is no password to enter.
-            </p>
-          </Section>
+          {user ? (
+            <Section title="Delete this account">
+              <p className="mb-4">
+                You are signed in as <strong className="text-parchment-100">@{user.username}</strong>.
+                Confirm below to permanently delete this EchoToCrowd account. There is no password —
+                Google sign-in is enough.
+              </p>
+              <DeleteAccountButton />
+            </Section>
+          ) : (
+            <Section title="Delete from the app or website">
+              <p>
+                Sign in, open <strong className="text-parchment-100">Profile</strong>, then choose{" "}
+                <strong className="text-parchment-100">Delete account</strong>. On the website that
+                brings you here so you can confirm. This uses Google sign-in only — there is no
+                password to enter.
+              </p>
+            </Section>
+          )}
 
           <Section title="Request deletion by email">
             <p>

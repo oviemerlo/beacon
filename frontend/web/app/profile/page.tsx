@@ -113,6 +113,12 @@ export default async function ProfilePage() {
             Sign out
           </button>
         </form>
+        <Link
+          href="/delete-account"
+          className="mt-3 w-full rounded-beacon bg-rust-400 px-4 py-2.5 font-semibold text-parchment-100 hover:opacity-90 transition-opacity inline-block text-center"
+        >
+          Delete account
+        </Link>
       </main>
     </div>
   );
