@@ -267,23 +267,15 @@ export function FollowTagsScreen() {
                 onShowCountries={setInfoTag}
                 lockedIds={lockedCountryTagIds}
               />
-              {countryLimit === 1
-                ? countrySlots
-                    .filter((slot) => slot.locked)
-                    .map((slot) => (
-                      <Text key={slot.slot} style={styles.planMeta}>
-                        {formatNextChangeAvailable(slot.next_change_at)}
-                      </Text>
-                    ))
-                : selectedCountries.map((tag) => {
-                    const slot = countrySlotForTag(countrySlots, tag.id);
-                    const next = slot?.locked ? formatNextChangeAvailable(slot.next_change_at) : null;
-                    return next ? (
-                      <Text key={tag.id} style={styles.planMeta}>
-                        {displayTagLabel(tag.label)} — {next}
-                      </Text>
-                    ) : null;
-                  })}
+              {selectedCountries.map((tag) => {
+                const slot = countrySlotForTag(countrySlots, tag.id);
+                const next = slot?.locked ? formatNextChangeAvailable(slot.next_change_at) : null;
+                return next ? (
+                  <Text key={tag.id} style={styles.planMeta}>
+                    {displayTagLabel(tag.label)} — {next}
+                  </Text>
+                ) : null;
+              })}
             </View>
           ) : null}
           <TextInput

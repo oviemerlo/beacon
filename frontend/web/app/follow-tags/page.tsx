@@ -274,23 +274,15 @@ export default function FollowTagsPage() {
                     onToggle={toggleFollow}
                     lockedIds={lockedCountryTagIds}
                   />
-                  {countryLimit === 1
-                    ? countrySlots
-                        .filter((slot) => slot.locked)
-                        .map((slot) => (
-                          <p key={slot.slot} className="text-parchment-500 text-xs font-mono mt-2">
-                            {formatNextChangeAvailable(slot.next_change_at)}
-                          </p>
-                        ))
-                    : selectedCountries.map((tag) => {
-                        const slot = countrySlotForTag(countrySlots, tag.id);
-                        const next = slot?.locked ? formatNextChangeAvailable(slot.next_change_at) : null;
-                        return next ? (
-                          <p key={tag.id} className="text-parchment-500 text-xs font-mono mt-2">
-                            {displayTagLabel(tag.label)} — {next}
-                          </p>
-                        ) : null;
-                      })}
+                  {selectedCountries.map((tag) => {
+                    const slot = countrySlotForTag(countrySlots, tag.id);
+                    const next = slot?.locked ? formatNextChangeAvailable(slot.next_change_at) : null;
+                    return next ? (
+                      <p key={tag.id} className="text-parchment-500 text-xs font-mono mt-2">
+                        {displayTagLabel(tag.label)} — {next}
+                      </p>
+                    ) : null;
+                  })}
                 </div>
               )}
               <input
