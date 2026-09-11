@@ -68,6 +68,8 @@ async function exchangeGoogleIdTokenWithBackend(idToken: string): Promise<void> 
  * below (used for iOS/web) isn't viable here — this is Google's recommended
  * path for Android instead.
  */
+
+/**
 async function signInWithGoogleAndroid(): Promise<void> {
   await GoogleSignin.hasPlayServices();
   const userInfo = await GoogleSignin.signIn();
@@ -76,7 +78,21 @@ async function signInWithGoogleAndroid(): Promise<void> {
   logAuth("google:id-token:received");
 
   await exchangeGoogleIdTokenWithBackend(idToken);
-}
+} */
+async function signInWithGoogleAndroid(): Promise<void> {
+  await GoogleSignin.hasPlayServices();
+  try {
+    const userInfo = await GoogleSignin.signIn();
+    logAuth("google:raw-result", { userInfo: JSON.stringify(userInfo) });
+    const idToken = userInfo.data?.idToken;
+    if (!idToken) throw new Error("Google sign-in was cancelled or failed");
+    logAuth("google:id-token:received");
+    await exchangeGoogleIdTokenWithBackend(idToken);
+  } catch (e: any) {
+      logAuth("google:native-error", { code: e?.code, message: e?.message });
+      throw e;
+    }
+  }
 
 /**
  * iOS / web: browser-based AuthSession authorization code + PKCE flow,

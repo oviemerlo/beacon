@@ -26,14 +26,22 @@
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "plugins": [
       "expo-secure-store",
       "expo-location",
       "expo-apple-authentication",
-      "@react-native-google-signin/google-signin"
-    ]
+      "@react-native-google-signin/google-signin",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "aaf3057e-d4d9-4219-8909-dfcb5d20f166"
+      }
+    }
   }
 }
