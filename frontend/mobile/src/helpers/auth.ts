@@ -1,22 +1,17 @@
-import * as WebBrowser from "expo-web-browser";
-import * as AuthSession from "expo-auth-session";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Platform } from "react-native";
+import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 import { TokenStore } from "./secureStore";
 import { apiBaseUrl } from "./api";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
-
-WebBrowser.maybeCompleteAuthSession();
 
 const API_URL = apiBaseUrl();
-const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+console.log("[auth] configure-webClientId", GOOGLE_WEB_CLIENT_ID);
 
-if (Platform.OS === "android") {
-  GoogleSignin.configure({
-    webClientId: GOOGLE_WEB_CLIENT_ID, // Android uses the Web client's ID to get a verifiable idToken
-  });
-}
+GoogleSignin.configure({
+  webClientId: GOOGLE_WEB_CLIENT_ID, // MUST be Web type, not Android
+  offlineAccess: true,
+});
 
 function logAuth(stage: string, details?: Record<string, unknown>) {
   if (details) {
@@ -24,15 +19,6 @@ function logAuth(stage: string, details?: Record<string, unknown>) {
     return;
   }
   console.log(`[auth] ${stage}`);
-}
-
-function getGoogleIosRedirectUri(clientId: string): string {
-  const suffix = ".apps.googleusercontent.com";
-  if (!clientId.endsWith(suffix)) {
-    throw new Error("EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID is not a valid Google iOS client ID");
-  }
-  const clientPrefix = clientId.slice(0, -suffix.length);
-  return `com.googleusercontent.apps.${clientPrefix}:/oauthredirect`;
 }
 
 async function exchangeGoogleIdTokenWithBackend(idToken: string): Promise<void> {
@@ -61,123 +47,32 @@ async function exchangeGoogleIdTokenWithBackend(idToken: string): Promise<void> 
   logAuth("google:success");
 }
 
-/**
- * Android: uses the native Google Sign-In SDK (Play Services) instead of a
- * browser redirect. Google disallows custom URI scheme redirects for new
- * Android OAuth clients by default, so the browser-based AuthSession flow
- * below (used for iOS/web) isn't viable here — this is Google's recommended
- * path for Android instead.
- */
-
-/**
-async function signInWithGoogleAndroid(): Promise<void> {
-  await GoogleSignin.hasPlayServices();
-  const userInfo = await GoogleSignin.signIn();
-  const idToken = userInfo.data?.idToken;
-  if (!idToken) throw new Error("Google sign-in was cancelled or failed");
-  logAuth("google:id-token:received");
-
-  await exchangeGoogleIdTokenWithBackend(idToken);
-} */
-async function signInWithGoogleAndroid(): Promise<void> {
-  await GoogleSignin.hasPlayServices();
-  try {
-    const userInfo = await GoogleSignin.signIn();
-    logAuth("google:raw-result", { userInfo: JSON.stringify(userInfo) });
-    const idToken = userInfo.data?.idToken;
-    if (!idToken) throw new Error("Google sign-in was cancelled or failed");
-    logAuth("google:id-token:received");
-    await exchangeGoogleIdTokenWithBackend(idToken);
-  } catch (e: any) {
-      logAuth("google:native-error", { code: e?.code, message: e?.message });
-      throw e;
-    }
-  }
-
-/**
- * iOS / web: browser-based AuthSession authorization code + PKCE flow,
- * exchanging the code with Google directly, then handing the resulting
- * ID token to the backend's POST /auth/google/token-exchange — the
- * native-app path the backend scaffold already exposes (see
- * beacon-backend/app/api/routes/auth.py). The web app itself uses the
- * redirect-based /auth/google/login flow instead; both land on the same
- * upsert logic server-side.
- *
- * Requires a dev build, not Expo Go, since Expo Go can't register custom
- * schemes.
- */
-async function signInWithGoogleAuthSession(): Promise<void> {
-  const clientId = Platform.OS === "ios" ? GOOGLE_IOS_CLIENT_ID : GOOGLE_WEB_CLIENT_ID;
-  if (!clientId) {
-    throw new Error(
-      Platform.OS === "ios"
-        ? "Missing EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID in mobile/.env"
-        : "Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID in mobile/.env"
-    );
-  }
-
-  const redirectUri =
-    Platform.OS === "ios"
-      ? getGoogleIosRedirectUri(clientId)
-      : AuthSession.makeRedirectUri({ scheme: "echotocrowd" });
-  logAuth("google:redirect-uri", { redirectUri, clientId });
-
-  const request = new AuthSession.AuthRequest({
-    clientId,
-    scopes: ["openid", "profile", "email"],
-    redirectUri,
-    responseType: AuthSession.ResponseType.Code,
-    usePKCE: true,
-    extraParams: {
-      prompt: "select_account",
-    },
-  });
-
-  const discovery = {
-    authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-  };
-  logAuth("google:prompt:start");
-  const result = await request.promptAsync(discovery);
-  logAuth("google:prompt:result", { type: result.type, params: result.type === "success" ? result.params : undefined });
-
-  const code = result.type === "success" ? (result.params as any).code : undefined;
-  if (!code) throw new Error("Google sign-in was cancelled or failed");
-
-  const codeVerifier = (request as any).codeVerifier as string | undefined;
-  if (!codeVerifier) throw new Error("Missing PKCE code_verifier for Google token exchange");
-
-  const tokenExchangeRes = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      code,
-      code_verifier: codeVerifier,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri,
-    }).toString(),
-  });
-  logAuth("google:token-exchange:response", { ok: tokenExchangeRes.ok, status: tokenExchangeRes.status });
-  if (!tokenExchangeRes.ok) {
-    const text = await tokenExchangeRes.text();
-    logAuth("google:token-exchange:error", { body: text });
-    throw new Error(`Google token exchange failed: ${text}`);
-  }
-  const tokenPayload = await tokenExchangeRes.json();
-  const idToken = tokenPayload?.id_token as string | undefined;
-  if (!idToken) throw new Error("Google sign-in was cancelled or failed");
-  logAuth("google:id-token:received");
-
-  await exchangeGoogleIdTokenWithBackend(idToken);
-}
-
 export async function signInWithGoogle(): Promise<void> {
-  logAuth("google:start", { platform: Platform.OS });
-  if (Platform.OS === "android") {
-    await signInWithGoogleAndroid();
-    return;
+  try {
+    console.log("[auth] google:start", {
+      platform: Platform.OS,
+      webClientIdPrefix: GOOGLE_WEB_CLIENT_ID?.slice(0, 25),
+    });
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    const userInfo = await GoogleSignin.signIn();
+    console.log("[auth] google:raw-result", JSON.stringify(userInfo, null, 2));
+
+    const idToken = userInfo.data?.idToken;
+    console.log("[auth] google:id-token", idToken ? "received" : "MISSING");
+
+    if (!idToken) throw new Error("Google idToken missing - webClientId is wrong type");
+
+    await exchangeGoogleIdTokenWithBackend(idToken);
+  } catch (e: unknown) {
+    const err = e as { code?: string; message?: string };
+    console.log("[auth] google:native-error", {
+      code: err?.code,
+      message: err?.message,
+      cancelled: err?.code === statusCodes.SIGN_IN_CANCELLED,
+      full: JSON.stringify(e, null, 2),
+    });
+    throw e;
   }
-  await signInWithGoogleAuthSession();
 }
 
 /** iOS only — the Apple button is conditionally rendered in LoginScreen. */
