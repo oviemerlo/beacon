@@ -322,6 +322,10 @@ async def set_discipline(db: AsyncSession, user: User, program_name: str) -> Tag
 async def get_setup_status(db: AsyncSession, user: User) -> SetupStatusOut:
     has_posted = await broadcast_repository.user_has_posted(db, user.id)
     avatar = await upload_repository.get_latest_avatar_for_user(db, user.id)
+    loaded = await user_repository.get_by_id_with_tags(db, user.id)
+    if loaded is None:
+        raise NotFoundError("User not found")
+    has_tags = bool(_identity_tags(loaded)) or loaded.country_slot_1_tag_id is not None
     items = [
         SetupChecklistItemOut(
             key="photo",
@@ -332,7 +336,7 @@ async def get_setup_status(db: AsyncSession, user: User) -> SetupStatusOut:
         SetupChecklistItemOut(
             key="tags",
             label="Click on tags to select your country tags/school (optional)",
-            done=user.country_slot_1_tag_id is not None,
+            done=has_tags,
             action_href="/follow-tags",
         ),
         SetupChecklistItemOut(

@@ -31,6 +31,8 @@ frontend/mobile/*.p12
 frontend/mobile/*.key
 frontend/mobile/.env
 frontend/google.txt
+frontend/mobile/android/
+frontend/mobile/ios/
 
 # --- Seed data (clone locally when re-seeding schools) ---
 university-domains-list/
