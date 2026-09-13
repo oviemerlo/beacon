@@ -72,5 +72,5 @@ export function FeedCardActionRow({
 }
 
 const styles = StyleSheet.create({
-  replyRow: { flexDirection: "row", gap: 8, marginTop: 10 },
+  replyRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
 });

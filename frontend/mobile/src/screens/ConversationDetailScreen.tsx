@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Alert, View, Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
+import { Alert, View, Text, TextInput, Pressable, FlatList, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
 import { applyMention, mentionTriggerFromInput, splitMentionParts } from "../helpers/mentions";
@@ -218,7 +218,11 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+    >
       <Pressable
         onPress={() =>
           isGroup
@@ -239,6 +243,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
         data={messages}
         keyExtractor={(m) => m.id}
         contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <>
             {context && !isGroup ? (
@@ -368,7 +373,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
           <Text style={styles.sendButtonText}>Send</Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
