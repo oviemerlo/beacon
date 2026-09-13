@@ -1,3 +1,6 @@
+node_modules/
+.DS_Store
+
 # --- Backend (Python) ---
 backend/**/__pycache__/
 backend/**/*.py[cod]

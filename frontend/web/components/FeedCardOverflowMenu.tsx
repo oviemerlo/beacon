@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { promptAndSubmitReport } from "@/helpers/report-actions";
 import { clientFetch } from "@/helpers/client-api";
+import { shareEcho } from "@/components/ShareButton";
 
 export type OverflowAction = { label: string; onSelect: () => Promise<void> };
 
@@ -11,6 +12,7 @@ export function buildFeedCardActions({
   broadcastId,
   senderId,
   senderDisplayName,
+  content,
   onBlocked,
   onRemoved,
   removeFromFeedId,
@@ -19,13 +21,21 @@ export function buildFeedCardActions({
   broadcastId: string;
   senderId: string;
   senderDisplayName: string;
+  content: string;
   onBlocked: (senderId: string) => void;
   onRemoved: (broadcastId: string) => void;
   removeFromFeedId?: string;
 }): OverflowAction[] {
   const hideId = removeFromFeedId ?? broadcastId;
+  const shareAction: OverflowAction = {
+    label: "Share",
+    onSelect: async () => {
+      await shareEcho({ broadcastId, senderName: senderDisplayName, content });
+    },
+  };
   if (isOwn) {
     return [
+      shareAction,
       {
         label: "Delete",
         onSelect: async () => {
@@ -42,6 +52,7 @@ export function buildFeedCardActions({
     ];
   }
   return [
+    shareAction,
     {
       label: "Report",
       onSelect: async () => {

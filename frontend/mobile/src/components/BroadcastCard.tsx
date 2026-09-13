@@ -62,6 +62,7 @@ export function BroadcastCard({
                 broadcastId: displayedEntity.id,
                 senderId: displayedEntity.sender_id,
                 senderDisplayName: displayedEntity.sender_display_name,
+                content: featuredReply ? featuredReply.content : broadcast.content,
                 onBlocked,
                 onRemoved,
                 removeFromFeedId: broadcast.id,
@@ -121,8 +122,6 @@ export function BroadcastCard({
         <FeedCardActionRow
           broadcastId={broadcast.id}
           isOwn={isOwn}
-          senderName={isOwn ? "You" : broadcast.sender_display_name}
-          content={featuredReply ? featuredReply.content : broadcast.content}
           onOpenBroadcast={onOpenBroadcast}
           onReplyPrivately={onPrivateReply}
         />

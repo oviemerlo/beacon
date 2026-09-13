@@ -250,6 +250,7 @@ function SearchHitCard({
                 broadcastId: hit.id,
                 senderId: hit.sender_id,
                 senderDisplayName: hit.sender_display_name,
+                content: hit.body,
                 onBlocked,
                 onRemoved,
               })}
@@ -265,8 +266,6 @@ function SearchHitCard({
       <FeedCardActionRow
         broadcastId={hit.id}
         isOwn={isOwn}
-        senderName={isOwn ? "You" : hit.sender_display_name}
-        content={hit.body}
         onReplyPrivately={
           isOwn
             ? undefined
@@ -369,6 +368,7 @@ function BroadcastCard({
                 broadcastId: displayedEntity.id,
                 senderId: displayedEntity.sender_id,
                 senderDisplayName: displayedEntity.sender_display_name,
+                content: featuredReply ? featuredReply.content : broadcast.content,
                 onBlocked,
                 onRemoved,
                 removeFromFeedId: broadcast.id,
@@ -417,8 +417,6 @@ function BroadcastCard({
       <FeedCardActionRow
         broadcastId={broadcast.id}
         isOwn={isOwn}
-        senderName={isOwn ? "You" : broadcast.sender_display_name}
-        content={featuredReply ? featuredReply.content : broadcast.content}
         onReplyPrivately={() => setShowPrivateComposer((v) => !v)}
       />
       </div>

@@ -219,6 +219,7 @@ function ThreadItem({
                 broadcastId: item.id,
                 senderId: item.sender_id,
                 senderDisplayName: item.sender_display_name,
+                content: item.content,
                 onBlocked,
                 onRemoved,
               })}

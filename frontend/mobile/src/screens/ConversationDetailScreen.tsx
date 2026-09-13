@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Alert, View, Text, TextInput, Pressable, FlatList, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
+import { Alert, View, Text, TextInput, Pressable, FlatList, StyleSheet, Platform } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
 import { applyMention, mentionTriggerFromInput, splitMentionParts } from "../helpers/mentions";
@@ -12,6 +14,7 @@ import type { ConversationContext, ConversationParticipant, MentionCandidate, Me
 
 export function ConversationDetailScreen({ conversationId }: { conversationId: string }) {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [context, setContext] = useState<ConversationContext | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -221,7 +224,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      keyboardVerticalOffset={insets.top + 60}
     >
       <Pressable
         onPress={() =>
@@ -240,6 +243,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
       )}
       <FlatList
         ref={listRef}
+        style={styles.list}
         data={messages}
         keyExtractor={(m) => m.id}
         contentContainerStyle={styles.listContent}
@@ -343,7 +347,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
         </View>
       )}
       {sendError && <Text style={styles.sendError}>{sendError}</Text>}
-      <View style={styles.composerRow}>
+      <View style={[styles.composerRow, { paddingBottom: 16 + insets.bottom }]}>
         <TextInput
           style={[styles.input, { height: composerHeight }]}
           placeholder="Message… Use @ to mention someone in this Echo"
@@ -403,6 +407,7 @@ const styles = StyleSheet.create({
   memberRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingVertical: 6 },
   memberName: { color: colors.parchment100, fontSize: 14, flex: 1 },
   promoteText: { color: colors.signal400, fontSize: 13, fontWeight: "600" },
+  list: { flex: 1 },
   listContent: { padding: 16, gap: 10, paddingBottom: 12, flexGrow: 1 },
   originHeader: {
     maxWidth: "78%",
@@ -452,7 +457,16 @@ const styles = StyleSheet.create({
   bubbleTextRead: { fontWeight: "400" },
   bubbleMetaRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, marginTop: 6, overflow: "visible" },
   bubbleTime: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
-  composerRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 16, borderTopWidth: 1, borderTopColor: colors.dusk700 },
+  composerRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.dusk700,
+    backgroundColor: colors.dusk950,
+  },
   input: {
     flex: 1,
     minHeight: 44,

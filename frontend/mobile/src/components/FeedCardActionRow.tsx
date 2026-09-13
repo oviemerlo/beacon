@@ -1,5 +1,4 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { ShareButton } from "./ShareButton";
 import { apiFetch } from "../helpers/api";
 import { colors, radii } from "../theme/tokens";
 
@@ -31,15 +30,11 @@ export const feedCardActionStyle = {
 export function FeedCardActionRow({
   broadcastId,
   isOwn,
-  senderName,
-  content,
   onOpenBroadcast,
   onReplyPrivately,
 }: {
   broadcastId: string;
   isOwn: boolean;
-  senderName: string;
-  content: string;
   onOpenBroadcast: (id: string) => void;
   onReplyPrivately?: () => void;
 }) {
@@ -60,13 +55,6 @@ export function FeedCardActionRow({
       <Pressable onPress={() => onOpenBroadcast(broadcastId)} style={feedCardActionStyle.pill}>
         <Text style={feedCardActionStyle.text}>View thread</Text>
       </Pressable>
-      <ShareButton
-        broadcastId={broadcastId}
-        senderName={senderName}
-        content={content}
-        style={feedCardActionStyle.pill}
-        textStyle={feedCardActionStyle.text}
-      />
     </View>
   );
 }

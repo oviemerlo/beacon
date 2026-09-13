@@ -8,6 +8,26 @@ export function echoShareUrl(broadcastId: string): string {
   return `${WEB_ORIGIN}/e/${broadcastId}`;
 }
 
+export async function shareEcho({
+  broadcastId,
+  senderName,
+  content,
+}: {
+  broadcastId: string;
+  senderName: string;
+  content: string;
+}) {
+  const url = echoShareUrl(broadcastId);
+  const title = `${senderName} on EchoToCrowd`;
+  const previewText = stripUrls(content);
+  const text = previewText ? echoPreview(previewText) : `${senderName} shared an Echo`;
+  try {
+    await Share.share({ title, message: `${text}\n${url}` });
+  } catch {
+    Alert.alert("Couldn't share this Echo.");
+  }
+}
+
 export function ShareButton({
   broadcastId,
   senderName,
@@ -21,20 +41,13 @@ export function ShareButton({
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
 }) {
-  async function onShare() {
-    const url = echoShareUrl(broadcastId);
-    const title = `${senderName} on EchoToCrowd`;
-    const previewText = stripUrls(content);
-    const text = previewText ? echoPreview(previewText) : `${senderName} shared an Echo`;
-    try {
-      await Share.share({ title, message: `${text}\n${url}` });
-    } catch {
-      Alert.alert("Couldn't share this Echo.");
-    }
-  }
-
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Share this Echo" onPress={() => void onShare()} style={style}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Share this Echo"
+      onPress={() => void shareEcho({ broadcastId, senderName, content })}
+      style={style}
+    >
       <Text style={textStyle}>Share</Text>
     </Pressable>
   );

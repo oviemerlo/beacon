@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { ShareButton } from "@/components/ShareButton";
 import { clientFetch } from "@/helpers/client-api";
 
 export async function startPrivateConversation(broadcastId: string, firstMessage: string) {
@@ -14,14 +13,10 @@ export async function startPrivateConversation(broadcastId: string, firstMessage
 export function FeedCardActionRow({
   broadcastId,
   isOwn,
-  senderName,
-  content,
   onReplyPrivately,
 }: {
   broadcastId: string;
   isOwn: boolean;
-  senderName: string;
-  content: string;
   onReplyPrivately?: () => void;
 }) {
   return (
@@ -41,12 +36,6 @@ export function FeedCardActionRow({
       <Link href={`/broadcasts/${broadcastId}`} className="feed-card-action">
         View thread
       </Link>
-      <ShareButton
-        broadcastId={broadcastId}
-        senderName={senderName}
-        content={content}
-        className="feed-card-action"
-      />
     </div>
   );
 }

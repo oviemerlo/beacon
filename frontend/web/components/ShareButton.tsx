@@ -4,6 +4,30 @@ import { useEffect, useRef, useState } from "react";
 import { echoPreview } from "@/helpers/time";
 import { echoShareTitle, echoShareUrl, stripUrls } from "@/helpers/share";
 
+export async function shareEcho({
+  broadcastId,
+  senderName,
+  content,
+}: {
+  broadcastId: string;
+  senderName: string;
+  content: string;
+}) {
+  const url = echoShareUrl(broadcastId, window.location.origin);
+  const title = echoShareTitle(senderName);
+  const previewText = stripUrls(content);
+  const text = previewText ? echoPreview(previewText) : `${senderName} shared an Echo`;
+  if (typeof navigator.share === "function") {
+    try {
+      await navigator.share({ title, text, url });
+      return true;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return true;
+    }
+  }
+  return false;
+}
+
 export function ShareButton({
   broadcastId,
   senderName,
@@ -37,19 +61,8 @@ export function ShareButton({
   }, [copied]);
 
   async function share() {
-    const url = echoShareUrl(broadcastId, window.location.origin);
-    const title = echoShareTitle(senderName);
-    const previewText = stripUrls(content);
-    const text = previewText ? echoPreview(previewText) : `${senderName} shared an Echo`;
-    if (typeof navigator.share === "function") {
-      try {
-        await navigator.share({ title, text, url });
-        return;
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-      }
-    }
-    setOpen((value) => !value);
+    const usedNative = await shareEcho({ broadcastId, senderName, content });
+    if (!usedNative) setOpen((value) => !value);
   }
 
   const url = typeof window === "undefined" ? "" : echoShareUrl(broadcastId, window.location.origin);

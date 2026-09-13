@@ -19,6 +19,7 @@
       }
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.echotocrowd.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/echotocrowd-icon-1024.png",
@@ -32,6 +33,7 @@
       ]
     },
     "plugins": [
+      "react-native-keyboard-controller",
       "expo-secure-store",
       "expo-location",
       "expo-apple-authentication",

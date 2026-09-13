@@ -56,6 +56,7 @@ export function SearchHitCard({
                 broadcastId: hit.id,
                 senderId: hit.sender_id,
                 senderDisplayName: hit.sender_display_name,
+                content: hit.body,
                 onBlocked,
                 onRemoved,
               })}
@@ -74,8 +75,6 @@ export function SearchHitCard({
       <FeedCardActionRow
         broadcastId={hit.id}
         isOwn={isOwn}
-        senderName={isOwn ? "You" : hit.sender_display_name}
-        content={hit.body}
         onOpenBroadcast={onOpenBroadcast}
         onReplyPrivately={isOwn ? undefined : onPrivateReply}
       />
