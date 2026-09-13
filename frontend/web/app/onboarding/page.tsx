@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clientFetch } from "@/helpers/client-api";
+import { FollowTagsForm } from "@/app/follow-tags/page";
 
 const MIN_AGE_YEARS = 16;
 
@@ -109,6 +110,20 @@ export default function OnboardingPage() {
     }
   }
 
+  if (step === "tags") {
+    return (
+      <main className="min-h-screen">
+        <FollowTagsForm onDone={() => router.replace("/feed")} />
+        <p className="text-xs text-parchment-500 pb-8 text-center">
+          By signing in, you agree to our{" "}
+          <Link href="/terms" className="underline hover:text-parchment-100">Terms</Link>
+          {" "}and{" "}
+          <Link href="/privacy" className="underline hover:text-parchment-100">Privacy Policy</Link>.
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen flex items-center justify-center px-6">
       <div className="card w-full max-w-md">
@@ -151,9 +166,7 @@ export default function OnboardingPage() {
               {submitting ? "Saving…" : "Continue"}
             </button>
           </>
-        ) : (
-          <TagStep onDone={() => router.replace("/feed")} />
-        )}
+        ) : null}
       </div>
     </main>
   );
@@ -216,37 +229,3 @@ function ProfileStep({
   );
 }
 
-function TagStep({ onDone }: { onDone: () => void }) {
-  // Barebone: in the full build, fetch /tags (a new lightweight backend
-  // endpoint, not yet in the API) and render checkboxes grouped by type.
-  // Scaffolded here as a static example set + free continue.
-  const [saving, setSaving] = useState(false);
-
-  async function finish() {
-    setSaving(true);
-    try {
-      await clientFetch("/users/me", { method: "PATCH", body: JSON.stringify({}) });
-      onDone();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <>
-      <h1 className="font-display text-xl font-bold">What describes you?</h1>
-      <p className="text-parchment-500 text-sm mt-2 mb-5">
-        Tags boost what shows up first in your feed — they never restrict who can see your broadcasts.
-      </p>
-      <button onClick={finish} disabled={saving} className="btn-primary w-full">
-        {saving ? "Saving…" : "Finish setup"}
-      </button>
-      <p className="text-xs text-parchment-500 mt-4 text-center">
-        By signing in, you agree to our{" "}
-        <Link href="/terms" className="underline hover:text-parchment-100">Terms</Link>
-        {" "}and{" "}
-        <Link href="/privacy" className="underline hover:text-parchment-100">Privacy Policy</Link>.
-      </p>
-    </>
-  );
-}

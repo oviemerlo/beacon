@@ -57,7 +57,7 @@ import {
 } from "@/helpers/tags";
 import type { CountrySlot, FollowedTags, TagGroups, UserProfile } from "@/types/api";
 
-export default function FollowTagsPage() {
+export function FollowTagsForm({ onDone }: { onDone?: () => void } = {}) {
   const [tagGroups, setTagGroups] = useState<TagGroups>(EMPTY_TAG_GROUPS);
   const [sectionQueries, setSectionQueries] = useState(EMPTY_SECTION_QUERIES);
   const [followedTagIds, setFollowedTagIds] = useState<number[]>([]);
@@ -122,7 +122,7 @@ export default function FollowTagsPage() {
   }, []);
 
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || onDone) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
@@ -153,7 +153,7 @@ export default function FollowTagsPage() {
       window.removeEventListener("beforeunload", onBeforeUnload);
       document.removeEventListener("click", onClick, true);
     };
-  }, [dirty]);
+  }, [dirty, onDone]);
 
   useEffect(() => {
     if (!success) return;
@@ -215,8 +215,8 @@ export default function FollowTagsPage() {
     setSuccess(null);
   }
 
-  async function saveFollowedTags() {
-    if (!canSave) return;
+  async function saveFollowedTags(): Promise<boolean> {
+    if (!canSave) return !dirty;
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -229,22 +229,32 @@ export default function FollowTagsPage() {
       setSavedFollowedTagIds(saved.tag_ids);
       setCountrySlots(saved.country_slots ?? []);
       setSuccess("Tags saved");
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save followed tags");
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
+  async function finishSetup() {
+    if (dirty) {
+      const saved = await saveFollowedTags();
+      if (!saved) return;
+    }
+    onDone?.();
+  }
+
   return (
-    <div className="min-h-screen">
-      <AppNav />
-      <main className="max-w-2xl mx-auto px-5 py-6">
+    <main className="max-w-2xl mx-auto px-5 py-6">
         <div className="flex items-center justify-between mb-2">
           <h1 className="font-display text-xl font-bold">Echo Tags</h1>
-          <Link href="/profile" className="text-sm text-signal-400 hover:text-signal-300">
-            Back to profile
-          </Link>
+          {onDone ? null : (
+            <Link href="/profile" className="text-sm text-signal-400 hover:text-signal-300">
+              Back to profile
+            </Link>
+          )}
         </div>
         <p className="text-parchment-500 text-sm mb-4">{ECHO_TAGS_SUBTITLE}</p>
 
@@ -422,8 +432,13 @@ export default function FollowTagsPage() {
 
             <div className="card">
               {atTagLimit && <p className="text-signal-400 text-xs mb-3">{followedTagLimitReachedMessage(tagLimit)}</p>}
-              <button type="button" className="btn-primary w-full" disabled={!canSave} onClick={saveFollowedTags}>
-                {saving ? "Saving…" : "Save"}
+              <button
+                type="button"
+                className="btn-primary w-full"
+                disabled={onDone ? saving : !canSave}
+                onClick={() => void (onDone ? finishSetup() : saveFollowedTags())}
+              >
+                {saving ? "Saving…" : onDone ? "Finish setup" : "Save"}
               </button>
             </div>
           </div>
@@ -431,7 +446,15 @@ export default function FollowTagsPage() {
 
         {success && <p className="text-signal-400 text-sm mt-3">{success}</p>}
         {error && <p className="text-rust-400 text-sm mt-3">{error}</p>}
-      </main>
+    </main>
+  );
+}
+
+export default function FollowTagsPage() {
+  return (
+    <div className="min-h-screen">
+      <AppNav />
+      <FollowTagsForm />
     </div>
   );
 }

@@ -39,12 +39,6 @@ each has its own `package.json` and dependency tree. What they share is a
 
 ## Known gaps across both clients
 
-Three backend endpoints don't exist yet and both `web` and `mobile` have
-matching `TODO`s waiting on them:
-- `GET /tags` — tag picker in onboarding and the broadcast composer
-- `GET /broadcasts/{id}` — broadcast detail (currently reply-box only)
-- `GET /conversations` — list-my-threads
-
 Real-time chat is polling on both clients (4s interval) pending WebSocket
 support on the backend.
 

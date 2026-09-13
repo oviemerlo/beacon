@@ -27,9 +27,7 @@ routes as the backend scaffold already exposes).
 ## What's wired vs. stubbed
 
 Same state as `frontend/web` — see that README's breakdown. Screens here
-call the exact same backend paths with the same JSON shapes; the three
-backend gaps (`GET /tags`, `GET /broadcasts/{id}`, `GET /conversations`)
-are marked `TODO` in the same places.
+call the exact same backend paths with the same JSON shapes.
 
 ## Structure
 
@@ -49,8 +47,6 @@ src/
 
 ## Known gaps
 
-- Tag picker UI (onboarding + broadcast composer) is a placeholder pending
-  a `GET /tags` backend endpoint
 - No push notifications wired yet (relevant once the digest job or
   real-time chat need to reach a backgrounded app)
 - Real-time chat is polling (4s interval), same stopgap as web, pending

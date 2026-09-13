@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import * as Location from "expo-location";
 import { apiFetch } from "../helpers/api";
+import { FollowTagsScreen } from "./FollowTagsScreen";
 import { colors, radii } from "../theme/tokens";
 
 const MIN_AGE_YEARS = 16;
@@ -124,7 +125,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, step === "tags" && styles.tagsStep]}>
       {step === "profile" ? (
         <ProfileStep
           displayName={displayName}
@@ -241,42 +242,14 @@ function ProfileStep({
 }
 
 function TagStep({ onDone }: { onDone: () => void }) {
-  // Barebone, same as web: fetch GET /tags (not yet in the API) and render
-  // selectable tag pills grouped by type once that endpoint exists.
-  const [saving, setSaving] = useState(false);
-
-  async function finish() {
-    setSaving(true);
-    try {
-      await apiFetch("/users/me", { method: "PATCH", body: JSON.stringify({}) });
-      onDone();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <>
-      <Text style={styles.title}>What describes you?</Text>
-      <Text style={styles.subtitle}>
-        Tags boost what shows up first in your feed — they never restrict who can see your broadcasts.
-      </Text>
-      <Text style={styles.todo}>
-        TODO: wire to GET /tags once that endpoint exists — render a selectable tag grid, then PATCH /users/me
-        with the chosen tag IDs.
-      </Text>
-      <Pressable style={styles.buttonPrimary} onPress={finish} disabled={saving}>
-        {saving ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonPrimaryText}>Finish setup</Text>}
-      </Pressable>
-    </>
-  );
+  return <FollowTagsScreen onDone={onDone} />;
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950, justifyContent: "center", padding: 24 },
+  tagsStep: { justifyContent: "flex-start", padding: 0 },
   title: { color: colors.parchment100, fontSize: 22, fontWeight: "700" },
   subtitle: { color: colors.parchment500, fontSize: 14, marginTop: 8, marginBottom: 20 },
-  todo: { color: colors.parchment500, fontSize: 11, fontFamily: "monospace", marginBottom: 20 },
   input: {
     backgroundColor: colors.dusk800,
     borderColor: colors.dusk600,

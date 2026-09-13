@@ -58,7 +58,7 @@ import {
 import { colors, radii } from "../theme/tokens";
 import type { CountrySlot, FollowedTags, Tag, TagGroups, UserProfile } from "../types/api";
 
-export function FollowTagsScreen() {
+export function FollowTagsScreen({ onDone }: { onDone?: () => void } = {}) {
   const navigation = useNavigation();
   const scrollRef = useRef<ScrollView>(null);
   const [tagGroups, setTagGroups] = useState<TagGroups>(EMPTY_TAG_GROUPS);
@@ -128,6 +128,7 @@ export function FollowTagsScreen() {
   }, []);
 
   useEffect(() => {
+    if (onDone) return;
     const unsubscribe = navigation.addListener("beforeRemove", (event) => {
       if (!dirtyRef.current) return;
       event.preventDefault();
@@ -144,7 +145,7 @@ export function FollowTagsScreen() {
       ]);
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, onDone]);
 
   useEffect(() => {
     if (!success) return;
@@ -215,8 +216,8 @@ export function FollowTagsScreen() {
     setSuccess(null);
   }
 
-  async function saveFollowedTags() {
-    if (!canSave) return;
+  async function saveFollowedTags(): Promise<boolean> {
+    if (!canSave) return !dirty;
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -229,11 +230,22 @@ export function FollowTagsScreen() {
       setSavedFollowedTagIds(saved.tag_ids);
       setCountrySlots(saved.country_slots ?? []);
       setSuccess("Tags saved");
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save followed tags");
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function finishSetup() {
+    if (dirty) {
+      const saved = await saveFollowedTags();
+      if (!saved) return;
+    }
+    dirtyRef.current = false;
+    onDone?.();
   }
 
   if (loading) return <ActivityIndicator color={colors.signal500} style={{ marginTop: 30 }} />;
@@ -426,14 +438,16 @@ export function FollowTagsScreen() {
           <Text style={[styles.limitHint, styles.limitHintIdle]}>{countrySelectionLine(countryCount, countryLimit, isAdmin)}</Text>
         )}
         <Pressable
-          onPress={saveFollowedTags}
-          disabled={!canSave}
-          style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
+          onPress={onDone ? () => void finishSetup() : () => void saveFollowedTags()}
+          disabled={onDone ? saving : !canSave}
+          style={[styles.saveButton, !onDone && !canSave && styles.saveButtonDisabled]}
         >
           {saving ? (
             <ActivityIndicator color={colors.dusk950} />
           ) : (
-            <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>Save</Text>
+            <Text style={[styles.saveButtonText, !onDone && !canSave && styles.saveButtonTextDisabled]}>
+              {onDone ? "Finish setup" : "Save"}
+            </Text>
           )}
         </Pressable>
       </View>

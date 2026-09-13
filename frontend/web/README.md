@@ -1,9 +1,7 @@
 # Beacon Web
 
-Next.js (App Router) frontend for Beacon. Barebone scaffold — screens are
-wired to real backend logic where that logic matters (feed, broadcast
-targeting, DM eligibility) and left as clearly-marked TODOs where it's
-routine CRUD not yet built on the backend.
+Next.js (App Router) frontend for EchoToCrowd. Screens are wired to the
+backend (feed, tags, broadcast targeting, threads, DMs).
 
 ## Setup
 
@@ -52,13 +50,9 @@ Wired to real backend logic:
 
   eligibility error if the broadcast was never in your feed)
 - Message thread (polling — swap for WebSocket once backend adds it)
-
-Marked `TODO` in the code, backend endpoint needed:
-- `GET /tags` — tag picker in onboarding and the broadcast composer currently
-  has nowhere to fetch the taxonomy from
-- `GET /broadcasts/{id}` — broadcast detail page doesn't show sender/content
-  yet, only the reply box
-- `GET /conversations` — no "list my threads" endpoint yet in the backend
+- Echo Tags (`GET /tags`) in onboarding and Profile
+- Broadcast thread (`GET /broadcasts/{id}/thread`)
+- Conversation inbox (`GET /conversations`)
 
 ## Structure
 

@@ -1,4 +1,4 @@
-"""Data access for Tag. Thin for now — grows once GET /tags exists."""
+"""Data access for Tag."""
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
