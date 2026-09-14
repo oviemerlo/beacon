@@ -72,9 +72,9 @@ export default async function HomePage() {
           <Link href="/terms" className="hover:text-parchment-100 transition-colors">Terms of Service</Link>
           {" · "}
           <Link href="/privacy" className="hover:text-parchment-100 transition-colors">Privacy Policy</Link>
-          {" · "}
-          <Link href="/delete-account" className="hover:text-parchment-100 transition-colors">Delete account</Link>
         </p>
+        <p className="mt-4">© 2026 1001721403 Ontario Inc. All rights reserved.</p>
+        <p>EchoToCrowd is a product of 1001721403 Ontario Inc.</p>
       </footer>
     </main>
   );
