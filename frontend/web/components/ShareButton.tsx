@@ -43,7 +43,7 @@ export function ShareButton({
     const text = previewText ? echoPreview(previewText) : `${senderName} shared an Echo`;
     if (typeof navigator.share === "function") {
       try {
-        await navigator.share({ title, text, url });
+        await navigator.share({ title, url });
         return;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;

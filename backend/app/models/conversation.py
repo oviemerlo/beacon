@@ -10,6 +10,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.broadcast import Broadcast
+    from app.models.upload import UploadedFile
 
 
 class Conversation(Base):
@@ -86,6 +87,7 @@ class Message(Base):
     )
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
+    attachments: Mapped[list["UploadedFile"]] = relationship(back_populates="message")
 
 
 class BlockedUser(Base):

@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TagOut(BaseModel):
@@ -291,6 +291,13 @@ class MessageIn(BaseModel):
     body: str = Field(min_length=1, max_length=2000)
 
 
+class MessageAttachmentOut(BaseModel):
+    file_id: uuid.UUID
+    original_filename: str
+    content_type: str
+    has_thumbnail: bool = False
+
+
 class MessageOut(BaseModel):
     id: uuid.UUID
     sender_id: uuid.UUID
@@ -299,6 +306,23 @@ class MessageOut(BaseModel):
     read_at: datetime | None
     mentioned_user_ids: list[uuid.UUID] = []
     link_previews: list[LinkPreviewOut] = []
+    attachments: list[MessageAttachmentOut] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def attachments_from_orm(cls, data):
+        if isinstance(data, dict):
+            return data
+        return {
+            "id": data.id,
+            "sender_id": data.sender_id,
+            "body": data.body,
+            "sent_at": data.sent_at,
+            "read_at": data.read_at,
+            "mentioned_user_ids": data.mentioned_user_ids or [],
+            "link_previews": getattr(data, "link_previews", []) or [],
+            "attachments": getattr(data, "_api_attachments", []) or [],
+        }
 
     class Config:
         from_attributes = True

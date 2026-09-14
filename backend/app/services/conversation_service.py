@@ -20,10 +20,11 @@ from app.repositories import (
     conversation_repository,
     link_preview_repository,
     notification_repository,
+    upload_repository,
     user_repository,
 )
 from app.services import mention_service
-from app.services.broadcast_tags import _link_preview_payload
+from app.services.broadcast_tags import _attachment_payloads, _link_preview_payload
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 from app.services.link_preview_service import schedule_previews
 
@@ -80,6 +81,12 @@ async def _attach_message_link_previews(db: AsyncSession, messages: list[Message
         message.link_previews = [_link_preview_payload(p) for p in by_id.get(message.id, [])]
 
 
+async def _attach_message_attachments(db: AsyncSession, messages: list[Message]) -> None:
+    by_id = await upload_repository.list_clean_attachments_for_messages(db, [m.id for m in messages])
+    for message in messages:
+        message._api_attachments = _attachment_payloads(by_id.get(message.id, []))
+
+
 async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> list[Message]:
     conversation = await _assert_participant(db, user_id, conversation_id)
     messages = await conversation_repository.list_messages(db, conversation_id)
@@ -87,6 +94,7 @@ async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: s
     await notification_repository.mark_read_for_conversation(db, user_id, conversation.id)
     await db.commit()
     await _attach_message_link_previews(db, messages)
+    await _attach_message_attachments(db, messages)
     return messages
 
 
@@ -110,6 +118,7 @@ async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: st
     await db.refresh(message)
     schedule_previews(body, message_id=message.id)
     await _attach_message_link_previews(db, [message])
+    await _attach_message_attachments(db, [message])
     return message
 
 

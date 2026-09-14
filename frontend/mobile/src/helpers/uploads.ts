@@ -16,7 +16,7 @@ export function isImageAttachment(contentType: string, filename = ""): boolean {
   return ext === "jpg" || ext === "jpeg" || ext === "png";
 }
 
-const ATTACHMENT_TYPES = new Set([
+export const ATTACHMENT_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "application/pdf",
@@ -37,25 +37,22 @@ export function isAllowedAttachment(type: string, name: string): boolean {
   return ATTACHMENT_EXTS.has(ext);
 }
 
-export async function uploadAvatar(file: PickedUpload): Promise<{ file_id: string; status: string }> {
+async function postUploadFile(path: string, file: PickedUpload): Promise<{ file_id: string; status: string }> {
   const body = new FormData();
   body.append("file", file as unknown as Blob);
-  return apiFetch<{ file_id: string; status: string }>("/uploads/avatar", {
-    method: "POST",
-    body,
-  });
+  return apiFetch<{ file_id: string; status: string }>(path, { method: "POST", body });
 }
 
-export async function uploadBroadcastAttachment(
-  broadcastId: string,
-  file: PickedUpload
-): Promise<{ file_id: string; status: string }> {
-  const body = new FormData();
-  body.append("file", file as unknown as Blob);
-  return apiFetch<{ file_id: string; status: string }>(`/uploads/broadcasts/${broadcastId}/attachments`, {
-    method: "POST",
-    body,
-  });
+export function uploadAvatar(file: PickedUpload) {
+  return postUploadFile("/uploads/avatar", file);
+}
+
+export function uploadBroadcastAttachment(broadcastId: string, file: PickedUpload) {
+  return postUploadFile(`/uploads/broadcasts/${broadcastId}/attachments`, file);
+}
+
+export function uploadMessageAttachment(messageId: string, file: PickedUpload) {
+  return postUploadFile(`/uploads/messages/${messageId}/attachments`, file);
 }
 
 export async function getUploadUrl(fileId: string): Promise<{ url: string; thumbnail_url: string | null }> {

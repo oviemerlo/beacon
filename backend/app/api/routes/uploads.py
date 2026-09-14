@@ -42,6 +42,23 @@ async def upload_broadcast_attachment(
     return {"file_id": str(row.id), "status": "processing"}
 
 
+@router.post("/messages/{message_id}/attachments")
+@limiter.limit("20/hour")
+async def upload_message_attachment(
+    request: Request,
+    message_id: str,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ = request
+    file_bytes, filename = await _read_upload(file, "attachment")
+    row = await upload_service.upload_message_attachment(
+        db, current_user, message_id, file_bytes, filename
+    )
+    return {"file_id": str(row.id), "status": "processing"}
+
+
 @router.get("/{file_id}/url")
 async def get_upload_url(
     file_id: str,

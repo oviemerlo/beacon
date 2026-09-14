@@ -4,12 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
+import { BroadcastAttachments } from "@/components/BroadcastAttachments";
+import { EchoMediaLayout } from "@/components/EchoAttachments";
 import { LinkPreviewList } from "@/components/LinkPreviewCard";
 import { clientFetch } from "@/helpers/client-api";
 import { applyMention, mentionTriggerFromInput, splitMentionParts } from "@/helpers/mentions";
 import { FeedCardOverflowMenu } from "@/components/FeedCardOverflowMenu";
 import { promptAndSubmitReport } from "@/helpers/report-actions";
 import { formatMessageSentAt } from "@/helpers/time";
+import { uploadMessageAttachment } from "@/helpers/uploads";
 import type { ConversationContext, ConversationParticipant, MentionCandidate, Message, UserProfile } from "@/types/api";
 
 export default function ConversationDetailPage() {
@@ -19,6 +22,7 @@ export default function ConversationDetailPage() {
   const [context, setContext] = useState<ConversationContext | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<MentionCandidate[]>([]);
@@ -160,8 +164,19 @@ export default function ConversationDetailPage() {
     setSending(true);
     setSendError(null);
     try {
-      await clientFetch(`/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ body: draft }) });
+      const created = await clientFetch<Message>(`/conversations/${conversationId}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ body: draft }),
+      });
+      try {
+        for (const file of attachments) {
+          await uploadMessageAttachment(created.id, file);
+        }
+      } catch {
+        // Message is already live.
+      }
       setDraft("");
+      setAttachments([]);
       setMentionOpen(false);
       await load();
     } catch (error) {
@@ -285,46 +300,52 @@ export default function ConversationDetailPage() {
                       mentionedMe ? "border-signal-500 bg-signal-500/10" : ""
                     }`}
                   >
-                    {mentionedMe && (
-                      <p className="text-signal-400 text-[10px] font-mono mb-1">You were mentioned</p>
-                    )}
-                    <p className={`text-sm mb-1 ${isUnread ? "font-semibold" : "font-normal"}`}>
-                      {senderLabel(m.sender_id)}:
-                    </p>
-                    <p className={`text-sm break-words ${isUnread ? "font-semibold" : "font-normal"}`}>
-                      {splitMentionParts(m.body).map((part, index) =>
-                        part.mention ? (
-                          <span key={`${m.id}-${index}`} className="mention-text">
-                            {part.text}
-                          </span>
-                        ) : (
-                          <span key={`${m.id}-${index}`}>{part.text}</span>
-                        )
+                    <EchoMediaLayout
+                      attachments={m.attachments}
+                      corner={
+                        !isMine ? (
+                          <FeedCardOverflowMenu
+                            senderName={senderLabel(m.sender_id)}
+                            actions={[
+                              {
+                                label: "Report",
+                                onSelect: async () => {
+                                  try {
+                                    await promptAndSubmitReport("message", m.id, "this message");
+                                    window.alert("Report submitted.");
+                                  } catch {
+                                    window.alert("Couldn't submit report.");
+                                  }
+                                },
+                              },
+                            ]}
+                          />
+                        ) : undefined
+                      }
+                    >
+                      {mentionedMe && (
+                        <p className="text-signal-400 text-[10px] font-mono mb-1">You were mentioned</p>
                       )}
-                    </p>
-                    <LinkPreviewList previews={m.link_previews} />
+                      <p className={`text-sm mb-1 ${isUnread ? "font-semibold" : "font-normal"}`}>
+                        {senderLabel(m.sender_id)}:
+                      </p>
+                      <p className={`text-sm break-words ${isUnread ? "font-semibold" : "font-normal"}`}>
+                        {splitMentionParts(m.body).map((part, index) =>
+                          part.mention ? (
+                            <span key={`${m.id}-${index}`} className="mention-text">
+                              {part.text}
+                            </span>
+                          ) : (
+                            <span key={`${m.id}-${index}`}>{part.text}</span>
+                          )
+                        )}
+                      </p>
+                      <LinkPreviewList previews={m.link_previews} />
+                    </EchoMediaLayout>
                     <div className="flex items-center justify-end gap-2 mt-2">
                       <p className="text-parchment-500 text-[10px] font-mono">
                         {formatMessageSentAt(m.sent_at)}
                       </p>
-                      {!isMine && (
-                        <FeedCardOverflowMenu
-                          senderName={senderLabel(m.sender_id)}
-                          actions={[
-                            {
-                              label: "Report",
-                              onSelect: async () => {
-                                try {
-                                  await promptAndSubmitReport("message", m.id, "this message");
-                                  window.alert("Report submitted.");
-                                } catch {
-                                  window.alert("Couldn't submit report.");
-                                }
-                              },
-                            },
-                          ]}
-                        />
-                      )}
                     </div>
                   </div>
                 </div>
@@ -362,6 +383,14 @@ export default function ConversationDetailPage() {
             </div>
           )}
           {sendError && <p className="text-rust-400 text-sm mb-2">{sendError}</p>}
+          <div className="mb-2">
+            <BroadcastAttachments
+              files={attachments}
+              onChange={setAttachments}
+              compact
+              onError={setSendError}
+            />
+          </div>
           <div className="flex gap-2 w-full">
             <input
               ref={inputRef}

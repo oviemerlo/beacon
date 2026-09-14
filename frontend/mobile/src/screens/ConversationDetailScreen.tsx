@@ -7,7 +7,10 @@ import { apiFetch } from "../helpers/api";
 import { applyMention, mentionTriggerFromInput, splitMentionParts } from "../helpers/mentions";
 import { pickReasonAndSubmitReport } from "../helpers/reportActions";
 import { formatMessageSentAt } from "../helpers/time";
+import { uploadMessageAttachment, type PickedUpload } from "../helpers/uploads";
 import { colors, radii } from "../theme/tokens";
+import { BroadcastAttachments } from "../components/BroadcastAttachments";
+import { EchoMediaLayout } from "../components/EchoAttachments";
 import { FeedCardOverflowMenu } from "../components/FeedCardOverflowMenu";
 import { LinkPreviewList } from "../components/LinkPreviewCard";
 import type { ConversationContext, ConversationParticipant, MentionCandidate, Message, UserProfile } from "../types/api";
@@ -19,6 +22,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
   const [context, setContext] = useState<ConversationContext | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
+  const [attachments, setAttachments] = useState<PickedUpload[]>([]);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [composerHeight, setComposerHeight] = useState(44);
@@ -151,9 +155,20 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
     setSending(true);
     setSendError(null);
     try {
-      await apiFetch(`/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ body: draft }) });
+      const created = await apiFetch<Message>(`/conversations/${conversationId}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ body: draft }),
+      });
+      try {
+        for (const file of attachments) {
+          await uploadMessageAttachment(created.id, file);
+        }
+      } catch {
+        // Message is already live.
+      }
       setDraft("");
       draftRef.current = "";
+      setAttachments([]);
       setComposerHeight(44);
       setMentionOpen(false);
       await load();
@@ -291,41 +306,47 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
           return (
             <View style={[styles.row, isMine ? styles.rowOutgoing : styles.rowIncoming]}>
               <View style={[styles.bubble, mentionedMe && styles.bubbleMentioned]}>
-                {mentionedMe && <Text style={styles.mentionedLabel}>You were mentioned</Text>}
-                <Text style={[styles.senderLabel, !isUnread && styles.senderLabelRead]}>
-                  {senderLabel(item.sender_id)}:
-                </Text>
-                <Text style={[styles.bubbleText, isUnread ? styles.bubbleTextUnread : styles.bubbleTextRead]}>
-                  {splitMentionParts(item.body).map((part, index) => (
-                    <Text key={`${item.id}-${index}`} style={part.mention ? styles.mentionInBody : undefined}>
-                      {part.text}
-                    </Text>
-                  ))}
-                </Text>
-                <LinkPreviewList previews={item.link_previews} />
+                <EchoMediaLayout
+                  attachments={item.attachments}
+                  corner={
+                    !isMine ? (
+                      <FeedCardOverflowMenu
+                        senderName={senderLabel(item.sender_id)}
+                        actions={[
+                          {
+                            label: "Report",
+                            onSelect: () => {
+                              void (async () => {
+                                try {
+                                  await pickReasonAndSubmitReport("message", item.id);
+                                } catch {
+                                  // Keep conversation stable on failure.
+                                }
+                              })();
+                            },
+                          },
+                        ]}
+                      />
+                    ) : undefined
+                  }
+                >
+                  {mentionedMe && <Text style={styles.mentionedLabel}>You were mentioned</Text>}
+                  <Text style={[styles.senderLabel, !isUnread && styles.senderLabelRead]}>
+                    {senderLabel(item.sender_id)}:
+                  </Text>
+                  <Text style={[styles.bubbleText, isUnread ? styles.bubbleTextUnread : styles.bubbleTextRead]}>
+                    {splitMentionParts(item.body).map((part, index) => (
+                      <Text key={`${item.id}-${index}`} style={part.mention ? styles.mentionInBody : undefined}>
+                        {part.text}
+                      </Text>
+                    ))}
+                  </Text>
+                  <LinkPreviewList previews={item.link_previews} />
+                </EchoMediaLayout>
                 <View style={styles.bubbleMetaRow}>
                   <Text style={styles.bubbleTime}>
                     {formatMessageSentAt(item.sent_at)}
                   </Text>
-                  {!isMine && (
-                    <FeedCardOverflowMenu
-                      senderName={senderLabel(item.sender_id)}
-                      actions={[
-                        {
-                          label: "Report",
-                          onSelect: () => {
-                            void (async () => {
-                              try {
-                                await pickReasonAndSubmitReport("message", item.id);
-                              } catch {
-                                // Keep conversation stable on failure.
-                              }
-                            })();
-                          },
-                        },
-                      ]}
-                    />
-                  )}
                 </View>
               </View>
             </View>
@@ -347,35 +368,38 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
         </View>
       )}
       {sendError && <Text style={styles.sendError}>{sendError}</Text>}
-      <View style={[styles.composerRow, { paddingBottom: 16 + insets.bottom }]}>
-        <TextInput
-          style={[styles.input, { height: composerHeight }]}
-          placeholder="Message… Use @ to mention someone in this Echo"
-          placeholderTextColor={colors.parchment500}
-          value={draft}
-          onChangeText={(value) => {
-            draftRef.current = value;
-            setDraft(value);
-            updateMentionState(value, value.length);
-            setCursor(value.length);
-          }}
-          onSelectionChange={(event) => {
-            const nextCursor = event.nativeEvent.selection.end;
-            setCursor(nextCursor);
-            updateMentionState(draftRef.current, nextCursor);
-          }}
-          multiline
-          blurOnSubmit={false}
-          textAlignVertical="top"
-          onContentSizeChange={(event) => {
-            const measuredHeight = Math.ceil(event.nativeEvent.contentSize.height);
-            const nextHeight = Math.max(44, Math.min(140, measuredHeight + 12));
-            setComposerHeight(nextHeight);
-          }}
-        />
-        <Pressable style={styles.sendButton} onPress={send} disabled={sending}>
-          <Text style={styles.sendButtonText}>Send</Text>
-        </Pressable>
+      <View style={[styles.composer, { paddingBottom: 16 + insets.bottom }]}>
+        <BroadcastAttachments files={attachments} onChange={setAttachments} compact />
+        <View style={styles.composerRow}>
+          <TextInput
+            style={[styles.input, { height: composerHeight }]}
+            placeholder="Message… Use @ to mention someone in this Echo"
+            placeholderTextColor={colors.parchment500}
+            value={draft}
+            onChangeText={(value) => {
+              draftRef.current = value;
+              setDraft(value);
+              updateMentionState(value, value.length);
+              setCursor(value.length);
+            }}
+            onSelectionChange={(event) => {
+              const nextCursor = event.nativeEvent.selection.end;
+              setCursor(nextCursor);
+              updateMentionState(draftRef.current, nextCursor);
+            }}
+            multiline
+            blurOnSubmit={false}
+            textAlignVertical="top"
+            onContentSizeChange={(event) => {
+              const measuredHeight = Math.ceil(event.nativeEvent.contentSize.height);
+              const nextHeight = Math.max(44, Math.min(140, measuredHeight + 12));
+              setComposerHeight(nextHeight);
+            }}
+          />
+          <Pressable style={styles.sendButton} onPress={send} disabled={sending}>
+            <Text style={styles.sendButtonText}>Send</Text>
+          </Pressable>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -457,15 +481,18 @@ const styles = StyleSheet.create({
   bubbleTextRead: { fontWeight: "400" },
   bubbleMetaRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, marginTop: 6, overflow: "visible" },
   bubbleTime: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
+  composer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.dusk700,
+    backgroundColor: colors.dusk950,
+  },
   composerRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.dusk700,
-    backgroundColor: colors.dusk950,
   },
   input: {
     flex: 1,

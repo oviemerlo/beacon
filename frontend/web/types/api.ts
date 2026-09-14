@@ -265,6 +265,7 @@ export interface Message {
   read_at: string | null;
   mentioned_user_ids?: string[];
   link_previews?: LinkPreview[];
+  attachments?: BroadcastAttachment[];
 }
 
 export interface MentionCandidate {

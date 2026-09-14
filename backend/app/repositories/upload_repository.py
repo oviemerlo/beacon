@@ -20,11 +20,13 @@ async def create(
     size_bytes: int,
     moderation_status: str = "pending",
     moderation_labels: str | None = None,
+    message_id: uuid.UUID | None = None,
 ) -> UploadedFile:
     row = UploadedFile(
         uploader_user_id=uploader_user_id,
         context=context,
         broadcast_id=broadcast_id,
+        message_id=message_id,
         s3_key=s3_key,
         original_filename=original_filename,
         content_type=content_type,
@@ -71,6 +73,26 @@ async def list_clean_attachments_for_broadcasts(
         if row.broadcast_id is None:
             continue
         grouped.setdefault(row.broadcast_id, []).append(row)
+    return grouped
+
+
+async def list_clean_attachments_for_messages(
+    db: AsyncSession, message_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[UploadedFile]]:
+    if not message_ids:
+        return {}
+    result = await db.execute(
+        select(UploadedFile)
+        .where(UploadedFile.message_id.in_(message_ids))
+        .where(UploadedFile.context == "message_attachment")
+        .where(UploadedFile.scan_status == "clean")
+        .order_by(UploadedFile.created_at.asc())
+    )
+    grouped: dict[uuid.UUID, list[UploadedFile]] = {}
+    for row in result.scalars():
+        if row.message_id is None:
+            continue
+        grouped.setdefault(row.message_id, []).append(row)
     return grouped
 
 

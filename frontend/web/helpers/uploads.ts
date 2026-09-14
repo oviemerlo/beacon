@@ -31,25 +31,22 @@ export function isAllowedAttachment(type: string, name: string): boolean {
   return ATTACHMENT_EXTS.has(ext);
 }
 
-export async function uploadAvatar(file: File): Promise<{ file_id: string; status: string }> {
+async function postUploadFile(path: string, file: File): Promise<{ file_id: string; status: string }> {
   const body = new FormData();
   body.append("file", file);
-  return clientFetch<{ file_id: string; status: string }>("/uploads/avatar", {
-    method: "POST",
-    body,
-  });
+  return clientFetch<{ file_id: string; status: string }>(path, { method: "POST", body });
 }
 
-export async function uploadBroadcastAttachment(
-  broadcastId: string,
-  file: File
-): Promise<{ file_id: string; status: string }> {
-  const body = new FormData();
-  body.append("file", file);
-  return clientFetch<{ file_id: string; status: string }>(`/uploads/broadcasts/${broadcastId}/attachments`, {
-    method: "POST",
-    body,
-  });
+export function uploadAvatar(file: File) {
+  return postUploadFile("/uploads/avatar", file);
+}
+
+export function uploadBroadcastAttachment(broadcastId: string, file: File) {
+  return postUploadFile(`/uploads/broadcasts/${broadcastId}/attachments`, file);
+}
+
+export function uploadMessageAttachment(messageId: string, file: File) {
+  return postUploadFile(`/uploads/messages/${messageId}/attachments`, file);
 }
 
 export async function getUploadUrl(fileId: string): Promise<{ url: string; thumbnail_url: string | null }> {

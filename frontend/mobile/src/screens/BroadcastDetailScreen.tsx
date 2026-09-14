@@ -136,7 +136,7 @@ export function BroadcastDetailScreen({
       {loadingThread && <ActivityIndicator color={colors.signal500} style={{ marginBottom: 12 }} />}
       {threadError && <Text style={styles.error}>{threadError}</Text>}
       {thread && (
-        <Card style={styles.threadCard}>
+        <Card style={StyleSheet.flatten([styles.threadCard, { flex: 1, minHeight: 0 }])}>
           <ThreadItem
             item={thread.parent}
             currentUserId={currentUserId}
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950, padding: 16 },
   threadCard: { marginBottom: 12 },
   repliesHeader: { color: colors.parchment500, fontSize: 11, marginTop: 12, marginBottom: 8, fontFamily: "monospace" },
-  repliesList: { maxHeight: 260 },
+  repliesList: { flex: 1, minHeight: 0 },
   replyItem: { borderWidth: 1, borderColor: colors.dusk700, borderRadius: radii.beacon, padding: 10, marginBottom: 8 },
   senderRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   senderName: { color: colors.parchment500, fontSize: 12 },

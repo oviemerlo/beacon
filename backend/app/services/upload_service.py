@@ -23,8 +23,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import AsyncSessionLocal
 from app.models.upload import UploadedFile
 from app.models.user import User
-from app.repositories import broadcast_repository, report_repository, upload_repository, user_repository
+from app.repositories import broadcast_repository, conversation_repository, report_repository, upload_repository, user_repository
 from app.services import attachment_thumbnail_service
+from app.services.conversation_service import _assert_participant
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 from app.services.moderation_service import ModerationResult, moderate_image_bytes
 from app.services.user_service import can_attach_files
@@ -247,7 +248,7 @@ async def _create_moderation_report(
         return
     label = result.top_label if result and result.top_label else "unknown"
     confidence = result.confidence if result and result.confidence is not None else 0.0
-    target_type = "user" if context == "avatar" else "broadcast"
+    target_type = "user" if context == "avatar" else "message" if context == "message_attachment" else "broadcast"
     await report_repository.create_report(
         db,
         reporter_id=admin.id,
@@ -270,6 +271,7 @@ async def _store_upload(
     max_bytes: int,
     s3_key: str,
     report_target_id: uuid.UUID,
+    message_id: uuid.UUID | None = None,
 ) -> UploadedFile:
     if not file_bytes:
         raise ValidationError("File is empty")
@@ -303,6 +305,7 @@ async def _store_upload(
         uploader_user_id=user.id,
         context=context,
         broadcast_id=broadcast_id,
+        message_id=message_id,
         s3_key=key,
         original_filename=filename,
         content_type=stored_type,
@@ -370,6 +373,40 @@ async def upload_broadcast_attachment(
         max_bytes=settings.MAX_DOCUMENT_UPLOAD_BYTES,
         s3_key=f"broadcast_attachment/{broadcast.id}/{uuid.uuid4()}/placeholder",
         report_target_id=broadcast.id,
+    )
+    schedule_attachment_thumbnail(row.id, row.content_type, file_bytes)
+    return row
+
+
+async def upload_message_attachment(
+    db: AsyncSession,
+    user: User,
+    message_id: uuid.UUID | str,
+    file_bytes: bytes,
+    declared_filename: str,
+) -> UploadedFile:
+    if not can_attach_files(user):
+        raise ForbiddenError("Verify your account to attach files to messages")
+
+    message = await conversation_repository.get_message_by_id(db, message_id)
+    if message is None:
+        raise NotFoundError("Message not found")
+    await _assert_participant(db, user.id, str(message.conversation_id))
+    if message.sender_id != user.id:
+        raise ForbiddenError("You can only attach files to your own messages")
+
+    row = await _store_upload(
+        db,
+        user=user,
+        context="message_attachment",
+        broadcast_id=None,
+        message_id=message.id,
+        file_bytes=file_bytes,
+        declared_filename=declared_filename,
+        allowed_types=ALLOWED_ATTACHMENT_TYPES,
+        max_bytes=settings.MAX_DOCUMENT_UPLOAD_BYTES,
+        s3_key=f"message_attachment/{message.id}/{uuid.uuid4()}/placeholder",
+        report_target_id=message.id,
     )
     schedule_attachment_thumbnail(row.id, row.content_type, file_bytes)
     return row

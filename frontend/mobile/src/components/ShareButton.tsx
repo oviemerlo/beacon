@@ -22,7 +22,7 @@ export async function shareEcho({
   const previewText = stripUrls(content);
   const text = previewText ? echoPreview(previewText) : `${senderName} shared an Echo`;
   try {
-    await Share.share({ title, message: `${text}\n${url}` });
+    await Share.share({ title, message: url, url });
   } catch {
     Alert.alert("Couldn't share this Echo.");
   }

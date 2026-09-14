@@ -2,7 +2,7 @@
   "expo": {
     "name": "EchoToCrowd",
     "slug": "echotocrowd-mobile",
-    "version": "0.1.0",
+    "version": "0.1.2",
     "icon": "./assets/echotocrowd-icon-1024.png",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -19,6 +19,7 @@
       }
     },
     "android": {
+      "edgeToEdgeEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.echotocrowd.app",
       "adaptiveIcon": {
@@ -33,7 +34,6 @@
       ]
     },
     "plugins": [
-      "react-native-keyboard-controller",
       "expo-secure-store",
       "expo-location",
       "expo-apple-authentication",

@@ -10,6 +10,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.broadcast import Broadcast
+    from app.models.conversation import Message
     from app.models.user import User
 
 
@@ -20,9 +21,12 @@ class UploadedFile(Base):
     uploader_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    context: Mapped[str] = mapped_column(String(40), nullable=False)  # avatar | broadcast_attachment
+    context: Mapped[str] = mapped_column(String(40), nullable=False)  # avatar | broadcast_attachment | message_attachment
     broadcast_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("broadcasts.id", ondelete="CASCADE"), nullable=True
+    )
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE"), nullable=True
     )
     s3_key: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
     thumbnail_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -36,10 +40,14 @@ class UploadedFile(Base):
 
     uploader: Mapped["User"] = relationship()
     broadcast: Mapped["Broadcast | None"] = relationship()
+    message: Mapped["Message | None"] = relationship(back_populates="attachments")
 
     __table_args__ = (
         UniqueConstraint("s3_key", name="uq_uploaded_files_s3_key"),
-        CheckConstraint("context IN ('avatar', 'broadcast_attachment')", name="ck_uploaded_files_context"),
+        CheckConstraint(
+            "context IN ('avatar', 'broadcast_attachment', 'message_attachment')",
+            name="ck_uploaded_files_context",
+        ),
         CheckConstraint(
             "scan_status IN ('pending', 'clean', 'infected', 'scan_failed')",
             name="ck_uploaded_files_scan_status",
@@ -49,8 +57,9 @@ class UploadedFile(Base):
             name="ck_uploaded_files_moderation_status",
         ),
         CheckConstraint(
-            "(context = 'avatar' AND broadcast_id IS NULL) OR "
-            "(context = 'broadcast_attachment' AND broadcast_id IS NOT NULL)",
-            name="ck_uploaded_files_broadcast_id",
+            "(context = 'avatar' AND broadcast_id IS NULL AND message_id IS NULL) OR "
+            "(context = 'broadcast_attachment' AND broadcast_id IS NOT NULL AND message_id IS NULL) OR "
+            "(context = 'message_attachment' AND message_id IS NOT NULL AND broadcast_id IS NULL)",
+            name="ck_uploaded_files_context_parent",
         ),
     )
