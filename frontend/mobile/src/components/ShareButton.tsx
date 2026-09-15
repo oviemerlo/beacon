@@ -1,6 +1,4 @@
 import { Alert, Pressable, Share, Text, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
-import { stripUrls } from "../helpers/share";
-import { echoPreview } from "../helpers/time";
 
 const WEB_ORIGIN = (process.env.EXPO_PUBLIC_WEB_URL ?? "https://echotocrowd.com").replace(/\/$/, "");
 
@@ -11,16 +9,13 @@ export function echoShareUrl(broadcastId: string): string {
 export async function shareEcho({
   broadcastId,
   senderName,
-  content,
 }: {
   broadcastId: string;
   senderName: string;
-  content: string;
+  content?: string;
 }) {
   const url = echoShareUrl(broadcastId);
   const title = `${senderName} on EchoToCrowd`;
-  const previewText = stripUrls(content);
-  const text = previewText ? echoPreview(previewText) : `${senderName} shared an Echo`;
   try {
     await Share.share({ title, message: url, url });
   } catch {

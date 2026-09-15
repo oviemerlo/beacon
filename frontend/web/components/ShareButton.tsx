@@ -39,8 +39,6 @@ export function ShareButton({
   async function share() {
     const url = echoShareUrl(broadcastId, window.location.origin);
     const title = echoShareTitle(senderName);
-    const previewText = stripUrls(content);
-    const text = previewText ? echoPreview(previewText) : `${senderName} shared an Echo`;
     if (typeof navigator.share === "function") {
       try {
         await navigator.share({ title, url });
@@ -83,10 +81,10 @@ export function ShareButton({
           <ShareMenuLink href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`}>
             Share on Facebook
           </ShareMenuLink>
-          <ShareMenuLink href={`https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`}>
+          <ShareMenuLink href={`https://wa.me/?text=${encodeURIComponent(url)}`}>
             Share on WhatsApp
           </ShareMenuLink>
-          <ShareMenuLink href={`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`}>
+          <ShareMenuLink href={`https://t.me/share/url?url=${encodeURIComponent(url)}`}>
             Share on Telegram
           </ShareMenuLink>
           <button
