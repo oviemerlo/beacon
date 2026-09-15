@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import { View, TextInput, Pressable, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboard-controller";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import { apiFetch } from "../helpers/api";
 import { reachBadgeLabel } from "../helpers/broadcastReach";
@@ -36,6 +38,8 @@ export function BroadcastDetailScreen({
   const [attachments, setAttachments] = useState<PickedUpload[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [composerHeight, setComposerHeight] = useState(60);
+  const insets = useSafeAreaInsets();
 
   const currentUserId = currentUser?.id ?? null;
 
@@ -104,6 +108,7 @@ export function BroadcastDetailScreen({
       }
       setMessage("");
       setAttachments([]);
+      setComposerHeight(60);
       setThread((current) => {
         if (!current) return current;
         if (current.replies.some((reply) => reply.id === created.id)) return current;
@@ -133,59 +138,74 @@ export function BroadcastDetailScreen({
 
   return (
     <View style={styles.container}>
-      {loadingThread && <ActivityIndicator color={colors.signal500} style={{ marginBottom: 12 }} />}
-      {threadError && <Text style={styles.error}>{threadError}</Text>}
-      {thread && (
-        <Card style={StyleSheet.flatten([styles.threadCard, { flex: 1, minHeight: 0 }])}>
-          <ThreadItem
-            item={thread.parent}
-            currentUserId={currentUserId}
-            onRemoved={onLeaveThread}
-            onBlocked={onLeaveThread}
+      <KeyboardAwareScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingBottom: 24 }]}
+        keyboardShouldPersistTaps="handled"
+        bottomOffset={insets.bottom + 120}
+        extraKeyboardSpace={insets.bottom + 80}
+      >
+        {loadingThread && <ActivityIndicator color={colors.signal500} style={{ marginBottom: 12 }} />}
+        {threadError && <Text style={styles.error}>{threadError}</Text>}
+        {thread && (
+          <Card style={styles.threadCard}>
+            <ThreadItem
+              item={thread.parent}
+              currentUserId={currentUserId}
+              onRemoved={onLeaveThread}
+              onBlocked={onLeaveThread}
+            />
+            <Text style={styles.repliesHeader}>Replies ({thread.replies.length})</Text>
+            {thread.replies.length === 0 ? (
+              <Text style={styles.hint}>No public replies yet.</Text>
+            ) : (
+              <View style={styles.repliesList}>
+                {thread.replies.map((item) => (
+                  <ThreadItem
+                    key={item.id}
+                    item={item}
+                    isReply
+                    currentUserId={currentUserId}
+                    onRemoved={onReplyRemoved}
+                    onBlocked={onReplyBlocked}
+                  />
+                ))}
+              </View>
+            )}
+          </Card>
+        )}
+      </KeyboardAwareScrollView>
+      <KeyboardStickyView style={[styles.composerWrapper, { paddingBottom: insets.bottom + 12 }]}>
+        <Card style={styles.composerCard}>
+          <TextInput
+            style={[styles.textarea, { height: composerHeight }]}
+            placeholder="Write your public reply…"
+            placeholderTextColor={colors.parchment500}
+            value={message}
+            onChangeText={setMessage}
+            multiline
+            textAlignVertical="top"
+            maxLength={BROADCAST_CONTENT_MAX}
+            onContentSizeChange={(event) => {
+              const measuredHeight = Math.ceil(event.nativeEvent.contentSize.height);
+              setComposerHeight(Math.max(60, Math.min(140, measuredHeight + 12)));
+            }}
           />
-          <Text style={styles.repliesHeader}>Replies ({thread.replies.length})</Text>
-          {thread.replies.length === 0 ? (
-            <Text style={styles.hint}>No public replies yet.</Text>
-          ) : (
-            <ScrollView style={styles.repliesList} nestedScrollEnabled>
-              {thread.replies.map((item) => (
-                <ThreadItem
-                  key={item.id}
-                  item={item}
-                  isReply
-                  currentUserId={currentUserId}
-                  onRemoved={onReplyRemoved}
-                  onBlocked={onReplyBlocked}
-                />
-              ))}
-            </ScrollView>
-          )}
+          <CharacterCountdown value={message} />
+          <View style={styles.composerTools}>
+            <BroadcastAttachments
+              files={attachments}
+              onChange={setAttachments}
+              compact
+            />
+          </View>
+          {error && <Text style={styles.error}>{error}</Text>}
+          <Pressable style={styles.button} onPress={postReplyInFeed} disabled={sending || !thread}>
+            {sending ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonText}>Reply in feed</Text>}
+          </Pressable>
+          <Text style={styles.hint}>This creates a public broadcast reply.</Text>
         </Card>
-      )}
-      <Card>
-        <TextInput
-          style={styles.textarea}
-          placeholder="Write your public reply…"
-          placeholderTextColor={colors.parchment500}
-          value={message}
-          onChangeText={setMessage}
-          multiline
-          maxLength={BROADCAST_CONTENT_MAX}
-        />
-        <CharacterCountdown value={message} />
-        <View style={styles.composerTools}>
-          <BroadcastAttachments
-            files={attachments}
-            onChange={setAttachments}
-            compact
-          />
-        </View>
-        {error && <Text style={styles.error}>{error}</Text>}
-        <Pressable style={styles.button} onPress={postReplyInFeed} disabled={sending || !thread}>
-          {sending ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonText}>Reply in feed</Text>}
-        </Pressable>
-        <Text style={styles.hint}>This creates a public broadcast reply.</Text>
-      </Card>
+      </KeyboardStickyView>
     </View>
   );
 }
@@ -268,10 +288,20 @@ function ThreadItem({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dusk950, padding: 16 },
+  container: { flex: 1, backgroundColor: colors.dusk950 },
+  scroll: { flex: 1 },
+  content: { flexGrow: 1, padding: 16 },
   threadCard: { marginBottom: 12 },
+  composerWrapper: {
+    backgroundColor: colors.dusk950,
+    borderTopWidth: 1,
+    borderTopColor: colors.dusk800,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  composerCard: { marginBottom: 0 },
   repliesHeader: { color: colors.parchment500, fontSize: 11, marginTop: 12, marginBottom: 8, fontFamily: "monospace" },
-  repliesList: { flex: 1, minHeight: 0 },
+  repliesList: { gap: 8 },
   replyItem: { borderWidth: 1, borderColor: colors.dusk700, borderRadius: radii.beacon, padding: 10, marginBottom: 8 },
   senderRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   senderName: { color: colors.parchment500, fontSize: 12 },
@@ -285,7 +315,7 @@ const styles = StyleSheet.create({
   reachPillText: { color: colors.parchment500, fontSize: 8, fontFamily: "monospace" },
   sharePill: { borderColor: colors.dusk600, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
   sharePillText: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
-  textarea: { color: colors.parchment100, minHeight: 100, textAlignVertical: "top" },
+  textarea: { color: colors.parchment100, minHeight: 60, textAlignVertical: "top" },
   composerTools: { marginTop: 12 },
   error: { color: colors.rust400, fontSize: 13, marginTop: 8 },
   button: { backgroundColor: colors.signal500, borderRadius: radii.beacon, paddingVertical: 12, alignItems: "center", marginTop: 12 },

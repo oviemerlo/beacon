@@ -2,7 +2,7 @@
   "expo": {
     "name": "EchoToCrowd",
     "slug": "echotocrowd-mobile",
-    "version": "0.1.2",
+    "version": "0.1.4",
     "icon": "./assets/echotocrowd-icon-1024.png",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",

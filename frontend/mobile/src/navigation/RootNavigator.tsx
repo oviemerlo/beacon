@@ -178,6 +178,7 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
     <Tabs.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         tabBarStyle: { backgroundColor: colors.dusk900, borderTopColor: colors.dusk700 },
         tabBarActiveTintColor: colors.signal400,
         tabBarInactiveTintColor: colors.parchment500,

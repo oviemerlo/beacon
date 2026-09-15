@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Alert, View, Text, TextInput, Pressable, FlatList, StyleSheet, Platform } from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { KeyboardAvoidingView, KeyboardStickyView } from "react-native-keyboard-controller";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
@@ -18,6 +19,7 @@ import type { ConversationContext, ConversationParticipant, MentionCandidate, Me
 export function ConversationDetailScreen({ conversationId }: { conversationId: string }) {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [context, setContext] = useState<ConversationContext | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -235,12 +237,8 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
     }
   }
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={insets.top + 60}
-    >
+  const screenContent = (
+    <>
       <Pressable
         onPress={() =>
           isGroup
@@ -368,7 +366,10 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
         </View>
       )}
       {sendError && <Text style={styles.sendError}>{sendError}</Text>}
-      <View style={[styles.composer, { paddingBottom: 16 + insets.bottom }]}>
+      <KeyboardStickyView
+        offset={{ closed: 0, opened: insets.bottom }}
+        style={[styles.composer, { paddingBottom: 16 + insets.bottom }]}
+      >
         <BroadcastAttachments files={attachments} onChange={setAttachments} compact />
         <View style={styles.composerRow}>
           <TextInput
@@ -400,9 +401,23 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
             <Text style={styles.sendButtonText}>Send</Text>
           </Pressable>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardStickyView>
+    </>
   );
+
+  if (Platform.OS === "ios") {
+    return (
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior="padding"
+        keyboardVerticalOffset={headerHeight}
+      >
+        {screenContent}
+      </KeyboardAvoidingView>
+    );
+  }
+
+  return <View style={styles.container}>{screenContent}</View>;
 }
 
 const styles = StyleSheet.create({
