@@ -2,15 +2,18 @@
 
 import logging
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.age import validate_date_of_birth
+from app.utils.apple_client import revoke_refresh_token
 from app.utils.config import settings
+from app.utils.token_crypto import decrypt
 from app.models.tag import Tag
 from app.models.user import User
 from app.repositories import broadcast_repository, school_repository, tag_repository, upload_repository, user_repository
-from app.schemas.schemas import FollowedTagsOut, FollowedTagsReplaceIn, ProfileUpdateIn, SetupChecklistItemOut, SetupStatusOut, TagOut, UserProfileOut
+from app.schemas.schemas import AcceptTermsIn, FollowedTagsOut, FollowedTagsReplaceIn, ProfileUpdateIn, SetupChecklistItemOut, SetupStatusOut, TagOut, UserProfileOut
 from app.services import school_service
 from app.services.country_slots import (
     apply_country_slot_changes,
@@ -22,16 +25,33 @@ from app.services.exceptions import ForbiddenError, NotFoundError, ValidationErr
 
 logger = logging.getLogger(__name__)
 
+TERMS_REQUIRED_MESSAGE = "Please accept the Terms to continue."
+
 FOLLOWABLE_TYPES = ("nationality", "region", "hobby")
 
-REGION_TAGS_LOCKED_MESSAGE = (
-    "Amplify audience is part of Amplify ($30/mo). "
-    "Campus and Connect can still target up to 100 km."
-)
+REGION_TAGS_LOCKED_MESSAGE = "Regional communities aren't available on your account."
+
+
+def terms_are_accepted(user: User) -> bool:
+    return user.terms_version == settings.CURRENT_TERMS_VERSION
+
+
+async def require_terms_accepted(db: AsyncSession, user_id: uuid.UUID) -> None:
+    user = await user_repository.get_by_id(db, user_id)
+    if user is None or not terms_are_accepted(user):
+        raise ForbiddenError(TERMS_REQUIRED_MESSAGE)
 
 
 def can_follow_region_tags(user: User) -> bool:
     return user.is_admin or user.account_type == "business"
+
+
+def region_slot_limit(user: User) -> int | None:
+    if user.is_admin:
+        return None
+    if can_follow_region_tags(user):
+        return 2
+    return 0
 
 
 def can_use_regional_reach(user: User) -> bool:
@@ -71,6 +91,10 @@ def _profile_out(user: User) -> UserProfileOut:
         update={
             "tags": [TagOut.model_validate(tag) for tag in _identity_tags(user)],
             "followed_tag_limit": followed_tag_limit(user.account_type, user.is_admin),
+            "can_follow_region": can_follow_region_tags(user),
+            "country_slot_limit": country_slot_limit(user),
+            "region_slot_limit": region_slot_limit(user),
+            "terms_accepted": terms_are_accepted(user),
         }
     )
 
@@ -352,11 +376,32 @@ async def get_setup_status(db: AsyncSession, user: User) -> SetupStatusOut:
         completed_required=completed,
         total_required=len(items),
         all_required_done=completed == len(items),
+        terms_accepted=terms_are_accepted(loaded),
     )
+
+
+async def accept_terms(db: AsyncSession, user: User, payload: AcceptTermsIn) -> UserProfileOut:
+    if payload.version != settings.CURRENT_TERMS_VERSION:
+        raise ValidationError("That terms version is not current.")
+    user.terms_version = payload.version
+    user.terms_accepted_at = datetime.now(timezone.utc)
+    await db.commit()
+    return await _load_profile(db, user.id)
 
 
 async def delete_account(db: AsyncSession, user: User) -> None:
     user_id = user.id
+    oauth_accounts = await user_repository.list_oauth_accounts(db, user_id)
+    for account in oauth_accounts:
+        if account.provider != "apple" or not account.apple_refresh_token_enc:
+            continue
+        try:
+            apple_refresh = decrypt(account.apple_refresh_token_enc)
+            revoked = await revoke_refresh_token(apple_refresh)
+            if not revoked:
+                logger.error("apple token revoke failed user_id=%s", user_id)
+        except Exception:
+            logger.error("apple token revoke failed user_id=%s", user_id)
     uploaded = await upload_repository.list_for_user(db, user_id)
     s3_keys = [file.s3_key for file in uploaded]
     s3_keys.extend(file.thumbnail_s3_key for file in uploaded if file.thumbnail_s3_key)

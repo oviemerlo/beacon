@@ -1,5 +1,11 @@
 node_modules/
 .DS_Store
+*.p8
+*.aab
+*.apk
+.env
+venv/
+__pycache__/
 
 # --- Backend (Python) ---
 backend/**/__pycache__/

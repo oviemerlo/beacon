@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput, ScrollView, Alert } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput, ScrollView, Alert, Linking } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { apiFetch } from "../helpers/api";
@@ -173,6 +173,16 @@ export function ProfileScreen({
           </Pressable>
         </Card>
       ) : null}
+
+      <Card style={{ marginBottom: 24 }}>
+        <Text style={styles.sectionLabel}>Terms & Privacy</Text>
+        <Pressable onPress={() => void Linking.openURL("https://www.echotocrowd.com/terms")} style={styles.followTagsButton}>
+          <Text style={styles.followTagsButtonText}>Terms of Service</Text>
+        </Pressable>
+        <Pressable onPress={() => void Linking.openURL("https://www.echotocrowd.com/privacy")} style={styles.followTagsButton}>
+          <Text style={styles.followTagsButtonText}>Privacy Policy</Text>
+        </Pressable>
+      </Card>
 
       <Pressable
         style={styles.signOutButton}

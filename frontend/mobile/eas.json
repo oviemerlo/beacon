@@ -8,22 +8,25 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://beacon-production-37c7.up.railway.app",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "997147869048-rojtcnaq0f89uspn21nof7l1144vggsj.apps.googleusercontent.com"
+        "EXPO_PUBLIC_APP_ENV": "local",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "997147869048-rojtcnaq0f89uspn21nof7l1144vggsj.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "997147869048-6va16ikp7bkrseosorf2rcs9stcqdn7b.apps.googleusercontent.com"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://beacon-production-37c7.up.railway.app",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "997147869048-rojtcnaq0f89uspn21nof7l1144vggsj.apps.googleusercontent.com"
+        "EXPO_PUBLIC_APP_ENV": "dev",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "997147869048-rojtcnaq0f89uspn21nof7l1144vggsj.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "997147869048-6va16ikp7bkrseosorf2rcs9stcqdn7b.apps.googleusercontent.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://beacon-production-37c7.up.railway.app",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "997147869048-rojtcnaq0f89uspn21nof7l1144vggsj.apps.googleusercontent.com"
+        "EXPO_PUBLIC_APP_ENV": "prod",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "997147869048-rojtcnaq0f89uspn21nof7l1144vggsj.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "997147869048-6va16ikp7bkrseosorf2rcs9stcqdn7b.apps.googleusercontent.com"
       }
     }
   },

@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clientFetch } from "@/helpers/client-api";
 import { FollowTagsForm } from "@/app/follow-tags/page";
+import type { UserProfile } from "@/types/api";
+
+const TERMS_VERSION = "2026-09";
 
 const MIN_AGE_YEARS = 16;
 
@@ -19,7 +22,7 @@ function calculateAge(dobIso: string, today = new Date()): number {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"profile" | "blocked" | "location" | "tags">("profile");
+  const [step, setStep] = useState<"profile" | "blocked" | "location" | "terms" | "tags">("profile");
   const [displayName, setDisplayName] = useState("");
   const [birthdate, setBirthdate] = useState("");
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -29,6 +32,15 @@ export default function OnboardingPage() {
   const [resolvingLocationLabel, setResolvingLocationLabel] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    clientFetch<UserProfile>("/users/me")
+      .then((me) => {
+        if (me.location_label && !me.terms_accepted) setStep("terms");
+        else if (me.location_label && me.terms_accepted) router.replace("/feed");
+      })
+      .catch(() => undefined);
+  }, [router]);
 
   async function prefillLocationLabel(latitude: number, longitude: number) {
     setResolvingLocationLabel(true);
@@ -104,7 +116,7 @@ export default function OnboardingPage() {
         method: "PATCH",
         body: JSON.stringify({ latitude: coords.lat, longitude: coords.lng, location_label: locationLabel || undefined }),
       });
-      setStep("tags");
+      setStep("terms");
     } finally {
       setSubmitting(false);
     }
@@ -166,9 +178,57 @@ export default function OnboardingPage() {
               {submitting ? "Saving…" : "Continue"}
             </button>
           </>
+        ) : step === "terms" ? (
+          <TermsStep onAccepted={() => setStep("tags")} />
         ) : null}
       </div>
     </main>
+  );
+}
+
+function TermsStep({ onAccepted }: { onAccepted: () => void }) {
+  const [agreed, setAgreed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function accept() {
+    if (!agreed) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await clientFetch("/users/me/accept-terms", {
+        method: "POST",
+        body: JSON.stringify({ version: TERMS_VERSION }),
+      });
+      onAccepted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save your agreement.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <h1 className="font-display text-xl font-bold">Terms</h1>
+      <p className="text-parchment-500 text-sm mt-2 mb-5">
+        EchoToCrowd has zero tolerance for objectionable content or abusive users.
+      </p>
+      <label className="flex items-start gap-3 mb-4 text-sm">
+        <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-1" />
+        <span>I agree to the Terms of Service and Community Guidelines</span>
+      </label>
+      <p className="text-sm mb-2">
+        <a href="https://www.echotocrowd.com/terms" className="text-signal-400 hover:text-signal-300">Terms of Service</a>
+      </p>
+      <p className="text-sm mb-4">
+        <a href="https://www.echotocrowd.com/guidelines" className="text-signal-400 hover:text-signal-300">Community Guidelines</a>
+      </p>
+      {error && <p className="text-rust-400 text-sm mb-2">{error}</p>}
+      <button type="button" className="btn-primary w-full" disabled={!agreed || submitting} onClick={() => void accept()}>
+        {submitting ? "Saving…" : "Continue"}
+      </button>
+    </>
   );
 }
 

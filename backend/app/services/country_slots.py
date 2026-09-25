@@ -22,7 +22,7 @@ def resolve_plan(user: User) -> str:
 
 
 def country_slot_limit(user: User) -> int | None:
-    """None means unlimited countries and no change window (Amplify / admin)."""
+    """None means unlimited countries and no change window (admin or business)."""
     if user.is_admin:
         return None
     plan = resolve_plan(user)
@@ -65,8 +65,7 @@ def country_limit_message(limit: int) -> str:
         )
     return (
         f"You've reached your {limit}-country limit. "
-        "Replace a community that is not in its 30-day change window, "
-        "or upgrade to Amplify for regional communities."
+        "Replace a community that is not in its 30-day change window."
     )
 
 

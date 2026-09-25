@@ -33,8 +33,12 @@ class UserProfileOut(BaseModel):
     tags: list[TagOut] = []
     course_codes: list[str] = []
     followed_tag_limit: int = 2
+    can_follow_region: bool = False
+    country_slot_limit: int | None = None
+    region_slot_limit: int | None = None
     avatar_file_id: uuid.UUID | None = None
     avatar_scan_status: str | None = None
+    terms_accepted: bool = False
 
     class Config:
         from_attributes = True
@@ -53,6 +57,11 @@ class SetupStatusOut(BaseModel):
     completed_required: int
     total_required: int
     all_required_done: bool
+    terms_accepted: bool = False
+
+
+class AcceptTermsIn(BaseModel):
+    version: str
 
 
 class PublicProfileOut(BaseModel):
@@ -328,6 +337,24 @@ class MessageOut(BaseModel):
         from_attributes = True
 
 
+class AppleTokenExchangeIn(BaseModel):
+    identity_token: str
+    authorization_code: str | None = None
+    full_name: str | None = Field(default=None, max_length=100)
+
+
+class GoogleTokenExchangeIn(BaseModel):
+    id_token: str
+
+
+class RefreshIn(BaseModel):
+    refresh_token: str
+
+
+class ExchangeCodeIn(BaseModel):
+    code: str
+
+
 class TokenPairOut(BaseModel):
     access_token: str
     refresh_token: str
@@ -354,7 +381,7 @@ class ReportResolveIn(BaseModel):
 
 class ReportOut(BaseModel):
     id: uuid.UUID
-    reporter_id: uuid.UUID
+    reporter_id: uuid.UUID | None
     target_type: ReportTargetType
     target_id: uuid.UUID
     reason: ReportReason

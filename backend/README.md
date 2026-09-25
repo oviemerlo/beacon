@@ -12,7 +12,9 @@ python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# edit .env: DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_ID/SECRET, Apple keys,
+# edit .env: DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_ID/SECRET, Apple keys
+# (APPLE_CLIENT_ID for token/revoke, APPLE_CLIENT_IDS for identity-token aud,
+# APPLE_PRIVATE_KEY or APPLE_PRIVATE_KEY_PATH, APPLE_TOKEN_ENCRYPTION_KEY),
 # INTERNAL_JOB_TOKEN if you want to use the manual digest trigger
 # S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY for echo2crowd uploads (separate from SES)
 # AWS_REKOGNITION_ACCESS_KEY_ID / AWS_REKOGNITION_SECRET_ACCESS_KEY for image
@@ -126,7 +128,19 @@ there's no accidental "forgot to protect this before shipping" state.
 - **Apple**: requires a Services ID, a Sign in with Apple key (.p8), and
   your Team ID from the Apple Developer portal. Apple only sends the
   user's name on first authorization — the frontend must capture and pass
-  it through on that first call.
+  it through on that first call. Native iOS sign-in POSTs JSON to
+  `/auth/apple/token-exchange` (`identity_token`, optional
+  `authorization_code` and `full_name`). `APPLE_CLIENT_ID` is the bundle
+  ID used as `client_id` on Apple's token and revoke calls.
+  `APPLE_CLIENT_IDS` is the audience allow-list for identity tokens
+  (default `com.echotocrowd.app`; add a web Services ID if you verify
+  web tokens too). Set it as a JSON list or a comma-separated string.
+  Account deletion revokes the Apple refresh token. `APPLE_PRIVATE_KEY`
+  is the .p8 PEM with `\n` escapes (preferred on Railway);
+  `APPLE_PRIVATE_KEY_PATH` is the local file alternative.
+  `APPLE_TOKEN_ENCRYPTION_KEY` is a Fernet key
+  (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
+  used to encrypt that refresh token in `oauth_accounts`.
 - Both token-exchange routes verify the identity token's signature,
   issuer, and audience before trusting anything in it
   (`app/utils/oauth_verify.py`) — Google via the official `google-auth`

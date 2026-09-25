@@ -9,7 +9,7 @@ import { EchoMediaLayout } from "@/components/EchoAttachments";
 import { LinkPreviewList } from "@/components/LinkPreviewCard";
 import { clientFetch } from "@/helpers/client-api";
 import { applyMention, mentionTriggerFromInput, splitMentionParts } from "@/helpers/mentions";
-import { FeedCardOverflowMenu } from "@/components/FeedCardOverflowMenu";
+import { blockUserAction, FeedCardOverflowMenu } from "@/components/FeedCardOverflowMenu";
 import { promptAndSubmitReport } from "@/helpers/report-actions";
 import { formatMessageSentAt } from "@/helpers/time";
 import { uploadMessageAttachment } from "@/helpers/uploads";
@@ -318,6 +318,9 @@ export default function ConversationDetailPage() {
                                   }
                                 },
                               },
+                              blockUserAction(m.sender_id, senderLabel(m.sender_id), () => {
+                                if (!isGroup) router.push("/conversations");
+                              }),
                             ]}
                           />
                         ) : undefined

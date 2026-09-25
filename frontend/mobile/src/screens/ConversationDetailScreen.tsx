@@ -5,6 +5,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
+import { blockUserAction, FeedCardOverflowMenu } from "../components/FeedCardOverflowMenu";
 import { applyMention, mentionTriggerFromInput, splitMentionParts } from "../helpers/mentions";
 import { pickReasonAndSubmitReport } from "../helpers/reportActions";
 import { formatMessageSentAt } from "../helpers/time";
@@ -12,7 +13,6 @@ import { uploadMessageAttachment, type PickedUpload } from "../helpers/uploads";
 import { colors, radii } from "../theme/tokens";
 import { BroadcastAttachments } from "../components/BroadcastAttachments";
 import { EchoMediaLayout } from "../components/EchoAttachments";
-import { FeedCardOverflowMenu } from "../components/FeedCardOverflowMenu";
 import { LinkPreviewList } from "../components/LinkPreviewCard";
 import type { ConversationContext, ConversationParticipant, MentionCandidate, Message, UserProfile } from "../types/api";
 
@@ -323,6 +323,9 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
                               })();
                             },
                           },
+                          blockUserAction(item.sender_id, senderLabel(item.sender_id), () => {
+                            if (!isGroup) navigation.navigate("Messages", { screen: "ConversationsHome" });
+                          }),
                         ]}
                       />
                     ) : undefined

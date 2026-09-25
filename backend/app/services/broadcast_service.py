@@ -19,7 +19,7 @@ from app.services import school_service
 from app.services.school_service import is_currently_verified, prepare_course_tag
 from app.services.text_moderation_service import TextModerationResult, moderate_text
 from app.services.link_preview_service import schedule_previews
-from app.services.user_service import REGION_TAGS_LOCKED_MESSAGE, can_follow_region_tags, can_use_regional_reach
+from app.services.user_service import REGION_TAGS_LOCKED_MESSAGE, can_follow_region_tags, can_use_regional_reach, require_terms_accepted
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ MODERATION_STATUS_FLAGGED = "flagged"
 
 
 async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: BroadcastCreateIn) -> Broadcast:
+    await require_terms_accepted(db, sender_id)
     tag_ids = list(payload.tag_ids)
     is_global = payload.is_global
     radius_meters = payload.radius_meters

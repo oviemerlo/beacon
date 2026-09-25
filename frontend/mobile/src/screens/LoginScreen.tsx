@@ -36,23 +36,15 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
       ) : (
         <>
           <Pressable style={styles.buttonPrimary} onPress={() => handle(signInWithGoogle)}>
-            <Text style={styles.buttonPrimaryText}>Get started</Text>
+            <Text style={styles.buttonPrimaryText}>Continue with Google</Text>
           </Pressable>
-
-          <Pressable style={styles.buttonSecondary} onPress={() => handle(signInWithGoogle)}>
-            <Text style={styles.buttonSecondaryText}>Sign in</Text>
-          </Pressable>
-
-          <Text style={styles.joinPrompt}>
-            New to EchoToCrowd? <Text style={styles.joinNow}>Join now</Text>
-          </Text>
 
           {Platform.OS === "ios" && (
             <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
               buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
               cornerRadius={radii.beacon}
-              style={{ width: "100%", height: 48, marginTop: 12 }}
+              style={styles.appleButton}
               onPress={() => handle(signInWithApple)}
             />
           )}
@@ -71,19 +63,8 @@ const styles = StyleSheet.create({
   brandText: { color: colors.signal400, fontWeight: "700", letterSpacing: 3, fontSize: 12 },
   title: { color: colors.parchment100, fontSize: 24, fontWeight: "700", textAlign: "center" },
   subtitle: { color: colors.parchment500, fontSize: 14, textAlign: "center", marginTop: 8, marginBottom: 28 },
-  buttonPrimary: { backgroundColor: colors.signal500, borderRadius: radii.beacon, paddingVertical: 14, alignItems: "center" },
+  buttonPrimary: { backgroundColor: colors.signal500, borderRadius: radii.beacon, height: 48, alignItems: "center", justifyContent: "center" },
   buttonPrimaryText: { color: colors.dusk950, fontWeight: "700" },
-  buttonSecondary: {
-    backgroundColor: colors.dusk700,
-    borderRadius: radii.beacon,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: colors.dusk600,
-  },
-  buttonSecondaryText: { color: colors.parchment100, fontWeight: "600" },
-  joinPrompt: { color: colors.parchment500, textAlign: "center", marginTop: 14, fontSize: 13 },
-  joinNow: { color: colors.signal400, fontWeight: "600" },
+  appleButton: { width: "100%", height: 48, marginTop: 12 },
   error: { color: colors.rust400, textAlign: "center", marginTop: 16 },
 });

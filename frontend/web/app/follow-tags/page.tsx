@@ -10,12 +10,7 @@ import { SchoolVerification } from "@/components/SchoolVerification";
 import { TagChipRow } from "@/components/TagChip";
 import { clientFetch } from "@/helpers/client-api";
 import {
-  AMPLIFY_BLURB,
-  AMPLIFY_EXAMPLES,
-  CAMPUS_PLAN_HINT,
   CAMPUS_SCHOOL_BLURB,
-  COUNTRY_COMMUNITY_LIMIT,
-  type AccountType,
   countryChangeHint,
   countryChangeLockedMessage,
   countryLimitMessage,
@@ -23,13 +18,9 @@ import {
   countrySlotForTag,
   formatNextChangeAvailable,
   lockedCountryIds,
-  followTagsShowsPlanCard,
-  planDetailLine,
-  regionalCommunitiesPriceLine,
   ECHO_TAGS_SUBTITLE,
   EMPTY_SECTION_QUERIES,
   EMPTY_TAG_GROUPS,
-  PLANS,
   autosuggestHint,
   canAddFollowedTag,
   displayTagLabel,
@@ -41,10 +32,6 @@ import {
   isRegionTagId,
   knownTagIdsFromGroups,
   regionLimitMessage,
-  regionSlotLimit,
-  resolvePlan,
-  REGIONAL_TAGS_LOCKED_MESSAGE,
-  REGIONAL_TAGS_PREMIUM_LABEL,
   retainKnown,
   sameTagIdSet,
   selectedCountryCount,
@@ -65,13 +52,14 @@ export function FollowTagsForm({ onDone }: { onDone?: () => void } = {}) {
   const [countrySlots, setCountrySlots] = useState<CountrySlot[]>([]);
   const [tagLimit, setTagLimit] = useState(2);
   const [schoolVerified, setSchoolVerified] = useState(false);
-  const [accountType, setAccountType] = useState<AccountType>("individual");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canFollowRegion, setCanFollowRegion] = useState(false);
+  const [countryLimit, setCountryLimit] = useState<number | null>(null);
+  const [regionLimit, setRegionLimit] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [showLockedRegions, setShowLockedRegions] = useState(false);
   const filteredTagGroups = useMemo(
     () => filterTagGroupsBySectionQuery(tagGroups, sectionQueries),
     [tagGroups, sectionQueries]
@@ -86,12 +74,7 @@ export function FollowTagsForm({ onDone }: { onDone?: () => void } = {}) {
   );
   const atTagLimit = !isAdmin && countedFollowedIds.length >= tagLimit;
   const countryCount = selectedCountryCount(tagGroups, followedTagIds);
-  const plan = resolvePlan(isAdmin, accountType);
-  const countryLimit = isAdmin ? null : COUNTRY_COMMUNITY_LIMIT;
-  const regionLimit = isAdmin ? null : regionSlotLimit(plan);
   const regionCount = selectedRegionCount(tagGroups, followedTagIds);
-  const canFollowRegion = plan === "amplify";
-  const planCopy = PLANS[plan];
   const lockedCountryTagIds = lockedCountryIds(countrySlots);
   const selectedCountries = selectedTagsForSection("nationality", tagGroups, followedTagIds);
 
@@ -106,8 +89,7 @@ export function FollowTagsForm({ onDone }: { onDone?: () => void } = {}) {
         const ids = followedIdsWithoutLockedRegions(
           retainKnown(followed.tag_ids, knownTagIdsFromGroups(groups)),
           groups,
-          me.is_admin,
-          me.account_type
+          Boolean(me.can_follow_region)
         );
         setFollowedTagIds(ids);
         setSavedFollowedTagIds(ids);
@@ -115,7 +97,9 @@ export function FollowTagsForm({ onDone }: { onDone?: () => void } = {}) {
         setTagLimit(me.followed_tag_limit ?? 2);
         setSchoolVerified(me.is_verified);
         setIsAdmin(me.is_admin);
-        setAccountType(me.account_type);
+        setCanFollowRegion(Boolean(me.can_follow_region));
+        setCountryLimit(me.country_slot_limit ?? null);
+        setRegionLimit(me.region_slot_limit ?? null);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Couldn't load tags"))
       .finally(() => setLoading(false));
@@ -162,11 +146,6 @@ export function FollowTagsForm({ onDone }: { onDone?: () => void } = {}) {
   }, [success]);
 
   function toggleFollow(tagId: number) {
-    if (isRegionTagId(tagGroups, tagId) && !canFollowRegion && !followedTagIds.includes(tagId)) {
-      setError(REGIONAL_TAGS_LOCKED_MESSAGE);
-      setSuccess(null);
-      return;
-    }
     if (
       !isAdmin &&
       regionLimit != null &&
@@ -262,14 +241,6 @@ export function FollowTagsForm({ onDone }: { onDone?: () => void } = {}) {
           <p className="text-parchment-500 font-mono text-sm">Loading tags…</p>
         ) : (
           <div className="space-y-4">
-            {followTagsShowsPlanCard(plan) && (
-              <div className="card">
-                <p className="text-sm font-medium">{planCopy.name}</p>
-                <p className="text-parchment-500 text-xs mt-1">{planCopy.meaning}</p>
-                <p className="text-parchment-500 text-xs font-mono mt-1">{planDetailLine(plan)}</p>
-              </div>
-            )}
-
             <div className="card">
               <p className="text-sm font-medium">{countrySectionTitle(countryLimit)}</p>
               <p className="text-parchment-500 text-xs mt-1 mb-3">
@@ -315,21 +286,10 @@ export function FollowTagsForm({ onDone }: { onDone?: () => void } = {}) {
               </p>
             </div>
 
+            {canFollowRegion ? (
             <div className="card">
-              {canFollowRegion ? (
-                <p className="text-sm font-medium mb-2">Regional Communities</p>
-              ) : (
-                <div className="flex items-center gap-2 mb-2">
-                  <p className="text-sm font-medium">🔒 Regional Communities</p>
-                  <span className="text-[10px] font-mono uppercase tracking-wide text-signal-400 border border-signal-500/50 rounded-full px-2 py-0.5">
-                    {REGIONAL_TAGS_PREMIUM_LABEL}
-                  </span>
-                </div>
-              )}
-              <p className={`text-parchment-500 mb-3 ${canFollowRegion ? "text-xs" : "text-sm"}`}>{AMPLIFY_BLURB}</p>
-              {canFollowRegion ? (
-                <>
-                  <p className="text-parchment-500 text-xs font-mono mb-3">{regionalCommunitiesPriceLine(canFollowRegion)}</p>
+              <p className="text-sm font-medium mb-2">Regional Communities</p>
+              <p className="text-parchment-500 text-xs mb-3">Choose the regional communities you want Echoes matched with.</p>
                   {selectedTagsForSection("region", tagGroups, followedTagIds).length > 0 && (
                     <div className="mb-3">
                       <p className="text-parchment-500 text-xs font-mono mb-2">Selected</p>
@@ -355,36 +315,12 @@ export function FollowTagsForm({ onDone }: { onDone?: () => void } = {}) {
                   <p className={`text-xs font-mono mt-3 ${regionLimit != null && regionCount >= regionLimit && !isAdmin ? "text-signal-400" : "text-parchment-500"}`}>
                     {regionLimit == null ? `${regionCount} selected` : `${regionCount} of ${regionLimit} selected`}
                   </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-parchment-300 text-xs font-mono mb-4">
-                    {AMPLIFY_EXAMPLES.map(displayTagLabel).join(" · ")}
-                  </p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    <button type="button" className="btn-secondary text-sm" onClick={() => setShowLockedRegions((open) => !open)}>
-                      {showLockedRegions ? "Hide regions" : "View regions"}
-                    </button>
-                  </div>
-                  <p className="text-parchment-500 text-xs">{regionalCommunitiesPriceLine(canFollowRegion)}</p>
-                  {showLockedRegions && (
-                    <div className="mt-4">
-                      <TagChipRow
-                        tags={visibleTagsForSection("region", filteredTagGroups, sectionQueries, followedTagIds)}
-                        selectedIds={followedTagIds}
-                        onToggle={toggleFollow}
-                        locked
-                      />
-                    </div>
-                  )}
-                </>
-              )}
             </div>
+            ) : null}
 
             <div id="school-community" className="card">
               <p className="text-sm font-medium mb-1">School Community</p>
-              <p className="text-parchment-500 text-sm mb-1">{CAMPUS_SCHOOL_BLURB}</p>
-              <p className="text-parchment-500 text-xs font-mono mb-3">{CAMPUS_PLAN_HINT}</p>
+              <p className="text-parchment-500 text-sm mb-3">{CAMPUS_SCHOOL_BLURB}</p>
               <SchoolVerification
                 onVerifiedChange={(verified) => {
                   setSchoolVerified(verified);

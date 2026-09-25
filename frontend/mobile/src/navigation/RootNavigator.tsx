@@ -9,7 +9,7 @@ import { TokenStore } from "../helpers/secureStore";
 import { apiFetch } from "../helpers/api";
 import { parseJoinToken, setPendingJoinToken, takePendingJoinToken } from "../helpers/joinLink";
 import { LoginScreen } from "../screens/LoginScreen";
-import { OnboardingScreen } from "../screens/OnboardingScreen";
+import { OnboardingScreen, TermsStep } from "../screens/OnboardingScreen";
 import { FeedScreen } from "../screens/FeedScreen";
 import { NewBroadcastScreen } from "../screens/NewBroadcastScreen";
 import { BroadcastDetailScreen } from "../screens/BroadcastDetailScreen";
@@ -209,7 +209,7 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
-type AuthState = "loading" | "signed-out" | "needs-onboarding" | "signed-in";
+type AuthState = "loading" | "signed-out" | "needs-onboarding" | "needs-terms" | "signed-in";
 
 function flushPendingJoin(signedIn: boolean) {
   if (!signedIn) return;
@@ -261,7 +261,9 @@ export function RootNavigator() {
     }
     try {
       const user = await apiFetch<UserProfile>("/users/me");
-      setAuthState(user.location_label ? "signed-in" : "needs-onboarding");
+      if (!user.location_label) setAuthState("needs-onboarding");
+      else if (!user.terms_accepted) setAuthState("needs-terms");
+      else setAuthState("signed-in");
     } catch {
       setAuthState("signed-out");
     }
@@ -290,6 +292,15 @@ export function RootNavigator() {
         {authState === "needs-onboarding" && (
           <RootStack.Screen name="Onboarding">
             {() => <OnboardingScreen onDone={() => setAuthState("signed-in")} />}
+          </RootStack.Screen>
+        )}
+        {authState === "needs-terms" && (
+          <RootStack.Screen name="Terms">
+            {() => (
+              <View style={{ flex: 1, backgroundColor: colors.dusk950, justifyContent: "center", padding: 24 }}>
+                <TermsStep onAccepted={() => setAuthState("signed-in")} />
+              </View>
+            )}
           </RootStack.Screen>
         )}
         {authState === "signed-in" && (

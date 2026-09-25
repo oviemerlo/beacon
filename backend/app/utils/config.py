@@ -1,8 +1,42 @@
+import json
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource, PydanticBaseSettingsSource
+
+
+class _AppleClientIdsEnvSource(EnvSettingsSource):
+    def prepare_field_value(self, field_name, field, value, value_is_complex):
+        if field_name == "APPLE_CLIENT_IDS" and isinstance(value, str):
+            return value
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
+
+
+class _AppleClientIdsDotEnvSource(DotEnvSettingsSource):
+    def prepare_field_value(self, field_name, field, value, value_is_complex):
+        if field_name == "APPLE_CLIENT_IDS" and isinstance(value, str):
+            return value
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            _AppleClientIdsEnvSource(settings_cls),
+            _AppleClientIdsDotEnvSource(settings_cls),
+            file_secret_settings,
+        )
 
     ENVIRONMENT: str = "development"
     DATABASE_URL: str
@@ -28,11 +62,46 @@ class Settings(BaseSettings):
         extra = [cid.strip() for cid in self.GOOGLE_MOBILE_CLIENT_IDS.split(",") if cid.strip()]
         return {self.GOOGLE_CLIENT_ID, *extra} - {""}
 
+    # Bundle ID. Used as client_id for Apple's token and revoke endpoints,
+    # not as the identity-token audience check (that is APPLE_CLIENT_IDS).
     APPLE_CLIENT_ID: str = ""
+    # Audiences accepted on Sign in with Apple identity tokens. Native iOS
+    # tokens use aud == "com.echotocrowd.app"; a web Services ID is a
+    # different aud. Env may be a JSON list or a comma-separated string.
+    APPLE_CLIENT_IDS: list[str] = ["com.echotocrowd.app"]
     APPLE_TEAM_ID: str = ""
     APPLE_KEY_ID: str = ""
     APPLE_PRIVATE_KEY_PATH: str = ""
+    # PEM contents of the Sign in with Apple .p8 key, with literal \n escapes.
+    # Preferred over APPLE_PRIVATE_KEY_PATH on Railway.
+    APPLE_PRIVATE_KEY: str = ""
+    # Fernet key used to encrypt Apple refresh tokens at rest.
+    APPLE_TOKEN_ENCRYPTION_KEY: str = ""
     APPLE_REDIRECT_URI: str = ""
+
+    @field_validator("APPLE_CLIENT_IDS", mode="before")
+    @classmethod
+    def parse_apple_client_ids(cls, value):
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return ["com.echotocrowd.app"]
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.startswith("["):
+                parsed = json.loads(stripped)
+                if not isinstance(parsed, list) or not all(isinstance(item, str) for item in parsed):
+                    raise ValueError("APPLE_CLIENT_IDS must be a JSON list of strings or a comma-separated string")
+                ids = [item.strip() for item in parsed if item.strip()]
+            else:
+                ids = [item.strip() for item in stripped.split(",") if item.strip()]
+            if not ids:
+                raise ValueError("APPLE_CLIENT_IDS must contain at least one client id")
+            return ids
+        if isinstance(value, list):
+            ids = [item.strip() for item in value if isinstance(item, str) and item.strip()]
+            if len(ids) != len(value):
+                raise ValueError("APPLE_CLIENT_IDS must be a list of non-empty strings")
+            return ids
+        return value
 
     FRONTEND_URL: str = "http://localhost:3000"
     # Comma-separated list of additional allowed CORS origins — e.g. an
@@ -44,6 +113,8 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         extra = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
         return list(dict.fromkeys([self.FRONTEND_URL, *extra]))
+
+    CURRENT_TERMS_VERSION: str = "2026-09"
 
     # Product rules — see /docs/PRODUCT_BRIEF.md for rationale.
     MIN_RADIUS_METERS: int = 100

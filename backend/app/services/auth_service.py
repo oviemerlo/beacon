@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.security import decode_token
 from app.utils.security import create_access_token, create_refresh_token
+from app.utils.token_crypto import encrypt
 from app.models.user import User
 from app.repositories import user_repository
 from app.schemas.schemas import TokenPairOut
@@ -40,6 +41,14 @@ async def upsert_user_from_identity(db: AsyncSession, *, provider: str, provider
     await db.commit()
     await db.refresh(user)
     return user
+
+
+async def store_apple_refresh_token(db: AsyncSession, provider_user_id: str, refresh_token: str) -> None:
+    account = await user_repository.get_oauth_account(db, "apple", provider_user_id)
+    if account is None:
+        return
+    account.apple_refresh_token_enc = encrypt(refresh_token)
+    await db.commit()
 
 
 def issue_tokens(user: User) -> TokenPairOut:

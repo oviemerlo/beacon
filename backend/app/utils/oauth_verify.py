@@ -69,10 +69,12 @@ async def _get_apple_jwks() -> dict:
 async def verify_apple_identity_token(identity_token: str) -> dict:
     """
     Verifies signature against Apple's published JWKS, matched by `kid`,
-    plus issuer/audience/expiry.
+    plus issuer and expiry. python-jose accepts only one audience string,
+    so `aud` is checked afterward against APPLE_CLIENT_IDS (native bundle
+    ID and any web Services ID).
     """
-    if not settings.APPLE_CLIENT_ID:
-        raise TokenVerificationError("APPLE_CLIENT_ID is not configured")
+    if not settings.APPLE_CLIENT_IDS:
+        raise TokenVerificationError("APPLE_CLIENT_IDS is not configured")
 
     try:
         unverified_header = jose_jwt.get_unverified_header(identity_token)
@@ -94,12 +96,14 @@ async def verify_apple_identity_token(identity_token: str) -> dict:
             identity_token,
             matching_key,
             algorithms=["RS256"],
-            audience=settings.APPLE_CLIENT_ID,
+            options={"verify_aud": False},
             issuer=APPLE_ISSUER,
         )
     except JWTError as e:
         raise TokenVerificationError(f"Apple token verification failed: {e}") from e
 
+    if claims.get("aud") not in settings.APPLE_CLIENT_IDS:
+        raise TokenVerificationError("Token audience does not match any configured Apple client ID")
     if claims.get("exp", 0) < time.time():
         raise TokenVerificationError("Apple token has expired")
     return claims

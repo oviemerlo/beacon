@@ -15,11 +15,10 @@ repository calls that either all succeed or all roll back together.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import delete, func, select, text, union
+from sqlalchemy import func, select, text, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation, ConversationInvite, ConversationParticipant
-from app.models.report import Report
 from app.models.tag import Tag, UserFollowedTag, UserTag
 from app.models.user import OAuthAccount, User
 from sqlalchemy.orm import selectinload
@@ -213,6 +212,11 @@ async def get_oauth_account(db: AsyncSession, provider: str, provider_user_id: s
     return result.scalar_one_or_none()
 
 
+async def list_oauth_accounts(db: AsyncSession, user_id: uuid.UUID) -> list[OAuthAccount]:
+    result = await db.execute(select(OAuthAccount).where(OAuthAccount.user_id == user_id))
+    return list(result.scalars().all())
+
+
 async def add_oauth_account(db: AsyncSession, user_id: uuid.UUID, provider: str, provider_user_id: str, email: str | None) -> OAuthAccount:
     account = OAuthAccount(user_id=user_id, provider=provider, provider_user_id=provider_user_id, email=email)
     db.add(account)
@@ -316,8 +320,8 @@ async def delete_account(db: AsyncSession, user: User) -> None:
 
     Most user-owned rows cascade in Postgres. conversations.created_by_user_id
     and conversation_invites.created_by_user_id have no ON DELETE and must be
-    cleared first. Reports targeting this user have no FK and would otherwise
-    become orphans.
+    cleared first. Reports stay so moderators can still review them. The
+    reporter foreign key is ON DELETE SET NULL.
     """
     user_id = user.id
 
@@ -346,6 +350,5 @@ async def delete_account(db: AsyncSession, user: User) -> None:
         else:
             invite.created_by_user_id = conversation.created_by_user_id
 
-    await db.execute(delete(Report).where(Report.target_type == "user", Report.target_id == user_id))
     await db.delete(user)
     await db.flush()

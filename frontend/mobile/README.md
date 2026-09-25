@@ -7,7 +7,7 @@ so both clients hit the exact same backend contract.
 
 ```bash
 npm install
-cp .env.example .env   # EXPO_PUBLIC_API_URL, EXPO_PUBLIC_GOOGLE_CLIENT_ID
+cp .env.example .env   # Google client IDs; backend comes from EXPO_PUBLIC_APP_ENV
 npx expo start
 ```
 

@@ -108,6 +108,16 @@ export default async function ProfilePage() {
           </div>
         )}
 
+        <div className="card mb-4">
+          <p className="font-medium mb-2">Terms & Privacy</p>
+          <a href="https://www.echotocrowd.com/terms" className="block text-sm text-signal-400 hover:text-signal-300 mb-2">
+            Terms of Service
+          </a>
+          <a href="https://www.echotocrowd.com/privacy" className="block text-sm text-signal-400 hover:text-signal-300">
+            Privacy Policy
+          </a>
+        </div>
+
         <form action="/auth/logout" method="post" className="mt-4">
           <button type="submit" className="btn-secondary w-full border border-rust-400 text-rust-400 hover:text-rust-300">
             Sign out

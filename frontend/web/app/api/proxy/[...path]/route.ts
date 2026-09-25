@@ -9,7 +9,11 @@ async function refreshTokens(): Promise<{ access_token: string; refresh_token: s
   const refreshToken = cookies().get("beacon_refresh_token")?.value;
   if (!refreshToken) return null;
 
-  const res = await fetch(`${API_URL}/auth/refresh?refresh_token=${encodeURIComponent(refreshToken)}`, { method: "POST" });
+  const res = await fetch(`${API_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
   if (!res.ok) return null;
   return res.json();
 }

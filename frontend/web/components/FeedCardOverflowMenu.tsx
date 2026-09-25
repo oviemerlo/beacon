@@ -6,6 +6,28 @@ import { clientFetch } from "@/helpers/client-api";
 
 export type OverflowAction = { label: string; onSelect: () => Promise<void> };
 
+export function blockUserAction(
+  userId: string,
+  displayName: string,
+  onBlocked: (userId: string) => void
+): OverflowAction {
+  return {
+    label: "Block",
+    onSelect: async () => {
+      const confirmed = window.confirm(
+        `Block ${displayName}?\n\nYou won't see their posts in your feed, including ones already here. They can still see your broadcasts.`
+      );
+      if (!confirmed) return;
+      try {
+        await clientFetch(`/blocks/${userId}`, { method: "PUT" });
+        onBlocked(userId);
+      } catch {
+        window.alert("Couldn't block this user.");
+      }
+    },
+  };
+}
+
 export function buildFeedCardActions({
   isOwn,
   broadcastId,
@@ -53,21 +75,7 @@ export function buildFeedCardActions({
         }
       },
     },
-    {
-      label: "Block",
-      onSelect: async () => {
-        const confirmed = window.confirm(
-          `Block ${senderDisplayName}?\n\nYou won't see their posts in your feed, including ones already here. They can still see your broadcasts.`
-        );
-        if (!confirmed) return;
-        try {
-          await clientFetch(`/blocks/${senderId}`, { method: "PUT" });
-          onBlocked(senderId);
-        } catch {
-          window.alert("Couldn't block this user.");
-        }
-      },
-    },
+    blockUserAction(senderId, senderDisplayName, onBlocked),
     {
       label: "Remove from my feed",
       onSelect: async () => {

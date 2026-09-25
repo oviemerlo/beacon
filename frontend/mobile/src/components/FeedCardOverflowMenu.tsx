@@ -7,6 +7,39 @@ import { shareEcho } from "./ShareButton";
 
 export type OverflowAction = { label: string; onSelect: () => void };
 
+export function blockUserAction(
+  userId: string,
+  displayName: string,
+  onBlocked: (userId: string) => void
+): OverflowAction {
+  return {
+    label: "Block",
+    onSelect: () => {
+      Alert.alert(
+        `Block ${displayName}?`,
+        "You won't see their posts in your feed, including ones already here. They can still see your broadcasts.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Block",
+            style: "destructive",
+            onPress: () => {
+              void (async () => {
+                try {
+                  await apiFetch(`/blocks/${userId}`, { method: "PUT" });
+                  onBlocked(userId);
+                } catch {
+                  Alert.alert("Couldn't block this user.");
+                }
+              })();
+            },
+          },
+        ]
+      );
+    },
+  };
+}
+
 export function buildFeedCardActions({
   isOwn,
   broadcastId,
@@ -74,32 +107,7 @@ export function buildFeedCardActions({
         })();
       },
     },
-    {
-      label: "Block",
-      onSelect: () => {
-        Alert.alert(
-          `Block ${senderDisplayName}?`,
-          "You won't see their posts in your feed, including ones already here. They can still see your broadcasts.",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Block",
-              style: "destructive",
-              onPress: () => {
-                void (async () => {
-                  try {
-                    await apiFetch(`/blocks/${senderId}`, { method: "PUT" });
-                    onBlocked(senderId);
-                  } catch {
-                    Alert.alert("Couldn't block this user.");
-                  }
-                })();
-              },
-            },
-          ]
-        );
-      },
-    },
+    blockUserAction(senderId, senderDisplayName, onBlocked),
     {
       label: "Remove from my feed",
       onSelect: () => {

@@ -9,11 +9,7 @@ import { SchoolVerification } from "../components/SchoolVerification";
 import { TagChipRow } from "../components/TagChip";
 import { apiFetch } from "../helpers/api";
 import {
-  AMPLIFY_BLURB,
-  AMPLIFY_EXAMPLES,
-  CAMPUS_PLAN_HINT,
   CAMPUS_SCHOOL_BLURB,
-  COUNTRY_COMMUNITY_LIMIT,
   countryChangeHint,
   countryChangeLockedMessage,
   countryLimitMessage,
@@ -22,13 +18,9 @@ import {
   countrySelectionLine,
   formatNextChangeAvailable,
   lockedCountryIds,
-  followTagsShowsPlanCard,
-  planDetailLine,
-  regionalCommunitiesPriceLine,
   ECHO_TAGS_SUBTITLE,
   EMPTY_SECTION_QUERIES,
   EMPTY_TAG_GROUPS,
-  PLANS,
   autosuggestHint,
   canAddFollowedTag,
   displayTagLabel,
@@ -40,11 +32,6 @@ import {
   isRegionTagId,
   knownTagIdsFromGroups,
   regionLimitMessage,
-  regionSlotLimit,
-  resolvePlan,
-  REGIONAL_TAGS_LOCKED_MESSAGE,
-  REGIONAL_TAGS_PREMIUM_LABEL,
-  type AccountType,
   retainKnown,
   sameTagIdSet,
   selectedCountryCount,
@@ -68,13 +55,14 @@ export function FollowTagsScreen({ onDone }: { onDone?: () => void } = {}) {
   const [countrySlots, setCountrySlots] = useState<CountrySlot[]>([]);
   const [tagLimit, setTagLimit] = useState(2);
   const [schoolVerified, setSchoolVerified] = useState(false);
-  const [accountType, setAccountType] = useState<AccountType>("individual");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canFollowRegion, setCanFollowRegion] = useState(false);
+  const [countryLimit, setCountryLimit] = useState<number | null>(null);
+  const [regionLimit, setRegionLimit] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [showLockedRegions, setShowLockedRegions] = useState(false);
   const [infoTag, setInfoTag] = useState<Tag | null>(null);
   const filteredTagGroups = useMemo(
     () => filterTagGroupsBySectionQuery(tagGroups, sectionQueries),
@@ -92,12 +80,7 @@ export function FollowTagsScreen({ onDone }: { onDone?: () => void } = {}) {
   );
   const atTagLimit = !isAdmin && countedFollowedIds.length >= tagLimit;
   const countryCount = selectedCountryCount(tagGroups, followedTagIds);
-  const plan = resolvePlan(isAdmin, accountType);
-  const countryLimit = isAdmin ? null : COUNTRY_COMMUNITY_LIMIT;
-  const regionLimit = isAdmin ? null : regionSlotLimit(plan);
   const regionCount = selectedRegionCount(tagGroups, followedTagIds);
-  const canFollowRegion = plan === "amplify";
-  const planCopy = PLANS[plan];
   const lockedCountryTagIds = lockedCountryIds(countrySlots);
   const selectedCountries = selectedTagsForSection("nationality", tagGroups, followedTagIds);
 
@@ -112,8 +95,7 @@ export function FollowTagsScreen({ onDone }: { onDone?: () => void } = {}) {
         const ids = followedIdsWithoutLockedRegions(
           retainKnown(followed.tag_ids, knownTagIdsFromGroups(groups)),
           groups,
-          me.is_admin,
-          me.account_type
+          Boolean(me.can_follow_region)
         );
         setFollowedTagIds(ids);
         setSavedFollowedTagIds(ids);
@@ -121,7 +103,9 @@ export function FollowTagsScreen({ onDone }: { onDone?: () => void } = {}) {
         setTagLimit(me.followed_tag_limit ?? 2);
         setSchoolVerified(me.is_verified);
         setIsAdmin(me.is_admin);
-        setAccountType(me.account_type);
+        setCanFollowRegion(Boolean(me.can_follow_region));
+        setCountryLimit(me.country_slot_limit ?? null);
+        setRegionLimit(me.region_slot_limit ?? null);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Couldn't load tags"))
       .finally(() => setLoading(false));
@@ -154,12 +138,6 @@ export function FollowTagsScreen({ onDone }: { onDone?: () => void } = {}) {
   }, [success]);
 
   function toggleFollow(tagId: number) {
-    if (isRegionTagId(tagGroups, tagId) && !canFollowRegion && !followedTagIds.includes(tagId)) {
-      setError(REGIONAL_TAGS_LOCKED_MESSAGE);
-      setSuccess(null);
-      Alert.alert("Regional targeting locked", REGIONAL_TAGS_LOCKED_MESSAGE);
-      return;
-    }
     if (
       !isAdmin &&
       regionLimit != null &&
@@ -256,14 +234,6 @@ export function FollowTagsScreen({ onDone }: { onDone?: () => void } = {}) {
         <Text style={styles.title}>Echo Tags</Text>
         <Text style={styles.subtitle}>{ECHO_TAGS_SUBTITLE}</Text>
 
-        {followTagsShowsPlanCard(plan) ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>{planCopy.name}</Text>
-            <Text style={styles.planStatus}>{planCopy.meaning}</Text>
-            <Text style={styles.planMeta}>{planDetailLine(plan)}</Text>
-          </View>
-        ) : null}
-
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>{countrySectionTitle(countryLimit)}</Text>
           <Text style={styles.hint}>
@@ -311,19 +281,10 @@ export function FollowTagsScreen({ onDone }: { onDone?: () => void } = {}) {
           </Text>
         </View>
 
+        {canFollowRegion ? (
         <View style={styles.card}>
-          {canFollowRegion ? (
-            <Text style={styles.sectionTitle}>Regional Communities</Text>
-          ) : (
-            <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitle}>🔒 Regional Communities</Text>
-              <Text style={styles.premiumBadge}>{REGIONAL_TAGS_PREMIUM_LABEL}</Text>
-            </View>
-          )}
-          <Text style={canFollowRegion ? styles.hint : styles.body}>{AMPLIFY_BLURB}</Text>
-          {canFollowRegion ? (
-            <>
-              <Text style={styles.planMeta}>{regionalCommunitiesPriceLine(canFollowRegion)}</Text>
+          <Text style={styles.sectionTitle}>Regional Communities</Text>
+          <Text style={styles.hint}>Choose the regional communities you want Echoes matched with.</Text>
               {selectedTagsForSection("region", tagGroups, followedTagIds).length > 0 ? (
                 <View style={styles.selectedGroup}>
                   <Text style={styles.selectedLabel}>Selected</Text>
@@ -351,35 +312,12 @@ export function FollowTagsScreen({ onDone }: { onDone?: () => void } = {}) {
               <Text style={[styles.limitHint, regionLimit != null && regionCount >= regionLimit && !isAdmin ? styles.limitHintReached : styles.limitHintIdle]}>
                 {regionLimit == null ? `${regionCount} selected` : `${regionCount} of ${regionLimit} selected`}
               </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.examples}>{AMPLIFY_EXAMPLES.map(displayTagLabel).join(" · ")}</Text>
-              <View style={styles.actionRow}>
-                <Pressable style={styles.secondaryButton} onPress={() => setShowLockedRegions((open) => !open)}>
-                  <Text style={styles.secondaryButtonText}>{showLockedRegions ? "Hide regions" : "View regions"}</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.hint}>{regionalCommunitiesPriceLine(canFollowRegion)}</Text>
-              {showLockedRegions ? (
-                <View style={{ marginTop: 12 }}>
-                  <TagChipRow
-                    tags={visibleTagsForSection("region", filteredTagGroups, sectionQueries, followedTagIds)}
-                    selectedIds={followedTagIds}
-                    onToggle={toggleFollow}
-                    onShowCountries={setInfoTag}
-                    locked
-                  />
-                </View>
-              ) : null}
-            </>
-          )}
         </View>
+        ) : null}
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>School Community</Text>
           <Text style={styles.body}>{CAMPUS_SCHOOL_BLURB}</Text>
-          <Text style={[styles.planMeta, { marginBottom: 10 }]}>{CAMPUS_PLAN_HINT}</Text>
           <SchoolVerification
             onVerifiedChange={(verified) => {
               setSchoolVerified(verified);

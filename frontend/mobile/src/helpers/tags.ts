@@ -7,23 +7,8 @@ export const TAG_SECTIONS: Array<{ key: CountedTagType; title: string }> = [
 ];
 
 export const ECHO_TAGS_SUBTITLE = "Choose the communities and interests you want to connect with.";
-export const FREE_REACH_LABEL = "100 km reach";
-export const COUNTRY_COMMUNITY_LIMIT = 2;
-export const REGION_COMMUNITY_LIMIT = 2;
 export const COUNTRY_SLOT_CHANGE_DAYS = 30;
-export const AMPLIFY_LABEL = "AMPLIFY";
-export const AMPLIFY_BLURB =
-  "Amplify: advanced audience targeting for Regional Communities — matched by region, with 2 region slots.";
-export const AMPLIFY_EXAMPLES = ["Sub-Saharan Africa", "Caribbean", "South Asia"] as const;
-export const AMPLIFY_PRICE_HINT = "Available with Amplify · $30/mo";
-export const PAID_REACH_LABEL = "Up to 100 km reach";
-export const AMPLIFY_AUDIENCE_LABEL = "Amplify audience";
-export const CAMPUS_SCHOOL_BLURB = "Connect with students from your verified institution — free to join.";
-export const CAMPUS_PLAN_HINT = "Free — includes 2 country communities and 100 km reach";
-
-export function regionSlotLimit(plan: PlanId): number {
-  return plan === "amplify" ? REGION_COMMUNITY_LIMIT : 0;
-}
+export const CAMPUS_SCHOOL_BLURB = "Connect with students from your verified institution.";
 
 export function countrySectionTitle(limit: number | null): string {
   return limit === 1 ? "Country Community" : "Country Communities";
@@ -39,7 +24,7 @@ export function countryLimitMessage(limit: number): string {
   if (limit === 1) {
     return "You've reached your 1-country limit. You can replace this community once the 30-day change window ends.";
   }
-  return `You've reached your ${limit}-country limit. Replace a community that is not in its 30-day change window, or upgrade to Amplify for regional communities.`;
+  return `You've reached your ${limit}-country limit. Replace a community that is not in its 30-day change window.`;
 }
 
 export function formatNextChangeAvailable(iso: string | null | undefined): string | null {
@@ -63,20 +48,9 @@ export function countrySlotForTag(slots: CountrySlot[], tagId: number): CountryS
   return slots.find((slot) => slot.tag_id === tagId);
 }
 
-export const COUNTRY_LIMIT_MESSAGE = countryLimitMessage(COUNTRY_COMMUNITY_LIMIT);
 export const REGION_INFO_SUBTITLE = "Targets country communities within this geographic region.";
 
-export type PlanId = "free" | "amplify";
 export type AccountType = "individual" | "business";
-
-export const PLANS: Record<PlanId, { name: string; price: string; meaning: string }> = {
-  free: { name: "Free", price: "$0", meaning: "2 country communities and 100 km reach" },
-  amplify: { name: "Amplify", price: "$30/mo", meaning: AMPLIFY_BLURB },
-};
-
-export function resolvePlan(isAdmin = false, accountType: AccountType = "individual"): PlanId {
-  return isAdmin || accountType === "business" ? "amplify" : "free";
-}
 
 export function displayTagLabel(label: string): string {
   return label.replace(" / Hispanic", "");
@@ -92,22 +66,6 @@ export function selectedRegionCount(groups: TagGroups, selectedIds: number[]): n
 
 export function regionLimitMessage(limit: number): string {
   return `You've reached your ${limit}-region limit. Deselect a regional community to add another.`;
-}
-
-export function planDetailLine(plan: PlanId): string {
-  if (plan === "amplify") {
-    return `${PLANS.amplify.price} · ${PAID_REACH_LABEL} · 2 country + 2 region communities`;
-  }
-  return `${PLANS.free.price} · ${FREE_REACH_LABEL} · 2 country communities`;
-}
-
-/** Amplify pricing/upsell lives on the Regional Communities card, not a standalone plan card. */
-export function followTagsShowsPlanCard(plan: PlanId): boolean {
-  return plan !== "amplify";
-}
-
-export function regionalCommunitiesPriceLine(canFollowRegion: boolean): string {
-  return canFollowRegion ? planDetailLine("amplify") : AMPLIFY_PRICE_HINT;
 }
 
 export function countrySelectionLine(count: number, limit: number | null, isAdmin: boolean): string {
@@ -229,18 +187,9 @@ export function canAddFollowedTag(selectedIds: number[], tagId: number, limit: n
 
 export function followedTagLimitReachedMessage(limit: number): string {
   if (limit <= 2) {
-    return `You've used all ${limit} free tags. Remove a country or interest to add another — school and course tags don't count.`;
+    return `You've used all ${limit} tags. Remove a country or interest to add another — school and course tags don't count.`;
   }
   return `You've used all ${limit} tags. Deselect one to add another.`;
-}
-
-export const REGIONAL_TAGS_PREMIUM_LABEL = "AMPLIFY";
-export const REGIONAL_TAGS_PREMIUM_HINT = "Available with Amplify · $30/mo";
-export const REGIONAL_TAGS_LOCKED_MESSAGE =
-  "Regional communities are part of Amplify ($30/mo). Free accounts can still target up to 100 km.";
-
-export function canFollowRegionTags(isAdmin = false, accountType: AccountType = "individual"): boolean {
-  return resolvePlan(isAdmin, accountType) === "amplify";
 }
 
 export function isRegionTagId(groups: TagGroups, tagId: number): boolean {
@@ -250,10 +199,9 @@ export function isRegionTagId(groups: TagGroups, tagId: number): boolean {
 export function followedIdsWithoutLockedRegions(
   selectedIds: number[],
   groups: TagGroups,
-  isAdmin = false,
-  accountType: AccountType = "individual"
+  canFollowRegion: boolean
 ): number[] {
-  if (canFollowRegionTags(isAdmin, accountType)) return selectedIds;
+  if (canFollowRegion) return selectedIds;
   const regionIds = new Set(groups.region.map((tag) => tag.id));
   return selectedIds.filter((id) => !regionIds.has(id));
 }

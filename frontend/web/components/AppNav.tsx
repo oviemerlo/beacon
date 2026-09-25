@@ -2,9 +2,9 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { clientFetch } from "@/helpers/client-api";
-import type { UnreadCount } from "@/types/api";
+import type { UnreadCount, UserProfile } from "@/types/api";
 
 const NAV_ITEMS = [
   { href: "/feed", label: "Feed" },
@@ -15,9 +15,23 @@ const NAV_ITEMS = [
 
 export function AppNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [feedUnread, setFeedUnread] = useState(0);
   const [messageUnread, setMessageUnread] = useState(0);
   const [mentionUnread, setMentionUnread] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    clientFetch<UserProfile>("/users/me")
+      .then((me) => {
+        if (!active) return;
+        if (me.location_label && me.terms_accepted === false) router.replace("/onboarding");
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   useEffect(() => {
     let active = true;

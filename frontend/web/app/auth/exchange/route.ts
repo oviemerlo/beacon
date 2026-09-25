@@ -20,7 +20,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=missing_code", req.url));
   }
 
-  const exchangeRes = await fetch(`${API_URL}/auth/exchange?code=${encodeURIComponent(code)}`, { method: "POST" });
+  const exchangeRes = await fetch(`${API_URL}/auth/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
   if (!exchangeRes.ok) {
     return NextResponse.redirect(new URL("/login?error=exchange_failed", req.url));
   }
@@ -32,7 +36,7 @@ export async function GET(req: NextRequest) {
     const meRes = await fetch(`${API_URL}/users/me`, { headers: { Authorization: `Bearer ${access_token}` } });
     if (meRes.ok) {
       const me = await meRes.json();
-      needsOnboarding = !me.location_label;
+      needsOnboarding = !me.location_label || !me.terms_accepted;
     }
   } catch {
     // If this check fails, default to onboarding — it's a safe landing

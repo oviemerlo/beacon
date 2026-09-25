@@ -26,6 +26,7 @@ from app.repositories import (
 from app.services import mention_service
 from app.services.broadcast_tags import _attachment_payloads, _link_preview_payload
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
+from app.services.user_service import require_terms_accepted
 from app.services.link_preview_service import schedule_previews
 
 
@@ -99,6 +100,7 @@ async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: s
 
 
 async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: str, body: str) -> Message:
+    await require_terms_accepted(db, user_id)
     conversation = await _assert_participant(db, user_id, conversation_id)
     mentioned_user_ids: list[uuid.UUID] = []
     if conversation.name is None:
@@ -339,6 +341,7 @@ def _other_participant_id(conversation: Conversation, user_id: uuid.UUID) -> uui
 async def create_group_conversation(
     db: AsyncSession, user_id: uuid.UUID, name: str, max_participants: int | None
 ) -> tuple[Conversation, ConversationInvite]:
+    await require_terms_accepted(db, user_id)
     trimmed = name.strip()
     if not trimmed:
         raise ValidationError("Group name is required")

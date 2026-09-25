@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.schemas import FollowedTagsOut, FollowedTagsReplaceIn, ProfileUpdateIn, SetDisciplineIn, SetupStatusOut, UserProfileOut
+from app.schemas.schemas import AcceptTermsIn, FollowedTagsOut, FollowedTagsReplaceIn, ProfileUpdateIn, SetDisciplineIn, SetupStatusOut, UserProfileOut
 from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -54,6 +54,15 @@ async def put_discipline(
 ):
     tag = await user_service.set_discipline(db, current_user, payload.program_name)
     return {"tag_id": tag.id, "label": tag.label}
+
+
+@router.post("/me/accept-terms", response_model=UserProfileOut)
+async def accept_terms(
+    payload: AcceptTermsIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await user_service.accept_terms(db, current_user, payload)
 
 
 @router.get("/me/setup-status", response_model=SetupStatusOut)

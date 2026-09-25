@@ -25,6 +25,10 @@ export interface UserProfile {
   tags: Tag[];
   course_codes?: string[];
   followed_tag_limit: number;
+  can_follow_region?: boolean;
+  country_slot_limit?: number | null;
+  region_slot_limit?: number | null;
+  terms_accepted?: boolean;
   avatar_file_id?: string | null;
   avatar_scan_status?: string | null;
 }
@@ -42,6 +46,7 @@ export interface SetupStatus {
   completed_required: number;
   total_required: number;
   all_required_done: boolean;
+  terms_accepted?: boolean;
 }
 
 export interface CountrySlot {
