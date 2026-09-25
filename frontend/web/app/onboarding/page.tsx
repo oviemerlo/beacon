@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clientFetch } from "@/helpers/client-api";
-import { FollowTagsForm } from "@/app/follow-tags/page";
+import { FollowTagsForm } from "@/components/FollowTagsForm";
 import type { UserProfile } from "@/types/api";
 
 const TERMS_VERSION = "2026-09";
