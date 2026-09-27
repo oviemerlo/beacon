@@ -15,7 +15,10 @@
       "bundleIdentifier": "com.echotocrowd.app",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "EchoToCrowd uses your location to show broadcasts posted near you and to set the radius your own broadcasts reach."
+        "NSLocationWhenInUseUsageDescription": "EchoToCrowd uses your location to show broadcasts posted near you and to set the radius your own broadcasts reach.",
+        "NSPhotoLibraryUsageDescription": "EchoToCrowd lets you attach photos to echoes and messages.",
+        "NSCameraUsageDescription": "EchoToCrowd lets you take photos to share in echoes and messages.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
