@@ -36,6 +36,14 @@
         "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#0D0E14"
+    },
+    "androidNavigationBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#12131C"
+    },
     "plugins": [
       "expo-secure-store",
       "expo-location",
