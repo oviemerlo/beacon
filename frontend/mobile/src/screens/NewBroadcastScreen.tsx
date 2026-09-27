@@ -246,8 +246,6 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
       nestedScrollEnabled
       scrollEnabled
     >
-      <Text style={styles.title}>New broadcast</Text>
-
       <TextInput
         style={styles.textarea}
         placeholder="What do you want people nearby to know?"
@@ -413,7 +411,6 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950 },
   contentContainer: { padding: 16, flexGrow: 1 },
-  title: { color: colors.parchment100, fontSize: 20, fontWeight: "700", marginBottom: 24 },
   textarea: {
     backgroundColor: colors.dusk800,
     borderColor: colors.dusk600,

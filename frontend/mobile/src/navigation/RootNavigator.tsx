@@ -31,6 +31,7 @@ const FeedStack = createNativeStackNavigator();
 const ConversationsStack = createNativeStackNavigator();
 const GroupsStack = createNativeStackNavigator();
 const ProfileStack = createNativeStackNavigator();
+const BroadcastStack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
 
 const navTheme = {
@@ -137,6 +138,16 @@ function ProfileStackNavigator({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
+function BroadcastStackNavigator() {
+  return (
+    <BroadcastStack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.dusk900 }, headerTintColor: colors.parchment100 }}>
+      <BroadcastStack.Screen name="NewBroadcast" options={{ title: "New broadcast" }}>
+        {({ navigation }: any) => <NewBroadcastScreen onPosted={() => navigation.getParent()?.navigate("Feed")} />}
+      </BroadcastStack.Screen>
+    </BroadcastStack.Navigator>
+  );
+}
+
 function AppTabs({ onSignOut }: { onSignOut: () => void }) {
   const [feedUnread, setFeedUnread] = useState(0);
   const [messageUnread, setMessageUnread] = useState(0);
@@ -195,9 +206,7 @@ function AppTabs({ onSignOut }: { onSignOut: () => void }) {
       })}
     >
       <Tabs.Screen name="Feed" component={FeedStackNavigator} options={{ tabBarBadge: feedUnread > 0 ? feedUnread : undefined }} />
-      <Tabs.Screen name="Broadcast">
-        {({ navigation }: any) => <NewBroadcastScreen onPosted={() => navigation.navigate("Feed")} />}
-      </Tabs.Screen>
+      <Tabs.Screen name="Broadcast" component={BroadcastStackNavigator} />
       <Tabs.Screen
         name="Messages"
         component={ConversationsStackNavigator}
