@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     FOLLOWED_TAG_LIMIT_DEFAULT: int = 2  # student / non-student
     FOLLOWED_TAG_LIMIT_BUSINESS: int = 4
     FOLLOWED_TAG_LIMIT_ADMIN: int = 10_000
-    COUNTRY_SLOT_LIMIT_FREE: int = 1
+    COUNTRY_SLOT_LIMIT_FREE: int = 2
     COUNTRY_SLOT_LIMIT_PAID: int = 2
     COUNTRY_SLOT_CHANGE_DAYS: int = 30
     LINK_PREVIEW_FETCH_TIMEOUT_SECONDS: float = 5

@@ -274,13 +274,13 @@ export function TermsStep({ onAccepted }: { onAccepted: () => void }) {
         <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
           {agreed ? <Text style={styles.checkmark}>✓</Text> : null}
         </View>
-        <Text style={styles.checkLabel}>I agree to the Terms of Service and Community Guidelines</Text>
+        <Text style={styles.checkLabel}>I agree to the Terms of Service, including the Community Guidelines, and the Privacy Policy</Text>
       </Pressable>
       <Pressable onPress={() => void Linking.openURL("https://www.echotocrowd.com/terms")}>
         <Text style={styles.link}>Terms of Service</Text>
       </Pressable>
-      <Pressable onPress={() => void Linking.openURL("https://www.echotocrowd.com/guidelines")}>
-        <Text style={styles.link}>Community Guidelines</Text>
+      <Pressable onPress={() => void Linking.openURL("https://www.echotocrowd.com/privacy")}>
+        <Text style={styles.link}>Privacy Policy</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable style={[styles.buttonPrimary, !agreed && styles.buttonDisabled]} onPress={() => void accept()} disabled={!agreed || submitting}>

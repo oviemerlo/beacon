@@ -47,7 +47,7 @@ export default function TermsPage() {
             </ul>
           </Section>
 
-          <Section title="Community guidelines">
+          <Section id="community-guidelines" title="Community guidelines">
             <p>You agree not to use EchoToCrowd to:</p>
             <ul className="list-disc pl-5 space-y-1 mt-2">
               <li>Post content that is illegal, harassing, hateful, sexually explicit, or violent.</li>
@@ -152,9 +152,9 @@ export default function TermsPage() {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ id, title, children }: { id?: string; title: string; children: ReactNode }) {
   return (
-    <section>
+    <section id={id}>
       <h2 className="font-display text-lg font-semibold text-parchment-100 mb-2">{title}</h2>
       {children}
     </section>

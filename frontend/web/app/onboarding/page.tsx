@@ -216,13 +216,13 @@ function TermsStep({ onAccepted }: { onAccepted: () => void }) {
       </p>
       <label className="flex items-start gap-3 mb-4 text-sm">
         <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-1" />
-        <span>I agree to the Terms of Service and Community Guidelines</span>
+        <span>I agree to the Terms of Service, including the Community Guidelines, and the Privacy Policy</span>
       </label>
       <p className="text-sm mb-2">
-        <a href="https://www.echotocrowd.com/terms" className="text-signal-400 hover:text-signal-300">Terms of Service</a>
+        <Link href="/terms" className="text-signal-400 hover:text-signal-300">Terms of Service</Link>
       </p>
       <p className="text-sm mb-4">
-        <a href="https://www.echotocrowd.com/guidelines" className="text-signal-400 hover:text-signal-300">Community Guidelines</a>
+        <Link href="/privacy" className="text-signal-400 hover:text-signal-300">Privacy Policy</Link>
       </p>
       {error && <p className="text-rust-400 text-sm mb-2">{error}</p>}
       <button type="button" className="btn-primary w-full" disabled={!agreed || submitting} onClick={() => void accept()}>
