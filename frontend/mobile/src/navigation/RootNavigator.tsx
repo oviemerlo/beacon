@@ -3,10 +3,12 @@ import { NavigationContainer, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, Image, Linking, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Image, Linking, Text, View } from "react-native";
 
 import { TokenStore } from "../helpers/secureStore";
 import { apiFetch } from "../helpers/api";
+import { syncLocationIfMoved } from "../helpers/locationSync";
+import { ViewerUserProvider } from "../helpers/viewerUser";
 import { parseJoinToken, setPendingJoinToken, takePendingJoinToken } from "../helpers/joinLink";
 import { LoginScreen } from "../screens/LoginScreen";
 import { OnboardingScreen, TermsStep } from "../screens/OnboardingScreen";
@@ -145,6 +147,50 @@ function BroadcastStackNavigator() {
         {({ navigation }: any) => <NewBroadcastScreen onPosted={() => navigation.getParent()?.navigate("Feed")} />}
       </BroadcastStack.Screen>
     </BroadcastStack.Navigator>
+  );
+}
+
+function SignedInApp({ onSignOut }: { onSignOut: () => void }) {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const userRef = useRef(user);
+  userRef.current = user;
+
+  useEffect(() => {
+    let active = true;
+
+    async function syncFrom(registered: { latitude: number | null; longitude: number | null }) {
+      const profile = await syncLocationIfMoved(registered);
+      if (active && profile) setUser(profile);
+    }
+
+    async function start() {
+      try {
+        const me = await apiFetch<UserProfile>("/users/me");
+        if (!active) return;
+        setUser(me);
+        userRef.current = me;
+        await syncFrom({ latitude: me.latitude ?? null, longitude: me.longitude ?? null });
+      } catch {
+        // Stay signed in; the feed can still load its own profile.
+      }
+    }
+
+    void start();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      const current = userRef.current;
+      void syncFrom({ latitude: current?.latitude ?? null, longitude: current?.longitude ?? null });
+    });
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  return (
+    <ViewerUserProvider value={{ user, setUser }}>
+      <AppTabs onSignOut={onSignOut} />
+    </ViewerUserProvider>
   );
 }
 
@@ -314,7 +360,7 @@ export function RootNavigator() {
         )}
         {authState === "signed-in" && (
           <RootStack.Screen name="App">
-            {() => <AppTabs onSignOut={() => setAuthState("signed-out")} />}
+            {() => <SignedInApp onSignOut={() => setAuthState("signed-out")} />}
           </RootStack.Screen>
         )}
       </RootStack.Navigator>

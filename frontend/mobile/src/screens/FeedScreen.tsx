@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, TextInput } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
+import { syncLocationIfMoved } from "../helpers/locationSync";
+import { useViewerUser } from "../helpers/viewerUser";
 import { audienceFilterActive, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "../helpers/tags";
 import { usePolling } from "../helpers/usePolling";
 import { colors, radii } from "../theme/tokens";
@@ -21,7 +23,7 @@ export function FeedScreen({
   onOpenConversation: (conversationId: string) => void;
 }) {
   const [broadcasts, setBroadcasts] = useState<FeedBroadcast[]>([]);
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const { user, setUser } = useViewerUser();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -106,6 +108,11 @@ export function FeedScreen({
 
   async function onRefresh() {
     setRefreshing(true);
+    const profile = await syncLocationIfMoved({
+      latitude: user?.latitude ?? null,
+      longitude: user?.longitude ?? null,
+    });
+    if (profile) setUser(profile);
     if (isSearching) {
       try {
         setSearchHits(await apiFetch<FeedSearchHit[]>(searchPath));
@@ -134,14 +141,7 @@ export function FeedScreen({
       <LocationDriftBanner
         registeredLatitude={user?.latitude ?? null}
         registeredLongitude={user?.longitude ?? null}
-        onConfirmUpdate={async (latitude, longitude) => {
-          await apiFetch("/users/me", {
-            method: "PATCH",
-            body: JSON.stringify({ latitude, longitude }),
-          });
-          const refreshed = await apiFetch<UserProfile>("/users/me");
-          setUser(refreshed);
-        }}
+        onProfile={setUser}
       />
 
       <View style={styles.searchWrap}>

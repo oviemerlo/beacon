@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { distanceMeters, formatDistance } from "@/helpers/distance";
+import { useEffect, useState } from "react";
 
-const LOCATION_DRIFT_THRESHOLD_METERS = 50000;
+import { clientFetch } from "@/helpers/client-api";
+import { geolocationPermission, syncLocationIfMoved } from "@/helpers/locationSync";
+import type { UserProfile } from "@/types/api";
+
 const DISMISS_KEY = "beacon.locationDrift.dismissed";
 
 type Props = {
   registeredLatitude: number | null;
   registeredLongitude: number | null;
-  onConfirmUpdate: (latitude: number, longitude: number) => Promise<void>;
+  onProfile: (profile: UserProfile) => void;
 };
 
-export function LocationDriftBanner({ registeredLatitude, registeredLongitude, onConfirmUpdate }: Props) {
-  const [distance, setDistance] = useState<number | null>(null);
-  const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+export function LocationDriftBanner({ registeredLatitude, registeredLongitude, onProfile }: Props) {
+  const [needsPermission, setNeedsPermission] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -23,72 +24,72 @@ export function LocationDriftBanner({ registeredLatitude, registeredLongitude, o
       setDismissed(true);
       return;
     }
-    if (registeredLatitude == null || registeredLongitude == null) return;
-    if (!navigator.geolocation) return;
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCurrentCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-        const drift = distanceMeters(
-          registeredLatitude,
-          registeredLongitude,
-          pos.coords.latitude,
-          pos.coords.longitude
-        );
-        setDistance(drift);
-      },
-      () => {
-        setDistance(null);
-      },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-    );
-  }, [registeredLatitude, registeredLongitude]);
+    let active = true;
+    async function check() {
+      const permission = await geolocationPermission();
+      if (!active) return;
+      setNeedsPermission(permission !== "granted");
+    }
 
-  const show = useMemo(
-    () => !dismissed && distance != null && distance > LOCATION_DRIFT_THRESHOLD_METERS,
-    [dismissed, distance]
-  );
-  if (!show || distance == null || currentCoords == null) return null;
+    void check();
+    function onVisible() {
+      if (document.visibilityState === "visible") void check();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  if (dismissed || !needsPermission) return null;
 
   function dismissForSession() {
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem(DISMISS_KEY, "1");
-    }
+    if (typeof window !== "undefined") sessionStorage.setItem(DISMISS_KEY, "1");
     setDismissed(true);
   }
 
-  async function confirmUpdate() {
-    if (!currentCoords) return;
+  function enableLocation() {
+    if (!navigator.geolocation) return;
     setSaving(true);
-    try {
-      await onConfirmUpdate(currentCoords.latitude, currentCoords.longitude);
-      dismissForSession();
-    } finally {
-      setSaving(false);
-    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          setNeedsPermission(false);
+          const profile = await syncLocationIfMoved({
+            latitude: registeredLatitude,
+            longitude: registeredLongitude,
+          });
+          if (profile) {
+            onProfile(profile);
+            return;
+          }
+          // Browsers that hide the Permissions API still need this click to save the fix.
+          if ((await geolocationPermission()) === "unknown") {
+            await clientFetch("/users/me", {
+              method: "PATCH",
+              body: JSON.stringify({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+            });
+            onProfile(await clientFetch<UserProfile>("/users/me"));
+          }
+        } finally {
+          setSaving(false);
+        }
+      },
+      () => setSaving(false),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+    );
   }
 
   return (
     <div className="card border-rust-400/50 bg-rust-400/10 mb-4">
-      <p className="text-rust-200 text-sm">
-        You seem to be about <strong>{formatDistance(distance)}</strong> from your registered location.
-        Update your location for more accurate nearby results?
-      </p>
+      <p className="text-parchment-100 text-sm">Turn on location to see echoes near you.</p>
       <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          onClick={confirmUpdate}
-          disabled={saving}
-          className="btn-primary px-3 py-2 text-xs disabled:opacity-60"
-        >
-          {saving ? "Updating…" : "Update location"}
+        <button type="button" onClick={enableLocation} disabled={saving} className="btn-primary px-3 py-2 text-xs disabled:opacity-60">
+          {saving ? "Updating…" : "Turn on location"}
         </button>
-        <button
-          type="button"
-          onClick={dismissForSession}
-          disabled={saving}
-          className="btn-secondary px-3 py-2 text-xs"
-        >
+        <button type="button" onClick={dismissForSession} disabled={saving} className="btn-secondary px-3 py-2 text-xs">
           Not now
         </button>
       </div>

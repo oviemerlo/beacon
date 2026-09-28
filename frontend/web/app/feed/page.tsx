@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
@@ -15,6 +15,7 @@ import { LocationDriftBanner } from "@/components/LocationDriftBanner";
 import { SetupChecklistBanner } from "@/components/SetupChecklistBanner";
 import { reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
+import { syncLocationIfMoved } from "@/helpers/locationSync";
 import { formatDistance } from "@/helpers/distance";
 import { audienceFilterActive, echoAudienceLabels, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "@/helpers/tags";
 import { echoPreview, formatBroadcastSentAt } from "@/helpers/time";
@@ -25,6 +26,8 @@ export default function FeedPage() {
   const router = useRouter();
   const [broadcasts, setBroadcasts] = useState<FeedBroadcast[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const userRef = useRef(user);
+  userRef.current = user;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,14 +59,49 @@ export default function FeedPage() {
   }, [debouncedQuery, selectedTagIds, selectedCourseCodes]);
 
   useEffect(() => {
+    let active = true;
     clientFetch<UserProfile>("/users/me")
-      .then((me) => {
+      .then(async (me) => {
+        if (!active) return;
         setUser(me);
         setSelectedTagIds((ids) => retainKnown(ids, me.tags.map((tag) => tag.id)));
         setSelectedCourseCodes((codes) => retainKnown(codes, me.course_codes ?? []));
+        const profile = await syncLocationIfMoved({
+          latitude: me.latitude ?? null,
+          longitude: me.longitude ?? null,
+        });
+        if (active && profile) setUser(profile);
       })
-      .catch(() => setUser(null));
+      .catch(() => {
+        if (active) setUser(null);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function syncThenReload() {
+      const current = userRef.current;
+      if (!current) return;
+      const profile = await syncLocationIfMoved({
+        latitude: current?.latitude ?? null,
+        longitude: current?.longitude ?? null,
+      });
+      if (!active) return;
+      if (profile) setUser(profile);
+      if (profile) await loadFeed({ silent: true });
+    }
+    function onVisible() {
+      if (document.visibilityState === "visible") void syncThenReload();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadFeed]);
 
   const chips = feedSearchChips(user?.tags ?? [], selectedTagIds, user?.course_codes ?? [], selectedCourseCodes);
   const filterActive = audienceFilterActive(selectedTagIds, selectedCourseCodes);
@@ -122,14 +160,7 @@ export default function FeedPage() {
         <LocationDriftBanner
           registeredLatitude={user?.latitude ?? null}
           registeredLongitude={user?.longitude ?? null}
-          onConfirmUpdate={async (latitude, longitude) => {
-            await clientFetch("/users/me", {
-              method: "PATCH",
-              body: JSON.stringify({ latitude, longitude }),
-            });
-            const refreshed = await clientFetch<UserProfile>("/users/me");
-            setUser(refreshed);
-          }}
+          onProfile={setUser}
         />
 
         <div className="mb-5">

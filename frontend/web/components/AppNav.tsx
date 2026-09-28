@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clientFetch } from "@/helpers/client-api";
+import { syncLocationIfMoved } from "@/helpers/locationSync";
 import type { UnreadCount, UserProfile } from "@/types/api";
 
 const NAV_ITEMS = [
@@ -22,14 +23,35 @@ export function AppNav() {
 
   useEffect(() => {
     let active = true;
+    const registered = { latitude: null as number | null, longitude: null as number | null };
+
+    async function sync() {
+      const profile = await syncLocationIfMoved(registered);
+      if (!active || !profile) return;
+      registered.latitude = profile.latitude ?? null;
+      registered.longitude = profile.longitude ?? null;
+    }
+
     clientFetch<UserProfile>("/users/me")
-      .then((me) => {
+      .then(async (me) => {
         if (!active) return;
-        if (me.location_label && me.terms_accepted === false) router.replace("/onboarding");
+        if (me.location_label && me.terms_accepted === false) {
+          router.replace("/onboarding");
+          return;
+        }
+        registered.latitude = me.latitude ?? null;
+        registered.longitude = me.longitude ?? null;
+        await sync();
       })
       .catch(() => undefined);
+
+    function onVisible() {
+      if (document.visibilityState === "visible") void sync();
+    }
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [router]);
 

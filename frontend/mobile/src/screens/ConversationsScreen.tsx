@@ -88,7 +88,6 @@ export function ConversationsScreen({ onOpenConversation }: { onOpenConversation
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Messages</Text>
       <TextInput
         style={styles.searchInput}
         placeholder="Search your messages"
@@ -312,7 +311,6 @@ function SearchHitCard({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950, padding: 16 },
-  title: { color: colors.parchment100, fontSize: 20, fontWeight: "700", marginBottom: 16 },
   searchInput: {
     backgroundColor: colors.dusk800,
     borderColor: colors.dusk600,

@@ -1,64 +1,78 @@
 import { useEffect, useState } from "react";
-import { Text, View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Location from "expo-location";
-import { colors, radii } from "../theme/tokens";
-import { distanceMeters, formatDistance } from "../helpers/distance";
 
-const LOCATION_DRIFT_THRESHOLD_METERS = 50000;
+import { syncLocationIfMoved } from "../helpers/locationSync";
+import { colors, radii } from "../theme/tokens";
+import type { UserProfile } from "../types/api";
+
 let dismissedForSession = false;
 
 export function LocationDriftBanner({
   registeredLatitude,
   registeredLongitude,
-  onConfirmUpdate,
+  onProfile,
 }: {
   registeredLatitude: number | null;
   registeredLongitude: number | null;
-  onConfirmUpdate: (latitude: number, longitude: number) => Promise<void>;
+  onProfile: (profile: UserProfile) => void;
 }) {
-  const [distance, setDistance] = useState<number | null>(null);
-  const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [needsPermission, setNeedsPermission] = useState(false);
+  const [canAskAgain, setCanAskAgain] = useState(true);
+  const [dismissed, setDismissed] = useState(dismissedForSession);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let active = true;
+
     async function check() {
       if (dismissedForSession) {
         setDismissed(true);
         return;
       }
-      if (registeredLatitude == null || registeredLongitude == null) return;
       const permissions = await Location.getForegroundPermissionsAsync();
-      if (permissions.status !== "granted") return;
-
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const drift = distanceMeters(
-        registeredLatitude,
-        registeredLongitude,
-        pos.coords.latitude,
-        pos.coords.longitude
-      );
-      setCurrentCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-      setDistance(drift);
+      if (!active) return;
+      setCanAskAgain(permissions.canAskAgain);
+      setNeedsPermission(permissions.status !== "granted");
     }
-    check().catch(() => setDistance(null));
-  }, [registeredLatitude, registeredLongitude]);
 
-  if (dismissed || distance == null || distance <= LOCATION_DRIFT_THRESHOLD_METERS || currentCoords == null) return null;
+    void check();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void check();
+    });
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  if (dismissed || !needsPermission) return null;
 
   function dismissSession() {
     dismissedForSession = true;
     setDismissed(true);
   }
 
-  async function confirmUpdate() {
-    if (!currentCoords) return;
+  async function enableLocation() {
+    const current = await Location.getForegroundPermissionsAsync();
+    if (!current.canAskAgain && current.status !== "granted") {
+      await Linking.openSettings();
+      return;
+    }
     setSaving(true);
     try {
-      await onConfirmUpdate(currentCoords.latitude, currentCoords.longitude);
-      dismissSession();
+      const result = await Location.requestForegroundPermissionsAsync();
+      setCanAskAgain(result.canAskAgain);
+      if (result.status !== "granted") {
+        setNeedsPermission(true);
+        return;
+      }
+      setNeedsPermission(false);
+      const profile = await syncLocationIfMoved({
+        latitude: registeredLatitude,
+        longitude: registeredLongitude,
+      });
+      if (profile) onProfile(profile);
     } finally {
       setSaving(false);
     }
@@ -66,13 +80,14 @@ export function LocationDriftBanner({
 
   return (
     <View style={styles.banner}>
-      <Text style={styles.text}>
-        You seem to be about {formatDistance(distance)} from your registered location.
-        Update location for more accurate nearby results?
-      </Text>
+      <Text style={styles.text}>Turn on location to see echoes near you.</Text>
       <View style={styles.actionsRow}>
-        <Pressable style={styles.primaryButton} disabled={saving} onPress={confirmUpdate}>
-          {saving ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.primaryButtonText}>Update location</Text>}
+        <Pressable style={styles.primaryButton} disabled={saving} onPress={() => void enableLocation()}>
+          {saving ? (
+            <ActivityIndicator color={colors.dusk950} />
+          ) : (
+            <Text style={styles.primaryButtonText}>{canAskAgain ? "Turn on location" : "Open Settings"}</Text>
+          )}
         </Pressable>
         <Pressable style={styles.secondaryButton} disabled={saving} onPress={dismissSession}>
           <Text style={styles.secondaryButtonText}>Not now</Text>
