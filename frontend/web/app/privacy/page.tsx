@@ -23,7 +23,7 @@ export default function PrivacyPage() {
         <div className="space-y-8 text-parchment-300 leading-relaxed">
           <Section title="Who we are">
             <p>
-              EchoToCrowd is operated by 1001721403 Ontario Inc. ("EchoToCrowd," "we," "us"), a
+              EchoToCrowd is operated by Xylos Interactive Inc. ("EchoToCrowd," "we," "us"), a
               corporation registered in Ontario, Canada. This policy explains what personal
               information we collect through the EchoToCrowd app and website, why we collect it,
               and the choices you have.

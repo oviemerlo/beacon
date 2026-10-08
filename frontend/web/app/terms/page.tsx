@@ -24,7 +24,7 @@ export default function TermsPage() {
           <Section title="Agreement to these terms">
             <p>
               These Terms of Service ("Terms") govern your use of EchoToCrowd, operated by
-              1001721403 Ontario Inc. ("EchoToCrowd," "we," "us"). By creating an account or
+              Xylos Interactive Inc. ("EchoToCrowd," "we," "us"). By creating an account or
               using EchoToCrowd, you agree to these Terms.
             </p>
           </Section>
