@@ -164,4 +164,4 @@ start frontend/web command: npm run dev
 start frontend/mobile command: npx expo run:ios
 start frontend/mobile command for android: source ~/.zshrc
                                           npx expo run:android
-backend: uvicorn app.main:app --reload
+backend: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

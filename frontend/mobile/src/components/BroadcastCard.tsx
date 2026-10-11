@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { reachBadgeLabel } from "../helpers/broadcastReach";
 import { formatDistance } from "../helpers/distance";
 import { echoAudienceLabels } from "../helpers/tags";
 import { echoPreview, formatBroadcastSentAt } from "../helpers/time";
@@ -48,8 +47,6 @@ export function BroadcastCard({
   const headerVerified = featuredReply ? featuredReply.sender_is_verified : broadcast.sender_is_verified;
   const headerAvatarId = featuredReply ? featuredReply.sender_avatar_file_id : broadcast.sender_avatar_file_id;
   const headerAvatarName = featuredReply ? featuredReply.sender_display_name : broadcast.sender_display_name;
-  const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
-
   return (
     <Card style={menuOpen ? { ...feedCardStyles.cardOverflow, ...feedCardStyles.cardMenuOpen, ...styles.feedCard } : { ...feedCardStyles.cardOverflow, ...styles.feedCard }}>
       <EchoMediaLayout
@@ -106,9 +103,6 @@ export function BroadcastCard({
             {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
             {!isOwn ? `  ·  ${formatDistance(broadcast.distance_m)} away` : ""}
           </Text>
-          <View style={styles.reachPill}>
-            <Text style={styles.reachPillText}>{reachLabel}</Text>
-          </View>
           <Pressable
             onPress={() => onOpenBroadcast(broadcast.id)}
             accessibilityRole="link"
@@ -149,8 +143,6 @@ const styles = StyleSheet.create({
   cardFooter: { marginTop: "auto", paddingTop: 20 },
   metaRow: { flexDirection: "row", flexWrap: "nowrap", alignItems: "center", gap: 8, width: "100%" },
   cardMeta: { color: colors.parchment500, fontSize: 9, fontWeight: "400", fontFamily: "monospace", flexShrink: 1, flexGrow: 0, minWidth: 0 },
-  reachPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 1, flexShrink: 0 },
-  reachPillText: { color: colors.parchment500, fontSize: 8, fontFamily: "monospace" },
   replyCountWrap: { flexShrink: 0, marginLeft: "auto" },
   replyCountText: { color: colors.parchment500, fontSize: 9, fontFamily: "monospace" },
 });
