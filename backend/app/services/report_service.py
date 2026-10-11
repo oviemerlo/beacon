@@ -55,6 +55,17 @@ async def create_report(
     return report
 
 
+async def _target_url(db: AsyncSession, report: Report) -> str | None:
+    if report.target_type == "broadcast":
+        return f"/broadcasts/{report.target_id}"
+    if report.target_type == "message":
+        message = await conversation_repository.get_message_by_id(db, report.target_id)
+        if message is None:
+            return None
+        return f"/conversations/{message.conversation_id}"
+    return None
+
+
 def _target_preview(report: Report) -> str:
     details = (report.details or "").strip()
     if details:
@@ -79,6 +90,7 @@ async def list_reports_for_queue(db: AsyncSession, *, status: str, limit: int, o
                 "target_type": report.target_type,
                 "target_id": report.target_id,
                 "target_preview": _target_preview(report),
+                "target_url": await _target_url(db, report),
             }
         )
     return queue_items

@@ -13,6 +13,7 @@ import { getMyCourses, getVerificationStatus } from "@/helpers/school-verificati
 import { toggleItem } from "@/helpers/tags";
 import {
   buildReachPayload,
+  canUseGlobalReach,
   LOCAL_RADIUS_STEPS_M,
   radiusLabel,
   ReachCategory,
@@ -222,9 +223,11 @@ export default function NewBroadcastPage() {
           >
             Regional
           </button>
-          <button type="button" onClick={() => selectReach("global")} className="tag-pill justify-self-end" style={reachSelectorColors("global", reach === "global")}>
-            Global
-          </button>
+          {canUseGlobalReach() && (
+            <button type="button" onClick={() => selectReach("global")} className="tag-pill justify-self-end" style={reachSelectorColors("global", reach === "global")}>
+              Global
+            </button>
+          )}
         </div>
         {reach === "global" ? (
           <p className="text-signal-400 text-xs font-semibold font-mono mb-3">Global</p>

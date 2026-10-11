@@ -52,3 +52,9 @@ export function reachSelectorColors(category: ReachCategory, selected: boolean, 
 export function canUseRegionalReach(): boolean {
   return true; // 100 km reach is now the free-tier baseline for everyone
 }
+
+export function canUseGlobalReach(): boolean {
+  return false; // Hidden for now: the feed isn't algorithmically ranked yet, so a global
+  // broadcast would blast every follower's feed indiscriminately. Flip to true once
+  // reach is properly curated/throttled.
+}

@@ -100,12 +100,11 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
     moderation_status = "pending"
     moderation_labels = None
     moderation_result: TextModerationResult | None = None
-    if payload.reply_to_broadcast_id is None:
-        moderation_result = await moderate_text(payload.content)
-        if moderation_result.decision == "reject":
-            raise ValidationError(TEXT_REJECTED_MESSAGE)
-        moderation_status = MODERATION_STATUS_FLAGGED if moderation_result.decision == "flag" else MODERATION_STATUS_CLEAN
-        moderation_labels = moderation_result.raw_result_json
+    moderation_result = await moderate_text(payload.content)
+    if moderation_result.decision == "reject":
+        raise ValidationError(TEXT_REJECTED_MESSAGE)
+    moderation_status = MODERATION_STATUS_FLAGGED if moderation_result.decision == "flag" else MODERATION_STATUS_CLEAN
+    moderation_labels = moderation_result.raw_result_json
 
     broadcast = await broadcast_repository.create(
         db,
@@ -125,7 +124,7 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
         moderation_labels=moderation_labels,
     )
     if moderation_status == MODERATION_STATUS_FLAGGED:
-        await _create_text_moderation_report(db, broadcast.id, moderation_result)
+        await _create_text_moderation_report(db, broadcast.id, payload.content, moderation_result)
     await db.commit()
     await db.refresh(broadcast)
     schedule_previews(payload.content, broadcast_id=broadcast.id)
@@ -135,6 +134,7 @@ async def create_broadcast(db: AsyncSession, sender_id: uuid.UUID, payload: Broa
 async def _create_text_moderation_report(
     db: AsyncSession,
     broadcast_id: uuid.UUID,
+    content: str,
     result: TextModerationResult | None,
 ) -> None:
     admin = await user_repository.get_any_admin_user(db)
@@ -143,13 +143,14 @@ async def _create_text_moderation_report(
         return
     category = result.top_category if result and result.top_category else "unknown"
     score = result.score if result and result.score is not None else 0.0
+    snippet = content.strip().replace("\n", " ")[:200]
     await report_repository.create_report(
         db,
         reporter_id=admin.id,
         target_type="broadcast",
         target_id=broadcast_id,
         reason="inappropriate_content",
-        details=f"Auto-flagged by OpenAI moderation: {category} ({score:.2f} score)",
+        details=f'Auto-flagged by OpenAI moderation: {category} ({score:.2f} score) — "{snippet}"',
     )
 
 

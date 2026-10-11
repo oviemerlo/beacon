@@ -406,6 +406,7 @@ class ReportQueueItemOut(BaseModel):
     target_type: ReportTargetType
     target_id: uuid.UUID
     target_preview: str
+    target_url: str | None
 
 
 class AdminStatsOut(BaseModel):

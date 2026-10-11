@@ -10,6 +10,7 @@ import { apiFetch } from "../helpers/api";
 import { uploadBroadcastAttachment, type PickedUpload } from "../helpers/uploads";
 import {
   buildReachPayload,
+  canUseGlobalReach,
   LOCAL_RADIUS_STEPS_M,
   radiusLabel,
   ReachCategory,
@@ -272,9 +273,11 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
           </Pressable>
         </View>
         <View style={styles.pillSlotEnd}>
-          <Pressable onPress={() => selectReach("global")} style={[styles.pill, globalReachColors]}>
-            <Text style={[styles.pillText, { color: globalReachColors.color }]}>Global</Text>
-          </Pressable>
+          {canUseGlobalReach() && (
+            <Pressable onPress={() => selectReach("global")} style={[styles.pill, globalReachColors]}>
+              <Text style={[styles.pillText, { color: globalReachColors.color }]}>Global</Text>
+            </Pressable>
+          )}
         </View>
       </View>
       {reach === "global" ? (

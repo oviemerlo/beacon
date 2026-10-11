@@ -20,12 +20,14 @@ from app.repositories import (
     conversation_repository,
     link_preview_repository,
     notification_repository,
+    report_repository,
     upload_repository,
     user_repository,
 )
 from app.services import mention_service
 from app.services.broadcast_tags import _attachment_payloads, _link_preview_payload
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
+from app.services.text_moderation_service import TextModerationResult, moderate_text
 from app.services.user_service import require_terms_accepted
 from app.services.link_preview_service import schedule_previews
 
@@ -59,9 +61,22 @@ async def start_conversation(db: AsyncSession, initiator_id: uuid.UUID, broadcas
 
     root_echo_id = broadcast.parent_broadcast_id or broadcast.id
     mentioned_user_ids = await mention_service.validate_mentions_for_echo(db, first_message, root_echo_id, initiator_id)
+    moderation_result = await moderate_text(first_message)
+    if moderation_result.decision == "reject":
+        raise ValidationError("This message can't be sent.")
+    moderation_status = "flagged" if moderation_result.decision == "flag" else "clean"
+    moderation_labels = moderation_result.raw_result_json
     message = await conversation_repository.add_message(
-        db, conversation.id, initiator_id, first_message, mentioned_user_ids
+        db,
+        conversation.id,
+        initiator_id,
+        first_message,
+        mentioned_user_ids,
+        moderation_status=moderation_status,
+        moderation_labels=moderation_labels,
     )
+    if moderation_status == "flagged":
+        await _create_message_moderation_report(db, message.id, first_message, moderation_result)
     await _notify_mentions(db, message)
     await db.commit()
     await db.refresh(conversation)
@@ -114,7 +129,22 @@ async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: st
         if root_echo_id is None:
             raise NotFoundError("Broadcast not found")
         mentioned_user_ids = await mention_service.validate_mentions_for_echo(db, body, root_echo_id, user_id)
-    message = await conversation_repository.add_message(db, conversation_id, user_id, body, mentioned_user_ids)
+    moderation_result = await moderate_text(body)
+    if moderation_result.decision == "reject":
+        raise ValidationError("This message can't be sent.")
+    moderation_status = "flagged" if moderation_result.decision == "flag" else "clean"
+    moderation_labels = moderation_result.raw_result_json
+    message = await conversation_repository.add_message(
+        db,
+        conversation_id,
+        user_id,
+        body,
+        mentioned_user_ids,
+        moderation_status=moderation_status,
+        moderation_labels=moderation_labels,
+    )
+    if moderation_status == "flagged":
+        await _create_message_moderation_report(db, message.id, body, moderation_result)
     await _notify_mentions(db, message)
     await db.commit()
     await db.refresh(message)
@@ -122,6 +152,28 @@ async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: st
     await _attach_message_link_previews(db, [message])
     await _attach_message_attachments(db, [message])
     return message
+
+
+async def _create_message_moderation_report(
+    db: AsyncSession,
+    message_id: uuid.UUID,
+    body: str,
+    result: TextModerationResult | None,
+) -> None:
+    admin = await user_repository.get_any_admin_user(db)
+    if admin is None:
+        return
+    category = result.top_category if result and result.top_category else "unknown"
+    score = result.score if result and result.score is not None else 0.0
+    snippet = body.strip().replace("\n", " ")[:200]
+    await report_repository.create_report(
+        db,
+        reporter_id=admin.id,
+        target_type="message",
+        target_id=message_id,
+        reason="inappropriate_content",
+        details=f'Auto-flagged by OpenAI moderation: {category} ({score:.2f} score) — "{snippet}"',
+    )
 
 
 async def _notify_mentions(db: AsyncSession, message: Message) -> None:

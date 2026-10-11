@@ -448,6 +448,7 @@ def _echo_viewer_filters(user_id: uuid.UUID, distance_m=None, *, in_reach: bool,
         _not_deleted(),
         Broadcast.id.not_in(_hidden_broadcast_ids(user_id)),
         _still_live(),
+        Broadcast.moderation_status != "flagged",
     ]
     if in_reach:
         filters.append(_in_reach(user_id, distance_m))

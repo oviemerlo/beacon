@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Computed, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, Computed, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -81,6 +81,8 @@ class Message(Base):
         server_default="{}",
         default=list,
     )
+    moderation_status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    moderation_labels: Mapped[str | None] = mapped_column(Text, nullable=True)
     search_vector: Mapped[str] = mapped_column(
         TSVECTOR,
         Computed("to_tsvector('english', coalesce(body, ''))", persisted=True),
@@ -88,6 +90,13 @@ class Message(Base):
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
     attachments: Mapped[list["UploadedFile"]] = relationship(back_populates="message")
+
+    __table_args__ = (
+        CheckConstraint(
+            "moderation_status IN ('pending', 'clean', 'flagged', 'rejected')",
+            name="ck_messages_moderation_status",
+        ),
+    )
 
 
 class BlockedUser(Base):

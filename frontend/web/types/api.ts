@@ -314,6 +314,7 @@ export interface ReportQueueItem {
   target_type: ReportTargetType;
   target_id: string;
   target_preview: string;
+  target_url: string | null;
 }
 
 export interface AdminStats {

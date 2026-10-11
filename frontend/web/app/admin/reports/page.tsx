@@ -74,6 +74,14 @@ export default async function AdminReportsPage() {
                 </p>
                 <p className="text-sm text-parchment-500">
                   Target: {report.target_type} {report.target_id}
+                  {report.target_url && (
+                    <>
+                      {" — "}
+                      <Link href={report.target_url} className="text-signal-400 hover:text-signal-300">
+                        Open
+                      </Link>
+                    </>
+                  )}
                 </p>
                 {report.details && <p className="text-sm mt-3">{report.details}</p>}
                 {!report.details && <p className="text-sm mt-3 text-parchment-500">No additional details provided.</p>}

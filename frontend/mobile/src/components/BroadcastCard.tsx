@@ -102,7 +102,7 @@ export function BroadcastCard({
       ) : null}
       <View style={styles.cardFooter}>
         <View style={styles.metaRow}>
-          <Text style={styles.cardMeta} numberOfLines={1}>
+          <Text style={styles.cardMeta} numberOfLines={1} ellipsizeMode="tail">
             {formatBroadcastSentAt(featuredReply ? featuredReply.created_at : broadcast.created_at)}
             {!isOwn ? `  ·  ${formatDistance(broadcast.distance_m)} away` : ""}
           </Text>
@@ -113,8 +113,9 @@ export function BroadcastCard({
             onPress={() => onOpenBroadcast(broadcast.id)}
             accessibilityRole="link"
             accessibilityLabel={`View thread, ${broadcast.reply_count ?? 0} replies`}
+            style={styles.replyCountWrap}
           >
-            <Text style={styles.replyCountText}>
+            <Text style={styles.replyCountText} numberOfLines={1}>
               {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
             </Text>
           </Pressable>
@@ -146,9 +147,10 @@ const styles = StyleSheet.create({
   cardTagPillText: { color: colors.parchment300, fontSize: 11, fontWeight: "500" },
   feedCard: { paddingBottom: 10 },
   cardFooter: { marginTop: "auto", paddingTop: 20 },
-  metaRow: { flexDirection: "row", flexWrap: "nowrap", alignItems: "center", gap: 8 },
-  cardMeta: { color: colors.parchment500, fontSize: 9, fontWeight: "400", fontFamily: "monospace" },
-  reachPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 1 },
+  metaRow: { flexDirection: "row", flexWrap: "nowrap", alignItems: "center", gap: 8, width: "100%" },
+  cardMeta: { color: colors.parchment500, fontSize: 9, fontWeight: "400", fontFamily: "monospace", flexShrink: 1, flexGrow: 0, minWidth: 0 },
+  reachPill: { borderColor: colors.dusk600, borderWidth: 1, backgroundColor: colors.dusk800, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 1, flexShrink: 0 },
   reachPillText: { color: colors.parchment500, fontSize: 8, fontFamily: "monospace" },
+  replyCountWrap: { flexShrink: 0, marginLeft: "auto" },
   replyCountText: { color: colors.parchment500, fontSize: 9, fontFamily: "monospace" },
 });

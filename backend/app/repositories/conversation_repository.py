@@ -70,12 +70,16 @@ async def add_message(
     sender_id: uuid.UUID,
     body: str,
     mentioned_user_ids: list[uuid.UUID] | None = None,
+    moderation_status: str = "pending",
+    moderation_labels: str | None = None,
 ) -> Message:
     message = Message(
         conversation_id=conversation_id,
         sender_id=sender_id,
         body=body,
         mentioned_user_ids=mentioned_user_ids or [],
+        moderation_status=moderation_status,
+        moderation_labels=moderation_labels,
     )
     db.add(message)
     await db.flush()
