@@ -110,8 +110,10 @@ export function AppNav() {
                   </span>
                 )}
                 {item.href === "/conversations" && (messageUnread > 0 || mentionUnread > 0) && (
-                  <span className={`inline-flex min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full text-dusk-950 text-[10px] font-bold ${mentionUnread > 0 ? "bg-signal-500" : "bg-rust-500"}`}>
-                    {mentionUnread > 0 ? "@" : messageUnread > 99 ? "99+" : messageUnread}
+                  <span className={`inline-flex h-[18px] px-2 items-center justify-center rounded-full text-dusk-950 text-[10px] font-bold whitespace-nowrap ${mentionUnread > 0 ? "bg-signal-500" : "bg-rust-500"}`}>
+                    {mentionUnread > 0
+                      ? "@ mention"
+                      : `${messageUnread > 99 ? "99+" : messageUnread} ${messageUnread === 1 ? "message" : "messages"}`}
                   </span>
                 )}
               </Link>

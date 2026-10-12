@@ -50,7 +50,6 @@ export default function FeedPage() {
         pathWithTagQuery("/feed/for-you", { tagIds: selectedTagIds, courseCodes: selectedCourseCodes })
       );
       setBroadcasts(rows);
-      await clientFetch("/feed/mark-seen", { method: "POST" });
     } catch {
       if (!silent) setError("Couldn't load your feed. Try refreshing.");
     } finally {

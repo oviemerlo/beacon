@@ -34,12 +34,14 @@ export function ConversationsScreen({ onOpenConversation }: { onOpenConversation
         setThreads(rows);
         setMentions(mentionRows);
         if (!silent) setLoading(false);
-        try {
-          await apiFetch("/conversations/mark-seen", { method: "POST" });
-          if (!active) return;
-          setThreads((current) => current.map((thread) => ({ ...thread, unread_count: 0 })));
-        } catch {
-          // Keep inbox rendering even if read-state update fails.
+        if (!silent) {
+          try {
+            await apiFetch("/conversations/mark-seen", { method: "POST" });
+            if (!active) return;
+            setThreads((current) => current.map((thread) => ({ ...thread, unread_count: 0 })));
+          } catch {
+            // Keep inbox rendering even if read-state update fails.
+          }
         }
       };
 

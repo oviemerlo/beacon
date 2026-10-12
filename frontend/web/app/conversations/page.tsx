@@ -30,11 +30,13 @@ export default function ConversationsPage() {
     setThreads(rows);
     setMentions(mentionRows);
     if (!silent) setLoading(false);
-    try {
-      await clientFetch("/conversations/mark-seen", { method: "POST" });
-      setThreads((current) => current.map((thread) => ({ ...thread, unread_count: 0 })));
-    } catch {
-      // Keep inbox rendering even if read-state update fails.
+    if (!silent) {
+      try {
+        await clientFetch("/conversations/mark-seen", { method: "POST" });
+        setThreads((current) => current.map((thread) => ({ ...thread, unread_count: 0 })));
+      } catch {
+        // Keep inbox rendering even if read-state update fails.
+      }
     }
   }, [debouncedQuery]);
 
@@ -167,7 +169,7 @@ export default function ConversationsPage() {
                             originWasMine ? "ml-auto" : "mr-auto"
                           }`}
                         >
-                          <p className="text-parchment-300 text-sm italic">
+                          <p className="text-parchment-300 text-sm italic break-all">
                             {quotePrefix}
                             {t.origin_broadcast_preview}
                           </p>
@@ -175,7 +177,7 @@ export default function ConversationsPage() {
                         {isIncomingLatest ? (
                           <div className="max-w-[62%] mr-auto">
                             <p className={isUnread ? "font-semibold" : "font-normal"}>{t.other_participant.display_name}:</p>
-                            <p className={`text-parchment-100 text-sm mt-1 ${isUnread ? "font-semibold" : "font-normal"}`}>
+                            <p className={`text-parchment-100 text-sm mt-1 break-all ${isUnread ? "font-semibold" : "font-normal"}`}>
                               {t.last_message ? <MentionBody text={t.last_message} /> : "No messages yet."}
                             </p>
                             <p className="text-parchment-500 text-[10px] font-mono mt-1">
@@ -185,7 +187,7 @@ export default function ConversationsPage() {
                         ) : (
                           <div className="max-w-[62%] ml-auto text-right">
                             <p className="font-normal">You:</p>
-                            <p className="text-parchment-100 text-sm font-normal mt-1">
+                            <p className="text-parchment-100 text-sm font-normal mt-1 break-all">
                               {t.last_message ? <MentionBody text={t.last_message} /> : "No messages yet."}
                             </p>
                             <p className="text-parchment-500 text-[10px] font-mono mt-1">

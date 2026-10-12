@@ -45,7 +45,6 @@ export function FeedScreen({
       );
       setBroadcasts(data);
       setError(null);
-      await apiFetch("/feed/mark-seen", { method: "POST" });
     } catch {
       if (!silent) setError("Couldn't load your feed. Try refreshing.");
     }
@@ -57,6 +56,7 @@ export function FeedScreen({
   useFocusEffect(
     useCallback(() => {
       void load({ silent: true });
+      void apiFetch("/feed/mark-seen", { method: "POST" }).catch(() => {});
       apiFetch<UserProfile>("/users/me")
         .then((me) => {
           setUser(me);

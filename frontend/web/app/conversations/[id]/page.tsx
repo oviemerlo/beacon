@@ -278,7 +278,7 @@ export default function ConversationDetailPage() {
                   ? "Your broadcast:"
                   : `Broadcast from ${context.origin_broadcast_sender_display_name}:`}
               </p>
-              <p className="text-parchment-300 text-sm mt-1 italic">{context.origin_broadcast_preview}</p>
+              <p className="text-parchment-300 text-sm mt-1 italic break-all">{context.origin_broadcast_preview}</p>
             </div>
           </div>
         )}

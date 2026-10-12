@@ -165,3 +165,6 @@ start frontend/mobile command: npx expo run:ios
 start frontend/mobile command for android: source ~/.zshrc
                                           npx expo run:android
 backend: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+production build: eas build --platform all --profile production
+production submit: eas submit --platform all --profile production
+
