@@ -413,7 +413,10 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
             style={[styles.input, { height: composerHeight }]}
             placeholder={isComposerFocused ? "" : "Message… Use @ to mention someone in this Echo"}
             placeholderTextColor={colors.parchment500}
-            onFocus={() => setIsComposerFocused(true)}
+            onFocus={() => {
+              setIsComposerFocused(true);
+              requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+            }}
             onBlur={() => setIsComposerFocused(false)}
             value={draft}
             onChangeText={(value) => {
@@ -474,7 +477,7 @@ const styles = StyleSheet.create({
   memberName: { color: colors.parchment100, fontSize: 14, flex: 1 },
   promoteText: { color: colors.signal400, fontSize: 13, fontWeight: "600" },
   list: { flex: 1 },
-  listContent: { padding: 16, gap: 10, paddingBottom: 12, flexGrow: 1 },
+  listContent: { padding: 16, gap: 10, paddingBottom: 24, flexGrow: 1 },
   originHeader: {
     maxWidth: "78%",
     borderLeftWidth: 3,
