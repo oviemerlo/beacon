@@ -2,14 +2,12 @@
   "expo": {
     "name": "EchoToCrowd",
     "slug": "echotocrowd-mobile",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "icon": "./assets/echotocrowd-icon-1024.png",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "scheme": "echotocrowd",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["assets/*"],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.echotocrowd.app",
@@ -22,32 +20,34 @@
       }
     },
     "android": {
-      "edgeToEdgeEnabled": false,
-      "softwareKeyboardLayoutMode": "pan",
+      "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.echotocrowd.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/echotocrowd-icon-1024.png",
         "backgroundColor": "#D85A30"
       },
       "permissions": [
-        "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION"
       ]
-    },
-    "androidStatusBar": {
-      "barStyle": "light-content",
-      "backgroundColor": "#0D0E14"
-    },
-    "androidNavigationBar": {
-      "barStyle": "light-content",
-      "backgroundColor": "#12131C"
     },
     "plugins": [
       "expo-secure-store",
-      "expo-location",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Show nearby broadcasts"
+        }
+      ],
       "expo-apple-authentication",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "EchoToCrowd lets you attach photos to echoes and messages.",
+          "cameraPermission": "EchoToCrowd lets you take photos to share in echoes and messages."
+        }
+      ],
       [
         "@react-native-google-signin/google-signin",
         {
