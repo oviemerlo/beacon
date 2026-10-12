@@ -30,6 +30,7 @@ from app.services.exceptions import ForbiddenError, NotFoundError, ValidationErr
 from app.services.text_moderation_service import TextModerationResult, moderate_text
 from app.services.user_service import require_terms_accepted
 from app.services.link_preview_service import schedule_previews
+from app.utils.config import settings
 
 
 async def _assert_messaging_allowed(db: AsyncSession, user_a: uuid.UUID, user_b: uuid.UUID) -> None:
@@ -376,20 +377,34 @@ async def get_conversation_context(db: AsyncSession, user_id: uuid.UUID, convers
     other_user = await user_repository.get_by_id(db, other_user_id) if other_user_id is not None else None
     participant_count = await conversation_repository.participant_count(db, conversation.id)
     participants: list[dict] = []
+    participant_rows = []
     if conversation.name is not None:
         participant_rows = await conversation_repository.get_participants(db, conversation.id)
-        for row in participant_rows:
-            member = await user_repository.get_by_id(db, row.user_id)
-            participants.append(
-                {
-                    "user_id": str(row.user_id),
-                    "display_name": member.display_name if member is not None else "Unknown",
-                    "role": row.role,
-                }
-            )
+    avatar_ids = [row.user_id for row in participant_rows]
+    if other_user is not None:
+        avatar_ids.append(other_user.id)
+    avatars = await upload_repository.latest_clean_avatar_ids_for_users(db, avatar_ids)
+    for row in participant_rows:
+        member = await user_repository.get_by_id(db, row.user_id)
+        avatar_file_id = avatars.get(row.user_id)
+        participants.append(
+            {
+                "user_id": str(row.user_id),
+                "display_name": member.display_name if member is not None else "Unknown",
+                "role": row.role,
+                "avatar_file_id": str(avatar_file_id) if avatar_file_id else None,
+            }
+        )
+    other_avatar_file_id = avatars.get(other_user.id) if other_user is not None else None
+    group_invite = (
+        await conversation_repository.get_active_invite_for_conversation(db, conversation.id)
+        if conversation.name is not None
+        else None
+    )
     return {
         "id": str(conversation.id),
         "name": conversation.name,
+        "created_by_user_id": str(conversation.created_by_user_id) if conversation.created_by_user_id else None,
         "max_participants": conversation.max_participants,
         "participant_count": participant_count,
         "participants": participants,
@@ -399,6 +414,8 @@ async def get_conversation_context(db: AsyncSession, user_id: uuid.UUID, convers
         "origin_broadcast_sender_display_name": origin_sender.display_name if origin_sender is not None else "Unknown",
         "other_participant_id": str(other_user_id) if other_user_id is not None else None,
         "other_participant_display_name": other_user.display_name if other_user is not None else (conversation.name or "Unknown"),
+        "other_participant_avatar_file_id": str(other_avatar_file_id) if other_avatar_file_id else None,
+        "invite_url": f"{settings.FRONTEND_URL}/join/{group_invite.token}" if group_invite else None,
     }
 
 
@@ -459,6 +476,7 @@ async def list_groups_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[dic
     items: list[dict] = []
     for conversation in conversations:
         latest = await conversation_repository.latest_message_for_conversation(db, conversation.id)
+        invite = await conversation_repository.get_active_invite_for_conversation(db, conversation.id)
         items.append(
             {
                 "id": str(conversation.id),
@@ -468,6 +486,7 @@ async def list_groups_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[dic
                 "last_message": latest.body if latest else "",
                 "last_message_at": latest.sent_at if latest else conversation.created_at,
                 "unread_count": await conversation_repository.count_unread_in_conversation(db, user_id, conversation.id),
+                "invite_url": f"{settings.FRONTEND_URL}/join/{invite.token}" if invite else None,
             }
         )
     return items
@@ -492,4 +511,24 @@ async def promote_to_admin(
     if not await conversation_repository.is_participant(db, conversation.id, target_user_id):
         raise NotFoundError("That user isn't in this group")
     await conversation_repository.promote_many(db, conversation.id, [target_user_id])
+    await db.commit()
+
+
+async def demote_from_admin(
+    db: AsyncSession, acting_user_id: uuid.UUID, conversation_id: str, target_user_id: uuid.UUID
+) -> None:
+    conversation = await _assert_participant(db, acting_user_id, conversation_id)
+    if conversation.name is None:
+        raise ForbiddenError("Can't change roles in a direct conversation")
+    if conversation.created_by_user_id != acting_user_id:
+        raise ForbiddenError("Only the group's creator can remove admin rights")
+    if not await conversation_repository.is_participant(db, conversation.id, target_user_id):
+        raise NotFoundError("That user isn't in this group")
+    if not await conversation_repository.is_admin(db, conversation.id, target_user_id):
+        return
+    if target_user_id == acting_user_id:
+        admin_count = await conversation_repository.count_admins(db, conversation.id)
+        if admin_count <= 1:
+            raise ForbiddenError("Assign another admin before removing your own admin rights")
+    await conversation_repository.demote_many(db, conversation.id, [target_user_id])
     await db.commit()

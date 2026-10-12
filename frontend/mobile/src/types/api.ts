@@ -212,7 +212,10 @@ export interface ConversationContext {
   origin_broadcast_sender_display_name: string;
   other_participant_id: string | null;
   other_participant_display_name: string;
+  other_participant_avatar_file_id?: string | null;
   name?: string | null;
+  created_by_user_id?: string | null;
+  invite_url?: string | null;
   max_participants?: number | null;
   participant_count?: number | null;
   participants?: ConversationParticipant[];
@@ -222,6 +225,7 @@ export interface ConversationParticipant {
   user_id: string;
   display_name: string;
   role: "admin" | "member" | string;
+  avatar_file_id?: string | null;
 }
 
 export interface GroupSummary {
@@ -232,6 +236,7 @@ export interface GroupSummary {
   last_message: string;
   last_message_at: string;
   unread_count: number;
+  invite_url?: string | null;
 }
 
 export interface GroupCreateResult {

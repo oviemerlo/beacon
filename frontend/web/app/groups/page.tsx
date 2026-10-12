@@ -56,6 +56,24 @@ export default function GroupsPage() {
                 >
                   <p className="font-medium text-parchment-100">{group.name || "Untitled group"}</p>
                   <p className="text-parchment-500 text-sm mt-1">{countLabel}</p>
+                  {group.invite_url && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <p className="text-parchment-500 text-xs font-mono truncate">
+                        link: {group.invite_url.replace(/^https?:\/\//, "")}
+                      </p>
+                      <button
+                        type="button"
+                        className="text-xs text-signal-400 hover:text-signal-300 shrink-0"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void navigator.clipboard.writeText(group.invite_url!);
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  )}
                   <p className="text-parchment-100 text-sm mt-2">
                     {group.last_message || "No messages yet."}
                   </p>

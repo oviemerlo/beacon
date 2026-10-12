@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
 import { BroadcastAttachments } from "@/components/BroadcastAttachments";
 import { EchoMediaLayout } from "@/components/EchoAttachments";
+import { SenderAvatar } from "@/components/SenderAvatar";
 import { LinkPreviewList } from "@/components/LinkPreviewCard";
 import { clientFetch } from "@/helpers/client-api";
 import { applyMention, mentionTriggerFromInput, splitMentionParts } from "@/helpers/mentions";
@@ -19,6 +20,7 @@ export default function ConversationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [myAvatarId, setMyAvatarId] = useState<string | null>(null);
   const [context, setContext] = useState<ConversationContext | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
@@ -43,6 +45,7 @@ export default function ConversationDetailPage() {
       clientFetch<Message[]>(`/conversations/${conversationId}/messages`),
     ]);
     setCurrentUserId(me.id);
+    setMyAvatarId(me.avatar_file_id ?? null);
     setContext(details);
     setMessages(data);
   }
@@ -192,11 +195,18 @@ export default function ConversationDetailPage() {
   const isAdmin = participants.some(
     (participant) => participant.user_id === currentUserId && participant.role === "admin"
   );
+  const isCreator = context?.created_by_user_id === currentUserId;
 
   function senderLabel(senderId: string): string {
     if (String(senderId) === String(currentUserId)) return "You";
     if (!isGroup) return context?.other_participant_display_name ?? "Unknown";
     return participants.find((participant) => participant.user_id === senderId)?.display_name ?? "Unknown";
+  }
+
+  function senderAvatarId(senderId: string): string | null {
+    if (String(senderId) === String(currentUserId)) return myAvatarId;
+    if (!isGroup) return context?.other_participant_avatar_file_id ?? null;
+    return participants.find((p) => p.user_id === senderId)?.avatar_file_id ?? null;
   }
 
   async function leaveGroup() {
@@ -221,6 +231,18 @@ export default function ConversationDetailPage() {
       await load();
     } catch {
       window.alert("Couldn't promote this member.");
+    }
+  }
+
+  async function demote(participant: ConversationParticipant) {
+    if (!conversationId) return;
+    try {
+      await clientFetch(`/groups/${conversationId}/participants/${participant.user_id}/demote`, {
+        method: "POST",
+      });
+      await load();
+    } catch {
+      window.alert("Couldn't remove admin rights from this member.");
     }
   }
 
@@ -260,9 +282,20 @@ export default function ConversationDetailPage() {
             </div>
           </div>
         )}
-        {isGroup && isAdmin && (
+        {isGroup && (
           <div className="card mb-4">
-            <p className="text-sm font-medium mb-2">Members</p>
+            <p className="text-sm font-medium mb-2">
+              Members
+              {context?.invite_url && (
+                <button
+                  type="button"
+                  className="ml-3 text-xs font-normal text-signal-400 hover:text-signal-300"
+                  onClick={() => void navigator.clipboard.writeText(context.invite_url!)}
+                >
+                  Copy invite link
+                </button>
+              )}
+            </p>
             <ul className="flex flex-col gap-2">
               {participants.map((participant) => (
                 <li key={participant.user_id} className="flex items-center justify-between gap-3">
@@ -271,15 +304,26 @@ export default function ConversationDetailPage() {
                     {participant.user_id === currentUserId ? " (you)" : ""}
                     {participant.role === "admin" ? " · admin" : ""}
                   </p>
-                  {participant.role !== "admin" && (
-                    <button
-                      type="button"
-                      className="text-sm text-signal-400 hover:text-signal-300"
-                      onClick={() => void promote(participant)}
-                    >
-                      Make admin
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {isAdmin && participant.role !== "admin" && (
+                      <button
+                        type="button"
+                        className="text-sm text-signal-400 hover:text-signal-300"
+                        onClick={() => void promote(participant)}
+                      >
+                        Make admin
+                      </button>
+                    )}
+                    {isCreator && participant.role === "admin" && (
+                      <button
+                        type="button"
+                        className="text-sm text-rust-400 hover:text-rust-300"
+                        onClick={() => void demote(participant)}
+                      >
+                        Remove admin
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -311,7 +355,14 @@ export default function ConversationDetailPage() {
               };
 
               return (
-                <div key={m.id} className={`flex w-full ${isMine ? "justify-end" : "justify-start"}`}>
+                <div key={m.id} className={`flex w-full items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}>
+                  {!isMine && (
+                    <SenderAvatar
+                      fileId={senderAvatarId(m.sender_id)}
+                      name={senderLabel(m.sender_id)}
+                      className="h-7 w-7 shrink-0 mb-1 rounded-full border border-dusk-600"
+                    />
+                  )}
                   <div
                     className={`card relative overflow-visible py-2.5 px-3.5 w-[50%] ${
                       mentionedMe ? "border-signal-500 bg-signal-500/10" : ""

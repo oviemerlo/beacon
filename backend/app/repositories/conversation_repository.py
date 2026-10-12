@@ -382,6 +382,19 @@ async def get_invite_by_token(db: AsyncSession, token: str) -> ConversationInvit
     return result.scalar_one_or_none()
 
 
+async def get_active_invite_for_conversation(db: AsyncSession, conversation_id: uuid.UUID) -> ConversationInvite | None:
+    result = await db.execute(
+        select(ConversationInvite)
+        .where(
+            ConversationInvite.conversation_id == conversation_id,
+            ConversationInvite.revoked_at.is_(None),
+        )
+        .order_by(ConversationInvite.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def create_invite(
     db: AsyncSession,
     conversation_id: uuid.UUID,
@@ -474,3 +487,26 @@ async def promote_many(db: AsyncSession, conversation_id: uuid.UUID, user_ids: l
         .values(role="admin")
     )
     await db.flush()
+
+
+async def demote_many(db: AsyncSession, conversation_id: uuid.UUID, user_ids: list[uuid.UUID]) -> None:
+    if not user_ids:
+        return
+    await db.execute(
+        update(ConversationParticipant)
+        .where(
+            ConversationParticipant.conversation_id == conversation_id,
+            ConversationParticipant.user_id.in_(user_ids),
+        )
+        .values(role="member")
+    )
+
+
+async def count_admins(db: AsyncSession, conversation_id: uuid.UUID) -> int:
+    result = await db.execute(
+        select(func.count(ConversationParticipant.user_id)).where(
+            ConversationParticipant.conversation_id == conversation_id,
+            ConversationParticipant.role == "admin",
+        )
+    )
+    return int(result.scalar_one() or 0)

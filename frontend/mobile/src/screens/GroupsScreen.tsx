@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, Share } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
 import { formatMessageSentAt } from "../helpers/time";
@@ -75,6 +75,17 @@ export function GroupsScreen({
                 <Card>
                   <Text style={styles.groupName}>{group.name || "Untitled group"}</Text>
                   <Text style={styles.count}>{countLabel}</Text>
+                  {group.invite_url ? (
+                    <Pressable
+                      onPress={() => void Share.share({ message: group.invite_url!, url: group.invite_url! })}
+                      style={styles.inviteRow}
+                      hitSlop={6}
+                    >
+                      <Text style={styles.inviteText} numberOfLines={1}>
+                        link: {group.invite_url.replace(/^https?:\/\//, "")}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   <Text style={styles.preview}>{group.last_message || "No messages yet."}</Text>
                   <Text style={styles.time}>{formatMessageSentAt(group.last_message_at)}</Text>
                 </Card>
@@ -96,6 +107,8 @@ const styles = StyleSheet.create({
   list: { gap: 10, paddingBottom: 24 },
   groupName: { color: colors.parchment100, fontWeight: "600", fontSize: 16 },
   count: { color: colors.parchment500, fontSize: 13, marginTop: 4 },
+  inviteRow: { marginTop: 6 },
+  inviteText: { color: colors.signal400, fontSize: 11, fontFamily: "monospace" },
   preview: { color: colors.parchment100, fontSize: 14, marginTop: 8 },
   time: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace", marginTop: 4 },
   emptyTitle: { color: colors.parchment100, fontWeight: "600", textAlign: "center" },

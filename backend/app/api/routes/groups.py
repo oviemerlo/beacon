@@ -50,3 +50,13 @@ async def promote_participant(
     db: AsyncSession = Depends(get_db),
 ):
     await conversation_service.promote_to_admin(db, current_user.id, conversation_id, target_user_id)
+
+
+@router.post("/{conversation_id}/participants/{target_user_id}/demote", status_code=204)
+async def demote_participant(
+    conversation_id: str,
+    target_user_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await conversation_service.demote_from_admin(db, current_user.id, conversation_id, target_user_id)

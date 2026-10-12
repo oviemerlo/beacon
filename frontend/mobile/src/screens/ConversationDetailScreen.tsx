@@ -11,6 +11,7 @@ import { formatMessageSentAt } from "../helpers/time";
 import { uploadMessageAttachment, type PickedUpload } from "../helpers/uploads";
 import { colors, radii } from "../theme/tokens";
 import { BroadcastAttachments } from "../components/BroadcastAttachments";
+import { SenderAvatar } from "../components/SenderAvatar";
 import { EchoMediaLayout } from "../components/EchoAttachments";
 import { LinkPreviewList } from "../components/LinkPreviewCard";
 import type { ConversationContext, ConversationParticipant, MentionCandidate, Message, UserProfile } from "../types/api";
@@ -19,6 +20,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [myAvatarId, setMyAvatarId] = useState<string | null>(null);
   const [context, setContext] = useState<ConversationContext | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
@@ -45,6 +47,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
       apiFetch<Message[]>(`/conversations/${conversationId}/messages`),
     ]);
     setCurrentUserId(me.id);
+    setMyAvatarId(me.avatar_file_id ?? null);
     setContext(details);
     setMessages(data);
   }
@@ -187,6 +190,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
   const isAdmin = participants.some(
     (participant) => participant.user_id === currentUserId && participant.role === "admin"
   );
+  const isCreator = context?.created_by_user_id === currentUserId;
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -199,6 +203,12 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
     if (String(senderId) === String(currentUserId)) return "You";
     if (!isGroup) return context?.other_participant_display_name ?? "Unknown";
     return participants.find((participant) => participant.user_id === senderId)?.display_name ?? "Unknown";
+  }
+
+  function senderAvatarId(senderId: string): string | null {
+    if (String(senderId) === String(currentUserId)) return myAvatarId;
+    if (!isGroup) return context?.other_participant_avatar_file_id ?? null;
+    return participants.find((p) => p.user_id === senderId)?.avatar_file_id ?? null;
   }
 
   function leaveGroup() {
@@ -233,6 +243,17 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
       await load();
     } catch {
       Alert.alert("Couldn't promote this member.");
+    }
+  }
+
+  async function demote(participant: ConversationParticipant) {
+    try {
+      await apiFetch(`/groups/${conversationId}/participants/${participant.user_id}/demote`, {
+        method: "POST",
+      });
+      await load();
+    } catch {
+      Alert.alert("Couldn't remove admin rights from this member.");
     }
   }
 
@@ -274,7 +295,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
                 </View>
               </View>
             ) : null}
-            {isGroup && isAdmin ? (
+            {isGroup ? (
               <View style={styles.membersCard}>
                 <Text style={styles.membersTitle}>Members</Text>
                 {participants.map((participant) => (
@@ -284,9 +305,14 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
                       {participant.user_id === currentUserId ? " (you)" : ""}
                       {participant.role === "admin" ? " · admin" : ""}
                     </Text>
-                    {participant.role !== "admin" ? (
+                    {isAdmin && participant.role !== "admin" ? (
                       <Pressable onPress={() => void promote(participant)}>
                         <Text style={styles.promoteText}>Make admin</Text>
+                      </Pressable>
+                    ) : null}
+                    {isCreator && participant.role === "admin" ? (
+                      <Pressable onPress={() => void demote(participant)}>
+                        <Text style={styles.demoteText}>Remove admin</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -326,6 +352,10 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
 
           return (
             <View style={[styles.row, isMine ? styles.rowOutgoing : styles.rowIncoming]}>
+              <View style={isMine ? styles.rowOutgoingInner : styles.rowIncomingInner}>
+              {!isMine ? (
+                <SenderAvatar fileId={senderAvatarId(item.sender_id)} name={senderLabel(item.sender_id)} size={28} />
+              ) : null}
               <View style={[styles.bubble, mentionedMe && styles.bubbleMentioned]}>
                 <View style={styles.bubbleInner}>
                   {isDeleted ? (
@@ -383,6 +413,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
                     </Text>
                   </View>
                 </View>
+              </View>
               </View>
             </View>
           );
@@ -476,6 +507,7 @@ const styles = StyleSheet.create({
   memberRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingVertical: 6 },
   memberName: { color: colors.parchment100, fontSize: 14, flex: 1 },
   promoteText: { color: colors.signal400, fontSize: 13, fontWeight: "600" },
+  demoteText: { color: colors.rust400, fontSize: 13, fontWeight: "600" },
   list: { flex: 1 },
   listContent: { padding: 16, gap: 10, paddingBottom: 24, flexGrow: 1 },
   originHeader: {
@@ -499,9 +531,11 @@ const styles = StyleSheet.create({
     borderColor: colors.dusk700,
     borderWidth: 1,
     borderRadius: radii.beacon,
-    width: "78%",
+    flexShrink: 1,
     overflow: "visible",
   },
+  rowIncomingInner: { width: "78%", flexDirection: "row", alignItems: "flex-end", gap: 8 },
+  rowOutgoingInner: { width: "78%", flexDirection: "row", alignItems: "flex-end", justifyContent: "flex-end" },
   bubbleInner: {
     width: "100%",
     padding: 10,

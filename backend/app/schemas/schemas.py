@@ -240,6 +240,7 @@ class ConversationParticipantOut(BaseModel):
     user_id: uuid.UUID
     display_name: str
     role: str
+    avatar_file_id: uuid.UUID | None = None
 
 
 class ParticipantOut(BaseModel):
@@ -262,10 +263,13 @@ class ConversationContextOut(BaseModel):
     origin_broadcast_sender_display_name: str
     other_participant_id: uuid.UUID | None = None
     other_participant_display_name: str
+    other_participant_avatar_file_id: uuid.UUID | None = None
     name: str | None = None
+    created_by_user_id: uuid.UUID | None = None
     max_participants: int | None = None
     participant_count: int | None = None
     participants: list[ConversationParticipantOut] = []
+    invite_url: str | None = None
 
 
 class GroupCreateIn(BaseModel):
@@ -286,6 +290,7 @@ class GroupOut(BaseModel):
     last_message: str
     last_message_at: datetime
     unread_count: int
+    invite_url: str | None = None
 
 
 class InvitePreviewOut(BaseModel):
