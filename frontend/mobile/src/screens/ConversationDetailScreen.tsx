@@ -40,16 +40,25 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
   const listRef = useRef<FlatList>(null);
 
   useKeyboardHandler({
-    onMove: (e) => { "worklet"; runOnJS(setKbHeight)(e.height); },
+    onMove: (e) => {
+      "worklet";
+      runOnJS(setKbHeight)(e.height);
+    },
     onEnd: (e) => {
       "worklet";
       runOnJS(setKbHeight)(e.height);
-      runOnJS(() => {
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-      })();
     },
   }, []);
-  const draftRef = useRef("");
+
+  useEffect(() => {
+    if (kbHeight > 0) {
+      const t = setTimeout(() => {
+        listRef.current?.scrollToEnd({ animated: true });
+      }, 60);
+      return () => clearTimeout(t);
+    }
+  }, [kbHeight]);
+  const draftRef = useRef("");  
   const mentionFetchedFor = useRef<string | null>(null);
   const mentionFetchInFlight = useRef(false);
 
