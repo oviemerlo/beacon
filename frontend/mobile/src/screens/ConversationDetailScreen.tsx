@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Alert, View, Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
-import { KeyboardEvents, KeyboardStickyView, useKeyboardHandler } from "react-native-keyboard-controller";
+import { KeyboardStickyView, useKeyboardHandler } from "react-native-keyboard-controller";
 import { runOnJS } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -41,7 +41,13 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
 
   useKeyboardHandler({
     onMove: (e) => { "worklet"; runOnJS(setKbHeight)(e.height); },
-    onEnd: (e) => { "worklet"; runOnJS(setKbHeight)(e.height); },
+    onEnd: (e) => {
+      "worklet";
+      runOnJS(setKbHeight)(e.height);
+      runOnJS(() => {
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+      })();
+    },
   }, []);
   const draftRef = useRef("");
   const mentionFetchedFor = useRef<string | null>(null);
@@ -65,13 +71,6 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
-
-  useEffect(() => {
-    const showSub = KeyboardEvents.addListener("keyboardDidShow", () => {
-      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-    });
-    return () => showSub.remove();
-  }, []);
 
   async function loadMentionCandidates(reason: string) {
     const echoId = context?.origin_broadcast_id ?? null;
