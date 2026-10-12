@@ -6,8 +6,8 @@ import { RootNavigator } from "./src/navigation/RootNavigator";
 export default function App() {
   return (
     <SafeAreaProvider>
-      <KeyboardProvider>
-        <StatusBar style="light" backgroundColor="#0D0E14" translucent={false} />
+      <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
+        <StatusBar translucent backgroundColor="transparent" style="light" />
         <RootNavigator />
       </KeyboardProvider>
     </SafeAreaProvider>

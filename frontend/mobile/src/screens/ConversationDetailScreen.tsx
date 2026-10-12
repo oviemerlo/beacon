@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Alert, View, Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
-import { KeyboardStickyView } from "react-native-keyboard-controller";
+import { KeyboardEvents, KeyboardStickyView, useKeyboardHandler } from "react-native-keyboard-controller";
+import { runOnJS } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
@@ -29,6 +30,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [composerHeight, setComposerHeight] = useState(44);
+  const [kbHeight, setKbHeight] = useState(0);
   const [candidates, setCandidates] = useState<MentionCandidate[]>([]);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionLoading, setMentionLoading] = useState(false);
@@ -36,6 +38,11 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
   const [mentionStart, setMentionStart] = useState(0);
   const [cursor, setCursor] = useState(0);
   const listRef = useRef<FlatList>(null);
+
+  useKeyboardHandler({
+    onMove: (e) => { "worklet"; runOnJS(setKbHeight)(e.height); },
+    onEnd: (e) => { "worklet"; runOnJS(setKbHeight)(e.height); },
+  }, []);
   const draftRef = useRef("");
   const mentionFetchedFor = useRef<string | null>(null);
   const mentionFetchInFlight = useRef(false);
@@ -58,6 +65,13 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
+
+  useEffect(() => {
+    const showSub = KeyboardEvents.addListener("keyboardDidShow", () => {
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    });
+    return () => showSub.remove();
+  }, []);
 
   async function loadMentionCandidates(reason: string) {
     const echoId = context?.origin_broadcast_id ?? null;
@@ -281,7 +295,10 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
         onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         keyExtractor={(m) => m.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: composerHeight + insets.bottom + 80 + kbHeight },
+        ]}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <>
@@ -437,8 +454,8 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
       )}
       {sendError && <Text style={styles.sendError}>{sendError}</Text>}
       <KeyboardStickyView
-        offset={{ closed: 0, opened: insets.bottom }}
-        style={styles.composer}
+        offset={{ closed: 0, opened: 0 }}
+        style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}
       >
         <BroadcastAttachments files={attachments} onChange={setAttachments} compact />
         <View style={styles.composerRow}>
@@ -514,7 +531,6 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     gap: 10,
-    paddingBottom: 120,
     flexGrow: 1,
   },
   originHeader: {

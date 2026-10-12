@@ -2,7 +2,7 @@
   "expo": {
     "name": "EchoToCrowd",
     "slug": "echotocrowd-mobile",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "icon": "./assets/echotocrowd-icon-1024.png",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -21,7 +21,7 @@
     },
     "android": {
       "edgeToEdgeEnabled": true,
-      "softwareKeyboardLayoutMode": "resize",
+      "softwareKeyboardLayoutMode": "pan",
       "package": "com.echotocrowd.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/echotocrowd-icon-1024.png",
