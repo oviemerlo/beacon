@@ -278,6 +278,8 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
         ref={listRef}
         style={styles.list}
         data={messages}
+        onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         keyExtractor={(m) => m.id}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
@@ -357,42 +359,42 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
                 <SenderAvatar fileId={senderAvatarId(item.sender_id)} name={senderLabel(item.sender_id)} size={28} />
               ) : null}
               <View style={[styles.bubble, mentionedMe && styles.bubbleMentioned]}>
+                {!isDeleted && (
+                  <View style={styles.bubbleCorner}>
+                    <FeedCardOverflowMenu
+                      senderName={isMine ? "your message" : senderLabel(item.sender_id)}
+                      actions={
+                        isMine
+                          ? [{ label: "Delete", onSelect: confirmDelete }]
+                          : [
+                              {
+                                label: "Report",
+                                onSelect: () => {
+                                  void (async () => {
+                                    try {
+                                      await pickReasonAndSubmitReport("message", item.id);
+                                    } catch {
+                                      // Keep conversation stable on failure.
+                                    }
+                                  })();
+                                },
+                              },
+                              blockUserAction(item.sender_id, senderLabel(item.sender_id), () => {
+                                if (!isGroup) navigation.navigate("Messages", { screen: "ConversationsHome" });
+                              }),
+                              { label: "Remove for me", onSelect: confirmDelete },
+                            ]
+                      }
+                    />
+                  </View>
+                )}
                 <View style={styles.bubbleInner}>
                   {isDeleted ? (
                     <Text style={styles.deletedBubbleText}>
                       {isMine ? "You deleted this message" : "This message was removed"}
                     </Text>
                   ) : (
-                    <EchoMediaLayout
-                      attachments={item.attachments}
-                      corner={
-                        <FeedCardOverflowMenu
-                          senderName={isMine ? "your message" : senderLabel(item.sender_id)}
-                          actions={
-                            isMine
-                              ? [{ label: "Delete", onSelect: confirmDelete }]
-                              : [
-                                  {
-                                    label: "Report",
-                                    onSelect: () => {
-                                      void (async () => {
-                                        try {
-                                          await pickReasonAndSubmitReport("message", item.id);
-                                        } catch {
-                                          // Keep conversation stable on failure.
-                                        }
-                                      })();
-                                    },
-                                  },
-                                  blockUserAction(item.sender_id, senderLabel(item.sender_id), () => {
-                                    if (!isGroup) navigation.navigate("Messages", { screen: "ConversationsHome" });
-                                  }),
-                                  { label: "Remove for me", onSelect: confirmDelete },
-                                ]
-                          }
-                        />
-                      }
-                    >
+                    <EchoMediaLayout attachments={item.attachments}>
                       {mentionedMe && <Text style={styles.mentionedLabel}>You were mentioned</Text>}
                       <Text style={[styles.senderLabel, !isUnread && styles.senderLabelRead]}>
                         {senderLabel(item.sender_id)}:
@@ -436,7 +438,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
       {sendError && <Text style={styles.sendError}>{sendError}</Text>}
       <KeyboardStickyView
         offset={{ closed: 0, opened: insets.bottom }}
-        style={[styles.composer, { paddingBottom: 16 + insets.bottom }]}
+        style={styles.composer}
       >
         <BroadcastAttachments files={attachments} onChange={setAttachments} compact />
         <View style={styles.composerRow}>
@@ -466,7 +468,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
             textAlignVertical="top"
             onContentSizeChange={(event) => {
               const measuredHeight = Math.ceil(event.nativeEvent.contentSize.height);
-              const nextHeight = Math.max(44, Math.min(140, measuredHeight + 12));
+              const nextHeight = Math.max(44, Math.min(140, measuredHeight));
               setComposerHeight(nextHeight);
             }}
           />
@@ -509,7 +511,12 @@ const styles = StyleSheet.create({
   promoteText: { color: colors.signal400, fontSize: 13, fontWeight: "600" },
   demoteText: { color: colors.rust400, fontSize: 13, fontWeight: "600" },
   list: { flex: 1 },
-  listContent: { padding: 16, gap: 10, paddingBottom: 24, flexGrow: 1 },
+  listContent: {
+    padding: 16,
+    gap: 10,
+    paddingBottom: 120,
+    flexGrow: 1,
+  },
   originHeader: {
     maxWidth: "78%",
     borderLeftWidth: 3,
@@ -531,14 +538,37 @@ const styles = StyleSheet.create({
     borderColor: colors.dusk700,
     borderWidth: 1,
     borderRadius: radii.beacon,
-    flexShrink: 1,
+    flex: 1,
+    minWidth: 0,
+    position: "relative",
     overflow: "visible",
   },
-  rowIncomingInner: { width: "78%", flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  rowOutgoingInner: { width: "78%", flexDirection: "row", alignItems: "flex-end", justifyContent: "flex-end" },
+  bubbleCorner: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    zIndex: 5,
+    elevation: 5,
+  },
+  rowIncomingInner: {
+    maxWidth: "85%",
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    flexShrink: 1,
+  },
+  rowOutgoingInner: {
+    maxWidth: "85%",
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "flex-end",
+    alignSelf: "flex-end",
+    flexShrink: 1,
+  },
   bubbleInner: {
     width: "100%",
     padding: 10,
+    flexShrink: 1,
   },
   bubbleMentioned: { borderColor: colors.signal500, backgroundColor: `${colors.signal500}1A` },
   mentionedLabel: { color: colors.signal400, fontSize: 10, fontFamily: "monospace", marginBottom: 4 },
@@ -563,7 +593,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontStyle: "italic",
   },
-  bubbleText: { color: colors.parchment100, fontSize: 14 },
+  bubbleText: {
+    color: colors.parchment100,
+    fontSize: 14,
+    flexShrink: 1,
+    flexWrap: "wrap",
+  },
   bubbleTextUnread: { fontWeight: "700" },
   bubbleTextRead: { fontWeight: "400" },
   bubbleMetaRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, marginTop: 6, overflow: "visible" },
@@ -571,6 +606,7 @@ const styles = StyleSheet.create({
   composer: {
     paddingHorizontal: 16,
     paddingTop: 12,
+    paddingBottom: 12,
     gap: 8,
     borderTopWidth: 1,
     borderTopColor: colors.dusk700,
