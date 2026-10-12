@@ -74,6 +74,16 @@ async def list_messages(conversation_id: str, current_user: User = Depends(get_c
     return await conversation_service.list_messages(db, current_user.id, conversation_id)
 
 
+@router.delete("/{conversation_id}/messages/{message_id}", status_code=204)
+async def delete_message(
+    conversation_id: str,
+    message_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await conversation_service.delete_message(db, current_user.id, conversation_id, message_id)
+
+
 @router.post("/{conversation_id}/messages", status_code=201, response_model=MessageOut)
 @limiter.limit("60/hour")
 async def send_message(

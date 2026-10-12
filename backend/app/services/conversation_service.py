@@ -105,13 +105,31 @@ async def _attach_message_attachments(db: AsyncSession, messages: list[Message])
 
 async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> list[Message]:
     conversation = await _assert_participant(db, user_id, conversation_id)
-    messages = await conversation_repository.list_messages(db, conversation_id)
+    messages = await conversation_repository.list_messages(db, conversation_id, viewer_id=user_id)
     await conversation_repository.mark_read_for_user_in_conversation(db, user_id, conversation.id)
     await notification_repository.mark_read_for_conversation(db, user_id, conversation.id)
     await db.commit()
     await _attach_message_link_previews(db, messages)
     await _attach_message_attachments(db, messages)
+    for message in messages:
+        if message.deleted_at is not None:
+            message.body = ""
+            message.link_previews = []
+            message._api_attachments = []
     return messages
+
+
+async def delete_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: str, message_id: str) -> None:
+    conversation = await _assert_participant(db, user_id, conversation_id)
+    message = await conversation_repository.get_message_by_id(db, message_id)
+    if message is None or message.conversation_id != conversation.id:
+        raise NotFoundError("Message not found")
+    if message.sender_id == user_id:
+        if message.deleted_at is None:
+            await conversation_repository.soft_delete_message(db, message)
+    else:
+        await conversation_repository.hide_message_for_user(db, user_id, message.id)
+    await db.commit()
 
 
 async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: str, body: str) -> Message:

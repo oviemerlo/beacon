@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Alert, View, Text, TextInput, Pressable, FlatList, StyleSheet, Platform } from "react-native";
-import { KeyboardAvoidingView, KeyboardStickyView } from "react-native-keyboard-controller";
-import { useHeaderHeight } from "@react-navigation/elements";
+import { Alert, View, Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../helpers/api";
@@ -19,11 +18,11 @@ import type { ConversationContext, ConversationParticipant, MentionCandidate, Me
 export function ConversationDetailScreen({ conversationId }: { conversationId: string }) {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [context, setContext] = useState<ConversationContext | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [attachments, setAttachments] = useState<PickedUpload[]>([]);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -301,53 +300,88 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
           const isMine = String(item.sender_id) === String(currentUserId);
           const isUnread = !isMine && item.read_at == null;
           const mentionedMe = (item.mentioned_user_ids ?? []).includes(currentUserId);
+          const isDeleted = item.deleted_at != null;
+
+          const deleteMessage = () => {
+            void (async () => {
+              try {
+                await apiFetch(`/conversations/${conversationId}/messages/${item.id}`, { method: "DELETE" });
+                await load();
+              } catch {
+                Alert.alert("Couldn't delete this message.");
+              }
+            })();
+          };
+
+          const confirmDelete = () => {
+            Alert.alert(
+              isMine ? "Delete this message?" : "Remove this message?",
+              isMine ? "It will be removed for everyone in this conversation." : "It will be removed from your view only.",
+              [
+                { text: "Cancel", style: "cancel" },
+                { text: isMine ? "Delete" : "Remove", style: "destructive", onPress: deleteMessage },
+              ]
+            );
+          };
+
           return (
             <View style={[styles.row, isMine ? styles.rowOutgoing : styles.rowIncoming]}>
               <View style={[styles.bubble, mentionedMe && styles.bubbleMentioned]}>
-                <EchoMediaLayout
-                  attachments={item.attachments}
-                  corner={
-                    !isMine ? (
-                      <FeedCardOverflowMenu
-                        senderName={senderLabel(item.sender_id)}
-                        actions={[
-                          {
-                            label: "Report",
-                            onSelect: () => {
-                              void (async () => {
-                                try {
-                                  await pickReasonAndSubmitReport("message", item.id);
-                                } catch {
-                                  // Keep conversation stable on failure.
-                                }
-                              })();
-                            },
-                          },
-                          blockUserAction(item.sender_id, senderLabel(item.sender_id), () => {
-                            if (!isGroup) navigation.navigate("Messages", { screen: "ConversationsHome" });
-                          }),
-                        ]}
-                      />
-                    ) : undefined
-                  }
-                >
-                  {mentionedMe && <Text style={styles.mentionedLabel}>You were mentioned</Text>}
-                  <Text style={[styles.senderLabel, !isUnread && styles.senderLabelRead]}>
-                    {senderLabel(item.sender_id)}:
-                  </Text>
-                  <Text style={[styles.bubbleText, isUnread ? styles.bubbleTextUnread : styles.bubbleTextRead]}>
-                    {splitMentionParts(item.body).map((part, index) => (
-                      <Text key={`${item.id}-${index}`} style={part.mention ? styles.mentionInBody : undefined}>
-                        {part.text}
+                <View style={styles.bubbleInner}>
+                  {isDeleted ? (
+                    <Text style={styles.deletedBubbleText}>
+                      {isMine ? "You deleted this message" : "This message was removed"}
+                    </Text>
+                  ) : (
+                    <EchoMediaLayout
+                      attachments={item.attachments}
+                      corner={
+                        <FeedCardOverflowMenu
+                          senderName={isMine ? "your message" : senderLabel(item.sender_id)}
+                          actions={
+                            isMine
+                              ? [{ label: "Delete", onSelect: confirmDelete }]
+                              : [
+                                  {
+                                    label: "Report",
+                                    onSelect: () => {
+                                      void (async () => {
+                                        try {
+                                          await pickReasonAndSubmitReport("message", item.id);
+                                        } catch {
+                                          // Keep conversation stable on failure.
+                                        }
+                                      })();
+                                    },
+                                  },
+                                  blockUserAction(item.sender_id, senderLabel(item.sender_id), () => {
+                                    if (!isGroup) navigation.navigate("Messages", { screen: "ConversationsHome" });
+                                  }),
+                                  { label: "Remove for me", onSelect: confirmDelete },
+                                ]
+                          }
+                        />
+                      }
+                    >
+                      {mentionedMe && <Text style={styles.mentionedLabel}>You were mentioned</Text>}
+                      <Text style={[styles.senderLabel, !isUnread && styles.senderLabelRead]}>
+                        {senderLabel(item.sender_id)}:
                       </Text>
-                    ))}
-                  </Text>
-                  <LinkPreviewList previews={item.link_previews} />
-                </EchoMediaLayout>
-                <View style={styles.bubbleMetaRow}>
-                  <Text style={styles.bubbleTime}>
-                    {formatMessageSentAt(item.sent_at)}
-                  </Text>
+                      <Text style={[styles.bubbleText, isUnread ? styles.bubbleTextUnread : styles.bubbleTextRead]}>
+                        {splitMentionParts(item.body).map((part, index) => (
+                          <Text key={`${item.id}-${index}`} style={part.mention ? styles.mentionInBody : undefined}>
+                            {part.text}
+                          </Text>
+                        ))}
+                      </Text>
+                      <LinkPreviewList previews={item.link_previews} />
+                    </EchoMediaLayout>
+                  )}
+                  <View style={styles.bubbleMetaRow}>
+                    <Text style={styles.bubbleTime}>
+                      {formatMessageSentAt(item.sent_at)}
+                    </Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -377,8 +411,10 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
         <View style={styles.composerRow}>
           <TextInput
             style={[styles.input, { height: composerHeight }]}
-            placeholder="Message… Use @ to mention someone in this Echo"
+            placeholder={isComposerFocused ? "" : "Message… Use @ to mention someone in this Echo"}
             placeholderTextColor={colors.parchment500}
+            onFocus={() => setIsComposerFocused(true)}
+            onBlur={() => setIsComposerFocused(false)}
             value={draft}
             onChangeText={(value) => {
               draftRef.current = value;
@@ -407,18 +443,6 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
       </KeyboardStickyView>
     </>
   );
-
-  if (Platform.OS === "ios") {
-    return (
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior="padding"
-        keyboardVerticalOffset={headerHeight}
-      >
-        {screenContent}
-      </KeyboardAvoidingView>
-    );
-  }
 
   return <View style={styles.container}>{screenContent}</View>;
 }
@@ -472,9 +496,12 @@ const styles = StyleSheet.create({
     borderColor: colors.dusk700,
     borderWidth: 1,
     borderRadius: radii.beacon,
-    padding: 10,
-    maxWidth: "78%",
+    width: "78%",
     overflow: "visible",
+  },
+  bubbleInner: {
+    width: "100%",
+    padding: 10,
   },
   bubbleMentioned: { borderColor: colors.signal500, backgroundColor: `${colors.signal500}1A` },
   mentionedLabel: { color: colors.signal400, fontSize: 10, fontFamily: "monospace", marginBottom: 4 },
@@ -494,6 +521,11 @@ const styles = StyleSheet.create({
   sendError: { color: colors.rust400, fontSize: 13, marginHorizontal: 16, marginBottom: 8 },
   senderLabel: { color: colors.parchment100, fontSize: 14, fontWeight: "700", marginBottom: 2 },
   senderLabelRead: { fontWeight: "400" },
+  deletedBubbleText: {
+    color: colors.parchment500,
+    fontSize: 13,
+    fontStyle: "italic",
+  },
   bubbleText: { color: colors.parchment100, fontSize: 14 },
   bubbleTextUnread: { fontWeight: "700" },
   bubbleTextRead: { fontWeight: "400" },

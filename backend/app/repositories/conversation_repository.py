@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.broadcast import Broadcast
-from app.models.conversation import Conversation, ConversationInvite, ConversationParticipant, HiddenConversation, Message
+from app.models.conversation import Conversation, ConversationInvite, ConversationParticipant, HiddenConversation, HiddenMessage, Message
 from app.models.user import User
 from app.models.upload import UploadedFile
 from app.schemas.schemas import ParticipantOut
@@ -18,6 +18,10 @@ from app.services.exceptions import ForbiddenError, NotFoundError
 
 def _hidden_conversation_ids(user_id: uuid.UUID):
     return select(HiddenConversation.conversation_id).where(HiddenConversation.user_id == user_id)
+
+
+def _hidden_message_ids(user_id: uuid.UUID):
+    return select(HiddenMessage.message_id).where(HiddenMessage.user_id == user_id)
 
 
 async def find_existing(db: AsyncSession, initiator_id: uuid.UUID, recipient_id: uuid.UUID, broadcast_id: uuid.UUID) -> Conversation | None:
@@ -64,6 +68,16 @@ async def get_message_by_id(db: AsyncSession, message_id: uuid.UUID | str) -> Me
     return await db.get(Message, message_id)
 
 
+async def soft_delete_message(db: AsyncSession, message: Message) -> None:
+    message.deleted_at = datetime.now(timezone.utc)
+
+
+async def hide_message_for_user(db: AsyncSession, user_id: uuid.UUID, message_id: uuid.UUID) -> None:
+    existing = await db.get(HiddenMessage, (user_id, message_id))
+    if existing is None:
+        db.add(HiddenMessage(user_id=user_id, message_id=message_id))
+
+
 async def add_message(
     db: AsyncSession,
     conversation_id: uuid.UUID,
@@ -86,8 +100,12 @@ async def add_message(
     return message
 
 
-async def list_messages(db: AsyncSession, conversation_id: uuid.UUID | str) -> list[Message]:
-    result = await db.execute(select(Message).where(Message.conversation_id == conversation_id).order_by(Message.sent_at.asc()))
+async def list_messages(db: AsyncSession, conversation_id: uuid.UUID | str, viewer_id: uuid.UUID | None = None) -> list[Message]:
+    query = select(Message).where(Message.conversation_id == conversation_id)
+    if viewer_id is not None:
+        query = query.where(Message.id.not_in(_hidden_message_ids(viewer_id)))
+    query = query.order_by(Message.sent_at.asc())
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 

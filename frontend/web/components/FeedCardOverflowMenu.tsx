@@ -93,9 +93,11 @@ export function buildFeedCardActions({
 export function FeedCardOverflowMenu({
   senderName,
   actions,
+  menuAlign = "right",
 }: {
   senderName: string;
   actions: OverflowAction[];
+  menuAlign?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -121,7 +123,11 @@ export function FeedCardOverflowMenu({
         <span className="text-base leading-none">⋯</span>
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 min-w-[11rem] overflow-hidden rounded-beacon border border-dusk-600 bg-dusk-800 py-1 shadow-lg">
+        <div
+          className={`absolute top-full z-20 mt-1 min-w-[11rem] overflow-hidden rounded-beacon border border-dusk-600 bg-dusk-800 py-1 shadow-lg ${
+            menuAlign === "left" ? "left-0" : "right-0"
+          }`}
+        >
           {actions.map((action) => (
             <button
               key={action.label}

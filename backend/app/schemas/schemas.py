@@ -313,6 +313,7 @@ class MessageOut(BaseModel):
     body: str
     sent_at: datetime
     read_at: datetime | None
+    deleted_at: datetime | None = None
     mentioned_user_ids: list[uuid.UUID] = []
     link_previews: list[LinkPreviewOut] = []
     attachments: list[MessageAttachmentOut] = []
@@ -328,6 +329,7 @@ class MessageOut(BaseModel):
             "body": data.body,
             "sent_at": data.sent_at,
             "read_at": data.read_at,
+            "deleted_at": data.deleted_at,
             "mentioned_user_ids": data.mentioned_user_ids or [],
             "link_previews": getattr(data, "link_previews", []) or [],
             "attachments": getattr(data, "_api_attachments", []) or [],

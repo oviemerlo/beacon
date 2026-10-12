@@ -293,58 +293,85 @@ export default function ConversationDetailPage() {
               const isMine = String(m.sender_id) === String(currentUserId);
               const isUnread = !isMine && m.read_at == null;
               const mentionedMe = (m.mentioned_user_ids ?? []).includes(currentUserId);
+              const isDeleted = m.deleted_at != null;
+
+              const deleteMessage = async () => {
+                const confirmed = window.confirm(
+                  isMine
+                    ? "Delete this message? It will be removed for everyone in this conversation."
+                    : "Remove this message from your view only?"
+                );
+                if (!confirmed) return;
+                try {
+                  await clientFetch(`/conversations/${conversationId}/messages/${m.id}`, { method: "DELETE" });
+                  await load();
+                } catch {
+                  window.alert("Couldn't delete this message.");
+                }
+              };
+
               return (
                 <div key={m.id} className={`flex w-full ${isMine ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`card overflow-visible py-2.5 px-3.5 w-fit max-w-[75%] ${
+                    className={`card relative overflow-visible py-2.5 px-3.5 w-[50%] ${
                       mentionedMe ? "border-signal-500 bg-signal-500/10" : ""
                     }`}
                   >
-                    <EchoMediaLayout
-                      attachments={m.attachments}
-                      corner={
-                        !isMine ? (
-                          <FeedCardOverflowMenu
-                            senderName={senderLabel(m.sender_id)}
-                            actions={[
-                              {
-                                label: "Report",
-                                onSelect: async () => {
-                                  try {
-                                    await promptAndSubmitReport("message", m.id, "this message");
-                                    window.alert("Report submitted.");
-                                  } catch {
-                                    window.alert("Couldn't submit report.");
-                                  }
-                                },
-                              },
-                              blockUserAction(m.sender_id, senderLabel(m.sender_id), () => {
-                                if (!isGroup) router.push("/conversations");
-                              }),
-                            ]}
-                          />
-                        ) : undefined
-                      }
-                    >
-                      {mentionedMe && (
-                        <p className="text-signal-400 text-[10px] font-mono mb-1">You were mentioned</p>
-                      )}
-                      <p className={`text-sm mb-1 ${isUnread ? "font-semibold" : "font-normal"}`}>
-                        {senderLabel(m.sender_id)}:
+                    {!isDeleted && (
+                      <div className="absolute top-1.5 right-1.5 z-10">
+                        <FeedCardOverflowMenu
+                          menuAlign={isMine ? "right" : "left"}
+                          senderName={isMine ? "your message" : senderLabel(m.sender_id)}
+                          actions={
+                            isMine
+                              ? [{ label: "Delete", onSelect: deleteMessage }]
+                              : [
+                                  {
+                                    label: "Report",
+                                    onSelect: async () => {
+                                      try {
+                                        await promptAndSubmitReport("message", m.id, "this message");
+                                        window.alert("Report submitted.");
+                                      } catch {
+                                        window.alert("Couldn't submit report.");
+                                      }
+                                    },
+                                  },
+                                  blockUserAction(m.sender_id, senderLabel(m.sender_id), () => {
+                                    if (!isGroup) router.push("/conversations");
+                                  }),
+                                  { label: "Remove for me", onSelect: deleteMessage },
+                                ]
+                          }
+                        />
+                      </div>
+                    )}
+                    {isDeleted ? (
+                      <p className="text-parchment-500 text-sm italic py-1">
+                        {isMine ? "You deleted this message" : "This message was removed"}
                       </p>
-                      <p className={`text-sm break-words ${isUnread ? "font-semibold" : "font-normal"}`}>
-                        {splitMentionParts(m.body).map((part, index) =>
-                          part.mention ? (
-                            <span key={`${m.id}-${index}`} className="mention-text">
-                              {part.text}
-                            </span>
-                          ) : (
-                            <span key={`${m.id}-${index}`}>{part.text}</span>
-                          )
+                    ) : (
+                      <EchoMediaLayout attachments={m.attachments}>
+                        {mentionedMe && (
+                          <p className="text-signal-400 text-[10px] font-mono mb-1">You were mentioned</p>
                         )}
-                      </p>
-                      <LinkPreviewList previews={m.link_previews} />
-                    </EchoMediaLayout>
+                        <p className={`text-sm mb-1 pr-7 ${isUnread ? "font-semibold" : "font-normal"}`}>
+                          {senderLabel(m.sender_id)}:
+                        </p>
+                        <p className={`text-sm break-words ${isUnread ? "font-semibold" : "font-normal"}`}>
+                          {splitMentionParts(m.body).map((part, index) =>
+                            part.mention ? (
+                              <span key={`${m.id}-${index}`} className="mention-text">
+                                {part.text}
+                              </span>
+                            ) : (
+                              <span key={`${m.id}-${index}`}>{part.text}</span>
+                            )
+                          )}
+                        </p>
+                        <LinkPreviewList previews={m.link_previews} />
+                      </EchoMediaLayout>
+                    )}
                     <div className="flex items-center justify-end gap-2 mt-2">
                       <p className="text-parchment-500 text-[10px] font-mono">
                         {formatMessageSentAt(m.sent_at)}

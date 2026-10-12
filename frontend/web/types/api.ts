@@ -268,6 +268,7 @@ export interface Message {
   body: string;
   sent_at: string;
   read_at: string | null;
+  deleted_at?: string | null;
   mentioned_user_ids?: string[];
   link_previews?: LinkPreview[];
   attachments?: BroadcastAttachment[];
