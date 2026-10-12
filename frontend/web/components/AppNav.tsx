@@ -99,23 +99,23 @@ export function AppNav() {
             const link = (
               <Link
                 href={item.href}
-                className={`px-3 py-1.5 rounded-beacon text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-beacon text-sm font-medium transition-colors inline-flex items-center ${
                   active ? "bg-dusk-700 text-signal-400" : "text-parchment-500 hover:text-parchment-100"
                 }`}
               >
-                {item.label}
-                {item.href === "/feed" && feedUnread > 0 && (
-                  <span className="inline-flex min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full bg-rust-500 text-dusk-950 text-[10px] font-bold">
-                    {feedUnread > 99 ? "99+" : feedUnread}
-                  </span>
-                )}
-                {item.href === "/conversations" && (messageUnread > 0 || mentionUnread > 0) && (
-                  <span className={`inline-flex h-[18px] px-2 items-center justify-center rounded-full text-dusk-950 text-[10px] font-bold whitespace-nowrap ${mentionUnread > 0 ? "bg-signal-500" : "bg-rust-500"}`}>
-                    {mentionUnread > 0
-                      ? "@ mention"
-                      : `${messageUnread > 99 ? "99+" : messageUnread} ${messageUnread === 1 ? "message" : "messages"}`}
-                  </span>
-                )}
+                <span>
+                  {item.label}
+                  {item.href === "/feed" && feedUnread > 0 && (
+                    <span className="text-rust-400 font-bold">
+                      {" "}({feedUnread > 99 ? "99+" : feedUnread})
+                    </span>
+                  )}
+                  {item.href === "/conversations" && (messageUnread > 0 || mentionUnread > 0) && (
+                    <span className={`font-bold ${mentionUnread > 0 ? "text-signal-400" : "text-rust-400"}`}>
+                      {" "}({mentionUnread > 0 ? "@" : messageUnread > 99 ? "99+" : messageUnread})
+                    </span>
+                  )}
+                </span>
               </Link>
             );
             if (item.href === "/conversations") {
