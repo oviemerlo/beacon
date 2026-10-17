@@ -76,7 +76,7 @@ export function UserSearchScreen() {
           style={styles.searchInput}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search by @handle or name"
+          placeholder="Search by wavelength or name"
           placeholderTextColor={colors.parchment500}
           autoCapitalize="none"
           autoCorrect={false}

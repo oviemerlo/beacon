@@ -130,13 +130,13 @@ export function ConversationsScreen({ onOpenConversation }: { onOpenConversation
   return (
     <View style={styles.container}>
       <Pressable style={styles.composeToggle} onPress={() => setComposeOpen((v) => !v)}>
-        <Text style={styles.composeToggleText}>{composeOpen ? "Cancel" : "Message someone by handle"}</Text>
+        <Text style={styles.composeToggleText}>{composeOpen ? "Cancel" : "Message someone by wavelength"}</Text>
       </Pressable>
       {composeOpen && (
         <Card style={{ marginBottom: 12 }}>
           <TextInput
             style={styles.searchInput}
-            placeholder="@handle"
+            placeholder="@wavelength"
             placeholderTextColor={colors.parchment500}
             value={composeHandle}
             onChangeText={setComposeHandle}

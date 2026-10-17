@@ -136,6 +136,7 @@ export function ProfileScreen({
         <View style={styles.identityRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{user.display_name}</Text>
+            <Text style={styles.wavelengthCaption}>Your Wavelength</Text>
             <Text style={styles.username}>@{user.username}</Text>
             {typeof user.age === "number" && <Text style={styles.locationLabel}>{user.age} years old</Text>}
             {user.location_label && <Text style={styles.locationLabel}>{user.location_label}</Text>}
@@ -292,6 +293,7 @@ const styles = StyleSheet.create({
   name: { color: colors.parchment100, fontWeight: "600", fontSize: 16 },
   username: { color: colors.parchment500, fontFamily: "monospace", fontSize: 12, marginTop: 2 },
   locationLabel: { color: colors.parchment500, fontSize: 13, marginTop: 8 },
+  wavelengthCaption: { color: colors.parchment500, fontSize: 11, marginTop: 6 },
   input: {
     backgroundColor: colors.dusk800,
     borderColor: colors.dusk600,

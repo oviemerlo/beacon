@@ -101,7 +101,7 @@ export default function SearchUsersPage() {
             className="input-field w-full mb-4"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by @handle or name"
+            placeholder="Search by wavelength or name"
             autoComplete="off"
             autoFocus
           />

@@ -120,18 +120,18 @@ export default function ConversationsPage() {
       <main className="max-w-2xl mx-auto px-5 py-6">
         <h1 className="font-display text-xl font-bold mb-5">Messages</h1>
         <button type="button" className="btn-secondary w-full mb-3" onClick={() => setComposeOpen((open) => !open)}>
-          {composeOpen ? "Cancel" : "Message someone by handle"}
+          {composeOpen ? "Cancel" : "Message someone by wavelength"}
         </button>
         {composeOpen && (
           <div className="card mb-4">
             <input
               className="input-field"
-              placeholder="@handle"
+              placeholder="@wavelength"
               value={composeHandle}
               onChange={(event) => setComposeHandle(event.target.value)}
               autoCapitalize="none"
               autoCorrect="off"
-              aria-label="Handle"
+              aria-label="Wavelength"
             />
             <textarea
               className="input-field mt-2 min-h-20"

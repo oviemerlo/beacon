@@ -89,7 +89,7 @@ async def start_direct_message(db: AsyncSession, initiator_id: uuid.UUID, recipi
     await require_terms_accepted(db, initiator_id)
     recipient = await user_repository.get_by_username(db, recipient_username.strip().lstrip("@"))
     if recipient is None or recipient.is_suspended:
-        raise NotFoundError("No user found with that handle")
+        raise NotFoundError("No one found with that wavelength")
     if recipient.id == initiator_id:
         raise ForbiddenError("Cannot message yourself")
 

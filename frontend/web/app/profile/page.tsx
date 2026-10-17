@@ -47,6 +47,7 @@ export default async function ProfilePage() {
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="font-semibold">{user.display_name}</p>
+              <p className="text-parchment-500 text-xs mt-1">Your Wavelength</p>
               <p className="text-parchment-500 text-sm font-mono">@{user.username}</p>
               {typeof user.age === "number" && <p className="text-parchment-500 text-sm mt-2">{user.age} years old</p>}
               {user.location_label && <p className="text-parchment-500 text-sm mt-2">{user.location_label}</p>}
