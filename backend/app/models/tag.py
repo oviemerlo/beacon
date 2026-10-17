@@ -30,6 +30,19 @@ class UserTag(Base):
     tag: Mapped["Tag"] = relationship()
 
 
+class UserDmTag(Base):
+    """Subset of the user's own identity tags (see UserTag) that a stranger
+    must share at least one of to DM this user when dm_permission == 'tag_match'."""
+
+    __tablename__ = "user_dm_tags"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    tag: Mapped["Tag"] = relationship()
+
+
 class UserFollowedTag(Base):
     """Explicit opt-in follows — powers the 'Opt-in' feed tab and digest."""
 

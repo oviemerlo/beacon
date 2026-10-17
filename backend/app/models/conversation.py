@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, Computed, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, Computed, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +23,9 @@ class Conversation(Base):
     name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     max_participants: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    dm_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # None for broadcast-origin and group conversations (already "open").
+    # 'pending' | 'accepted' | 'declined' for handle-initiated direct DMs only.
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     messages: Mapped[list["Message"]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
@@ -36,7 +39,20 @@ class Conversation(Base):
 
     __table_args__ = (
         UniqueConstraint("initiator_id", "recipient_id", "origin_broadcast_id", name="uq_conversation_per_broadcast"),
+        CheckConstraint(
+            "dm_status IS NULL OR dm_status IN ('pending', 'accepted', 'declined')",
+            name="ck_conversations_dm_status",
+        ),
     )
+
+
+Index(
+    "uq_direct_conversation_pair",
+    func.least(Conversation.initiator_id, Conversation.recipient_id),
+    func.greatest(Conversation.initiator_id, Conversation.recipient_id),
+    unique=True,
+    postgresql_where=Conversation.origin_broadcast_id.is_(None) & Conversation.name.is_(None),
+)
 
 
 class ConversationParticipant(Base):
@@ -48,6 +64,7 @@ class ConversationParticipant(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     role: Mapped[str] = mapped_column(String(20), default="member")  # "admin" | "member"
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="participants")
 

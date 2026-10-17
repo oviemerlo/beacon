@@ -310,7 +310,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <>
-            {context && !isGroup ? (
+            {context && !isGroup && context.origin_broadcast_id ? (
               <View style={[styles.row, originWasMine ? styles.rowOutgoing : styles.rowIncoming]}>
                 <View style={styles.originHeader}>
                   <Text style={styles.contextLabel}>
@@ -321,6 +321,8 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
                   <Text style={styles.contextPreview}>{context.origin_broadcast_preview}</Text>
                 </View>
               </View>
+            ) : context && !isGroup ? (
+              <Text style={styles.directLabel}>Direct message</Text>
             ) : null}
             {isGroup ? (
               <View style={styles.membersCard}>
@@ -438,6 +440,12 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
                     <Text style={styles.bubbleTime}>
                       {formatMessageSentAt(item.sent_at)}
                     </Text>
+                    {isGroup && isMine && !isDeleted && (item.read_by_count ?? 0) > 0 ? (
+                      <Text style={styles.bubbleTime}>Read by {item.read_by_count}</Text>
+                    ) : null}
+                    {!isGroup && isMine && !isDeleted ? (
+                      <Text style={styles.readStatus}>{item.read_at ? "Read" : "Sent"}</Text>
+                    ) : null}
                   </View>
                 </View>
               </View>
@@ -461,6 +469,29 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
         </View>
       )}
       {sendError && <Text style={styles.sendError}>{sendError}</Text>}
+      {context?.dm_status === "pending" && currentUserId != null && context.created_by_user_id !== currentUserId ? (
+        <View style={styles.requestBanner}>
+          <Text style={styles.requestBannerText}>{context.other_participant_display_name} wants to message you.</Text>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+            <Pressable
+              onPress={() => void apiFetch(`/conversations/${conversationId}/accept`, { method: "POST" }).then(() => load())}
+              style={styles.requestAcceptButton}
+            >
+              <Text style={styles.requestAcceptButtonText}>Accept</Text>
+            </Pressable>
+            <Pressable
+              onPress={() =>
+                void apiFetch(`/conversations/${conversationId}/decline`, { method: "POST" }).then(() =>
+                  navigation.navigate("Messages", { screen: "ConversationsHome" })
+                )
+              }
+              style={styles.requestDeclineButton}
+            >
+              <Text style={styles.requestDeclineButtonText}>Decline</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
       <KeyboardStickyView
         offset={{ closed: 0, opened: 0 }}
         style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}
@@ -502,6 +533,7 @@ export function ConversationDetailScreen({ conversationId }: { conversationId: s
           </Pressable>
         </View>
       </KeyboardStickyView>
+      )}
     </>
   );
 
@@ -610,6 +642,32 @@ const styles = StyleSheet.create({
   mentionItem: { paddingHorizontal: 12, paddingVertical: 10 },
   mentionMeta: { color: colors.parchment500, fontSize: 12, marginTop: 2 },
   sendError: { color: colors.rust400, fontSize: 13, marginHorizontal: 16, marginBottom: 8 },
+  directLabel: { color: colors.signal400, fontSize: 10, fontFamily: "monospace", marginHorizontal: 16, marginBottom: 8 },
+  requestBanner: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: radii.beacon,
+    borderWidth: 1,
+    borderColor: colors.dusk600,
+    backgroundColor: colors.dusk900,
+  },
+  requestBannerText: { color: colors.parchment100, fontSize: 14 },
+  requestAcceptButton: {
+    backgroundColor: colors.signal500,
+    borderRadius: radii.beacon,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  requestAcceptButtonText: { color: colors.dusk950, fontWeight: "700" },
+  requestDeclineButton: {
+    borderColor: colors.dusk600,
+    borderWidth: 1,
+    borderRadius: radii.beacon,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  requestDeclineButtonText: { color: colors.parchment300, fontWeight: "600" },
   senderLabel: { color: colors.parchment100, fontSize: 14, fontWeight: "700", marginBottom: 2 },
   senderLabelRead: { fontWeight: "400" },
   deletedBubbleText: {
@@ -627,6 +685,7 @@ const styles = StyleSheet.create({
   bubbleTextRead: { fontWeight: "400" },
   bubbleMetaRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, marginTop: 6, overflow: "visible" },
   bubbleTime: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
+  readStatus: { color: colors.parchment500, fontSize: 10, fontFamily: "monospace" },
   composer: {
     paddingHorizontal: 16,
     paddingTop: 12,

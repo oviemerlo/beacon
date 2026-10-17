@@ -11,10 +11,12 @@ import { FeedCardActionRow, startPrivateConversation } from "@/components/FeedCa
 import { buildFeedCardActions, FeedCardOverflowMenu } from "@/components/FeedCardOverflowMenu";
 import { SenderAvatar } from "@/components/SenderAvatar";
 import { VerifiedMark } from "@/components/VerifiedMark";
+import { FollowButton } from "@/components/FollowButton";
 import { LocationDriftBanner } from "@/components/LocationDriftBanner";
 import { SetupChecklistBanner } from "@/components/SetupChecklistBanner";
 import { reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
+import { useBroadcastViewTracking } from "@/helpers/broadcastViews";
 import { syncLocationIfMoved } from "@/helpers/locationSync";
 import { formatDistance } from "@/helpers/distance";
 import { audienceFilterActive, echoAudienceLabels, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "@/helpers/tags";
@@ -264,6 +266,7 @@ function SearchHitCard({
             <SenderAvatar fileId={hit.sender_avatar_file_id} name={hit.sender_id === currentUserId ? "You" : hit.sender_display_name} />
             {hit.sender_id === currentUserId ? "You" : hit.sender_display_name}
             <VerifiedMark verified={hit.sender_is_verified} />
+            <FollowButton userId={hit.sender_id} initialFollowing={Boolean(hit.sender_is_following)} currentUserId={currentUserId} />
           </p>
           {echoAudienceLabels(hit.tags, hit.course_codes, hit.course_code).map((label) => (
             <span key={label} className="tag-pill">
@@ -352,6 +355,8 @@ function BroadcastCard({
   const reachLabel = reachBadgeLabel(broadcast.is_global, broadcast.radius_meters);
   const isOwn = currentUserId === broadcast.sender_id;
   const featuredReply = broadcast.latest_reply ?? null;
+  const seenByLabel = featuredReply ? featuredReply.view_count_label : broadcast.view_count_label;
+  const viewRef = useBroadcastViewTracking<HTMLDivElement>([broadcast.id, featuredReply?.id]);
   const displayedEntity = featuredReply
     ? { id: featuredReply.id, sender_id: featuredReply.sender_id, sender_display_name: featuredReply.sender_display_name }
     : { id: broadcast.id, sender_id: broadcast.sender_id, sender_display_name: broadcast.sender_display_name };
@@ -387,7 +392,7 @@ function BroadcastCard({
   }
 
   return (
-    <div className="card flex flex-col hover:border-signal-500/50 transition-colors !pb-2.5">
+    <div ref={viewRef} className="card flex flex-col hover:border-signal-500/50 transition-colors !pb-2.5">
       <EchoMediaLayout
         attachments={featuredReply ? featuredReply.attachments : broadcast.attachments}
         corner={
@@ -412,6 +417,11 @@ function BroadcastCard({
             <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} className="h-9 w-9 shrink-0 rounded-full border border-dusk-600" />
             {headerName}
             <VerifiedMark verified={headerVerified} />
+            <FollowButton
+              userId={displayedEntity.sender_id}
+              initialFollowing={Boolean(featuredReply ? featuredReply.sender_is_following : broadcast.sender_is_following)}
+              currentUserId={currentUserId}
+            />
           </p>
           {echoAudienceLabels(broadcast.tags, broadcast.course_codes, broadcast.course_code).map((label) => (
             <span key={label} className="tag-pill text-xs font-medium">
@@ -443,6 +453,7 @@ function BroadcastCard({
         >
           {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
         </Link>
+        {seenByLabel ? <span className="whitespace-nowrap font-mono">Seen by {seenByLabel}</span> : null}
       </div>
       <FeedCardActionRow
         broadcastId={broadcast.id}

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.schemas import ConversationContextOut, ConversationStartIn, MessageIn, MessageOut
+from app.schemas.schemas import ConversationContextOut, ConversationStartIn, DirectMessageStartIn, MessageIn, MessageOut
 from app.services import conversation_service
 from app.utils.rate_limit import limiter
 
@@ -49,6 +49,17 @@ async def mark_mention_read(notification_id: str, current_user: User = Depends(g
     return {"status": "ok"}
 
 
+@router.post("/direct", status_code=201)
+async def start_direct_message(payload: DirectMessageStartIn, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    conversation = await conversation_service.start_direct_message(db, current_user.id, payload.recipient_username, payload.first_message)
+    return {"conversation_id": str(conversation.id)}
+
+
+@router.get("/requests")
+async def list_dm_requests(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await conversation_service.list_direct_message_requests(db, current_user.id)
+
+
 @router.get("/{conversation_id}/mention-candidates")
 async def mention_candidates(
     conversation_id: str,
@@ -62,6 +73,18 @@ async def mention_candidates(
 @router.put("/{conversation_id}/hide", status_code=204)
 async def hide_conversation(conversation_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await conversation_service.hide_conversation(db, current_user.id, conversation_id)
+
+
+@router.post("/{conversation_id}/accept", status_code=200)
+async def accept_dm(conversation_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await conversation_service.accept_direct_message(db, current_user.id, conversation_id)
+    return {"status": "ok"}
+
+
+@router.post("/{conversation_id}/decline", status_code=200)
+async def decline_dm(conversation_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await conversation_service.decline_direct_message(db, current_user.id, conversation_id)
+    return {"status": "ok"}
 
 
 @router.get("/{conversation_id}", response_model=ConversationContextOut)

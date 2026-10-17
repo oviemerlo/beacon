@@ -12,9 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import AsyncSessionLocal
 from app.models.broadcast import Broadcast
 from app.models.tag import Tag
-from app.repositories import broadcast_repository, link_preview_repository, upload_repository
+from app.repositories import broadcast_repository, follow_repository, link_preview_repository, upload_repository
 from app.services import user_service
 from app.services.regions import get_countries_for_region, get_region_for_country_name
+from app.utils.view_buckets import bucket_view_count
 
 
 def tag_payload(tag: Tag) -> dict:
@@ -64,12 +65,15 @@ def serialize_echo(
     distance_m,
     reply_count: int = 0,
     shared_tag_count=None,
+    view_count_label: str | None = None,
+    sender_is_following: bool = False,
 ) -> dict:
     return {
         "id": str(broadcast.id),
         "sender_id": str(broadcast.sender_id),
         "sender_display_name": broadcast.sender.display_name if broadcast.sender is not None else "Unknown",
         "sender_is_verified": bool(broadcast.sender is not None and broadcast.sender.is_verified),
+        "sender_is_following": sender_is_following,
         "sender_avatar_file_id": None,
         "content": broadcast.content,
         "distance_m": round(float(distance_m or 0), 1),
@@ -83,11 +87,18 @@ def serialize_echo(
         "last_activity_at": broadcast.created_at,
         "reply_count": int(reply_count or 0),
         "latest_reply": None,
+        "view_count_label": view_count_label,
         "attachments": [],
     }
 
 
-def serialize_echo_row(row, viewer_id, viewer_tags: list[Tag]) -> dict:
+def serialize_echo_row(
+    row,
+    viewer_id,
+    viewer_tags: list[Tag],
+    view_counts: dict[uuid.UUID, str | None] | None = None,
+    following_ids: set[uuid.UUID] | None = None,
+) -> dict:
     broadcast, distance_m, *rest = row
     if len(rest) == 2:
         shared_tag_count, reply_count = rest
@@ -100,6 +111,8 @@ def serialize_echo_row(row, viewer_id, viewer_tags: list[Tag]) -> dict:
         distance_m=distance_m,
         reply_count=reply_count,
         shared_tag_count=shared_tag_count,
+        view_count_label=view_counts.get(broadcast.id) if view_counts else None,
+        sender_is_following=bool(following_ids) and broadcast.sender_id in following_ids,
     )
 
 
@@ -207,12 +220,17 @@ async def _backfill_join_invite_previews(
 
 async def serialize_echo_rows(db: AsyncSession, viewer_id, rows) -> list[dict]:
     viewer_tags = await user_service.list_identity_tags(db, viewer_id)
-    cards = [serialize_echo_row(row, viewer_id, viewer_tags) for row in rows]
+    parent_ids = [row[0].id for row in rows]
+    latest_by_parent = await broadcast_repository.latest_visible_replies_by_parent(db, viewer_id, parent_ids)
+    all_ids = parent_ids + [reply.id for reply in latest_by_parent.values()]
+    raw_counts = await broadcast_repository.get_view_counts(db, all_ids)
+    view_count_labels = {bid: bucket_view_count(count) for bid, count in raw_counts.items()}
+    sender_ids = {row[0].sender_id for row in rows} | {reply.sender_id for reply in latest_by_parent.values()}
+    following_ids = await follow_repository.get_following_ids_for_set(db, viewer_id, list(sender_ids))
+    cards = [serialize_echo_row(row, viewer_id, viewer_tags, view_count_labels, following_ids) for row in rows]
     broadcasts = [row[0] for row in rows]
     await attach_broadcast_attachments(db, cards, broadcasts)
     await attach_course_codes(db, cards, broadcasts)
-    parent_ids = [row[0].id for row in rows]
-    latest_by_parent = await broadcast_repository.latest_visible_replies_by_parent(db, viewer_id, parent_ids)
     reply_attachments = await upload_repository.list_clean_attachments_for_broadcasts(
         db, [reply.id for reply in latest_by_parent.values()]
     )
@@ -231,22 +249,26 @@ async def serialize_echo_rows(db: AsyncSession, viewer_id, rows) -> list[dict]:
             "sender_id": str(reply.sender_id),
             "sender_display_name": reply.sender.display_name if reply.sender is not None else "Unknown",
             "sender_is_verified": bool(reply.sender is not None and reply.sender.is_verified),
+            "sender_is_following": reply.sender_id in following_ids,
             "sender_avatar_file_id": _avatar_id(avatars, reply.sender_id),
             "content": reply.content,
             "created_at": reply.created_at,
             "attachments": _attachment_payloads(reply_attachments.get(reply.id, [])),
+            "view_count_label": view_count_labels.get(reply.id),
         }
     await attach_link_previews(db, cards, broadcasts)
     return cards
 
 
-def serialize_search_hit(hit, viewer_id, viewer_tags: list[Tag]) -> dict:
+def serialize_search_hit(hit, viewer_id, viewer_tags: list[Tag], following_ids: set[uuid.UUID] | None = None) -> dict:
     card = serialize_echo(
         hit.broadcast,
         viewer_id=viewer_id,
         viewer_tags=viewer_tags,
         distance_m=0,
         reply_count=0,
+        view_count_label=None,
+        sender_is_following=bool(following_ids) and hit.broadcast.sender_id in following_ids,
     )
     return {
         "id": card["id"],
@@ -256,6 +278,7 @@ def serialize_search_hit(hit, viewer_id, viewer_tags: list[Tag]) -> dict:
         "sender_id": card["sender_id"],
         "sender_display_name": card["sender_display_name"],
         "sender_is_verified": card["sender_is_verified"],
+        "sender_is_following": card["sender_is_following"],
         "sender_avatar_file_id": card["sender_avatar_file_id"],
         "tags": card["tags"],
         "course_code": card["course_code"],

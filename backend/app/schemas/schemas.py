@@ -30,6 +30,8 @@ class UserProfileOut(BaseModel):
     longitude: float | None = None
     feed_radius_meters: int
     discoverable_in_broadcasts: bool
+    dm_permission: str = "no_one"
+    dm_tag_ids: list[int] = []
     tags: list[TagOut] = []
     course_codes: list[str] = []
     followed_tag_limit: int = 2
@@ -198,10 +200,12 @@ class LatestFeedReplyOut(BaseModel):
     sender_id: uuid.UUID
     sender_display_name: str
     sender_is_verified: bool = False
+    sender_is_following: bool = False
     content: str
     created_at: datetime
     attachments: list[BroadcastAttachmentOut] = []
     link_previews: list[LinkPreviewOut] = []
+    view_count_label: str | None = None
 
 
 class FeedBroadcastOut(BaseModel):
@@ -209,6 +213,7 @@ class FeedBroadcastOut(BaseModel):
     sender_id: uuid.UUID
     sender_display_name: str
     sender_is_verified: bool = False
+    sender_is_following: bool = False
     sender_avatar_file_id: uuid.UUID | None = None
     content: str
     distance_m: float
@@ -221,9 +226,14 @@ class FeedBroadcastOut(BaseModel):
     created_at: datetime
     last_activity_at: datetime | None = None
     reply_count: int = 0
+    view_count_label: str | None = None
     latest_reply: LatestFeedReplyOut | None = None
     attachments: list[BroadcastAttachmentOut] = []
     link_previews: list[LinkPreviewOut] = []
+
+
+class BroadcastViewsIn(BaseModel):
+    broadcast_ids: list[uuid.UUID] = Field(min_length=1, max_length=50)
 
 
 class BroadcastThreadOut(BaseModel):
@@ -234,6 +244,16 @@ class BroadcastThreadOut(BaseModel):
 class ConversationStartIn(BaseModel):
     broadcast_id: uuid.UUID
     first_message: str = Field(min_length=1, max_length=2000)
+
+
+class DirectMessageStartIn(BaseModel):
+    recipient_username: str = Field(min_length=1, max_length=50)
+    first_message: str = Field(min_length=1, max_length=2000)
+
+
+class DmSettingsIn(BaseModel):
+    dm_permission: Literal["everyone", "tag_match", "no_one"]
+    tag_ids: list[int] = []
 
 
 class ConversationParticipantOut(BaseModel):
@@ -270,6 +290,7 @@ class ConversationContextOut(BaseModel):
     participant_count: int | None = None
     participants: list[ConversationParticipantOut] = []
     invite_url: str | None = None
+    dm_status: Literal["pending", "accepted", "declined"] | None = None
 
 
 class GroupCreateIn(BaseModel):
@@ -322,6 +343,7 @@ class MessageOut(BaseModel):
     mentioned_user_ids: list[uuid.UUID] = []
     link_previews: list[LinkPreviewOut] = []
     attachments: list[MessageAttachmentOut] = []
+    read_by_count: int | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -338,6 +360,7 @@ class MessageOut(BaseModel):
             "mentioned_user_ids": data.mentioned_user_ids or [],
             "link_previews": getattr(data, "link_previews", []) or [],
             "attachments": getattr(data, "_api_attachments", []) or [],
+            "read_by_count": getattr(data, "_api_read_by_count", None),
         }
 
     class Config:
@@ -482,9 +505,29 @@ class FeedSearchHitOut(BaseModel):
     sender_id: uuid.UUID
     sender_display_name: str
     sender_is_verified: bool = False
+    sender_is_following: bool = False
     sender_avatar_file_id: uuid.UUID | None = None
     tags: list[TagOut] = []
     matches: list[FeedSearchMatchOut] = []
+
+
+class FollowTargetOut(BaseModel):
+    id: uuid.UUID
+    username: str
+    display_name: str
+    account_type: str
+    is_verified: bool
+    is_following: bool
+    avatar_file_id: uuid.UUID | None = None
+
+
+class FollowingListItemOut(BaseModel):
+    id: uuid.UUID
+    username: str
+    display_name: str
+    account_type: str
+    is_verified: bool
+    avatar_file_id: uuid.UUID | None = None
 
 
 class ConversationSearchMatchOut(BaseModel):

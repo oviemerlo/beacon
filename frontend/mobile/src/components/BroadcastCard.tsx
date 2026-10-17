@@ -12,6 +12,7 @@ import { FeedCardActionRow } from "./FeedCardActionRow";
 import { buildFeedCardActions, FeedCardOverflowMenu } from "./FeedCardOverflowMenu";
 import { SenderAvatar } from "./SenderAvatar";
 import { VerifiedMark } from "./VerifiedMark";
+import { FollowButton } from "./FollowButton";
 import { feedCardStyles } from "./feedCardStyles";
 import type { FeedBroadcast } from "../types/api";
 
@@ -33,6 +34,7 @@ export function BroadcastCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const isOwn = currentUserId === broadcast.sender_id;
   const featuredReply = broadcast.latest_reply ?? null;
+  const seenByLabel = featuredReply ? featuredReply.view_count_label : broadcast.view_count_label;
   const displayedEntity = featuredReply
     ? { id: featuredReply.id, sender_id: featuredReply.sender_id, sender_display_name: featuredReply.sender_display_name }
     : { id: broadcast.id, sender_id: broadcast.sender_id, sender_display_name: broadcast.sender_display_name };
@@ -74,6 +76,11 @@ export function BroadcastCard({
             <SenderAvatar fileId={headerAvatarId} name={headerAvatarName} size={36} />
             <Text style={styles.cardSenderName}>{headerName}</Text>
             <VerifiedMark verified={headerVerified} />
+            <FollowButton
+              userId={displayedEntity.sender_id}
+              initialFollowing={Boolean(featuredReply ? featuredReply.sender_is_following : broadcast.sender_is_following)}
+              currentUserId={currentUserId}
+            />
           </View>
           {echoAudienceLabels(broadcast.tags, broadcast.course_codes, broadcast.course_code).map((label) => (
             <View key={label} style={styles.cardTagPill}>
@@ -111,6 +118,7 @@ export function BroadcastCard({
           >
             <Text style={styles.replyCountText} numberOfLines={1}>
               {broadcast.reply_count ?? 0} repl{(broadcast.reply_count ?? 0) === 1 ? "y" : "ies"}
+              {seenByLabel ? `  ·  Seen by ${seenByLabel}` : ""}
             </Text>
           </Pressable>
         </View>

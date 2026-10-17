@@ -7,7 +7,7 @@ import { splitMentionParts } from "../helpers/mentions";
 import { formatMessageSentAt } from "../helpers/time";
 import { Card } from "../components/Shared";
 import { colors, radii } from "../theme/tokens";
-import type { ConversationSearchHit, ConversationThread, MentionNotification } from "../types/api";
+import type { ConversationSearchHit, ConversationThread, DmRequest, MentionNotification } from "../types/api";
 
 export function ConversationsScreen({ onOpenConversation }: { onOpenConversation: (id: string) => void }) {
   const [threads, setThreads] = useState<ConversationThread[]>([]);
@@ -18,6 +18,12 @@ export function ConversationsScreen({ onOpenConversation }: { onOpenConversation
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [mentions, setMentions] = useState<MentionNotification[]>([]);
+  const [requests, setRequests] = useState<DmRequest[]>([]);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeHandle, setComposeHandle] = useState("");
+  const [composeMessage, setComposeMessage] = useState("");
+  const [composeError, setComposeError] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
   const isSearching = debouncedQuery.trim().length > 0;
 
   useFocusEffect(
@@ -26,13 +32,15 @@ export function ConversationsScreen({ onOpenConversation }: { onOpenConversation
 
       const loadConversations = async ({ silent }: { silent: boolean }) => {
         if (debouncedQuery.trim()) return;
-        const [rows, mentionRows] = await Promise.all([
+        const [rows, mentionRows, requestRows] = await Promise.all([
           apiFetch<ConversationThread[]>("/conversations"),
           apiFetch<MentionNotification[]>("/conversations/mentions").catch(() => []),
+          apiFetch<DmRequest[]>("/conversations/requests").catch(() => [] as DmRequest[]),
         ]);
         if (!active) return;
         setThreads(rows);
         setMentions(mentionRows);
+        setRequests(requestRows);
         if (!silent) setLoading(false);
         if (!silent) {
           try {
@@ -88,8 +96,86 @@ export function ConversationsScreen({ onOpenConversation }: { onOpenConversation
     };
   }, [debouncedQuery, isSearching]);
 
+  async function sendDirectMessage() {
+    const handle = composeHandle.trim().replace(/^@/, "");
+    if (!handle || !composeMessage.trim()) return;
+    setComposing(true);
+    setComposeError(null);
+    try {
+      const { conversation_id } = await apiFetch<{ conversation_id: string }>("/conversations/direct", {
+        method: "POST",
+        body: JSON.stringify({ recipient_username: handle, first_message: composeMessage.trim() }),
+      });
+      setComposeOpen(false);
+      setComposeHandle("");
+      setComposeMessage("");
+      onOpenConversation(conversation_id);
+    } catch (error) {
+      setComposeError(error instanceof Error ? error.message : "Couldn't send that message.");
+    } finally {
+      setComposing(false);
+    }
+  }
+
+  async function respondToRequest(requestId: string, accept: boolean) {
+    try {
+      await apiFetch(`/conversations/${requestId}/${accept ? "accept" : "decline"}`, { method: "POST" });
+      setRequests((rows) => rows.filter((row) => row.id !== requestId));
+      if (accept) onOpenConversation(requestId);
+    } catch {
+      Alert.alert(accept ? "Couldn't accept that request." : "Couldn't decline that request.");
+    }
+  }
+
   return (
     <View style={styles.container}>
+      <Pressable style={styles.composeToggle} onPress={() => setComposeOpen((v) => !v)}>
+        <Text style={styles.composeToggleText}>{composeOpen ? "Cancel" : "Message someone by handle"}</Text>
+      </Pressable>
+      {composeOpen && (
+        <Card style={{ marginBottom: 12 }}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="@handle"
+            placeholderTextColor={colors.parchment500}
+            value={composeHandle}
+            onChangeText={setComposeHandle}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextInput
+            style={[styles.searchInput, { marginTop: 8 }]}
+            placeholder="Say something..."
+            placeholderTextColor={colors.parchment500}
+            value={composeMessage}
+            onChangeText={setComposeMessage}
+            multiline
+          />
+          {composeError && <Text style={{ color: colors.rust400, fontSize: 12, marginTop: 6 }}>{composeError}</Text>}
+          <Pressable style={styles.composeSendButton} onPress={sendDirectMessage} disabled={composing}>
+            {composing ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.composeSendButtonText}>Send</Text>}
+          </Pressable>
+        </Card>
+      )}
+      {requests.length > 0 && (
+        <View style={{ gap: 10, marginBottom: 12 }}>
+          {requests.map((req) => (
+            <Card key={req.id}>
+              <Text style={styles.mentionedLabel}>Message request</Text>
+              <Text style={styles.threadNameRead}>@{req.from_username} ({req.from_display_name})</Text>
+              <Text style={styles.threadPreviewRead}>{req.preview}</Text>
+              <View style={styles.actionRow}>
+                <Pressable onPress={() => respondToRequest(req.id, true)} style={styles.actionPill}>
+                  <Text style={styles.actionPillText}>Accept</Text>
+                </Pressable>
+                <Pressable onPress={() => respondToRequest(req.id, false)} style={styles.actionPill}>
+                  <Text style={styles.actionPillText}>Decline</Text>
+                </Pressable>
+              </View>
+            </Card>
+          ))}
+        </View>
+      )}
       <TextInput
         style={styles.searchInput}
         placeholder="Search your messages"
@@ -164,7 +250,7 @@ export function ConversationsScreen({ onOpenConversation }: { onOpenConversation
             ) : null
           }
           ListEmptyComponent={
-            mentions.length > 0 ? null : (
+            mentions.length > 0 || requests.length > 0 ? null : (
               <Card>
                 <Text style={styles.emptyTitle}>No conversations yet.</Text>
                 <Text style={styles.emptySubtitle}>Reply privately from a broadcast in your feed to start one.</Text>
@@ -182,12 +268,16 @@ export function ConversationsScreen({ onOpenConversation }: { onOpenConversation
               <Card>
                 {thread.has_mention && <Text style={styles.mentionedLabel}>You were mentioned</Text>}
                 <Pressable onPress={() => onOpenConversation(thread.id)}>
-                  <View style={originWasMine ? styles.quoteOutgoing : styles.quoteIncoming}>
-                    <Text style={styles.originPreview}>
-                      {quotePrefix}
-                      {thread.origin_broadcast_preview}
-                    </Text>
-                  </View>
+                  {thread.is_direct ? (
+                    <Text style={styles.directLabel}>Direct message</Text>
+                  ) : (
+                    <View style={originWasMine ? styles.quoteOutgoing : styles.quoteIncoming}>
+                      <Text style={styles.originPreview}>
+                        {quotePrefix}
+                        {thread.origin_broadcast_preview}
+                      </Text>
+                    </View>
+                  )}
                   {isIncomingLatest ? (
                     <View style={styles.incomingColumn}>
                       <Text style={[styles.threadName, !isUnread && styles.threadNameRead]}>
@@ -313,6 +403,24 @@ function SearchHitCard({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dusk950, padding: 16 },
+  composeToggle: {
+    borderColor: colors.dusk600,
+    borderWidth: 1,
+    borderRadius: radii.beacon,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  composeToggleText: { color: colors.signal400, fontWeight: "600", textAlign: "center" },
+  composeSendButton: {
+    backgroundColor: colors.signal500,
+    borderRadius: radii.beacon,
+    paddingVertical: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  composeSendButtonText: { color: colors.dusk950, fontWeight: "700" },
+  directLabel: { color: colors.signal400, fontSize: 10, fontFamily: "monospace", marginBottom: 6 },
   searchInput: {
     backgroundColor: colors.dusk800,
     borderColor: colors.dusk600,

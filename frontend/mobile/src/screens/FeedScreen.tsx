@@ -6,6 +6,7 @@ import { syncLocationIfMoved } from "../helpers/locationSync";
 import { useViewerUser } from "../helpers/viewerUser";
 import { audienceFilterActive, feedSearchChips, pathWithTagQuery, retainKnown, toggleItem } from "../helpers/tags";
 import { usePolling } from "../helpers/usePolling";
+import { broadcastViewabilityConfig, useFlatListBroadcastViews } from "../helpers/broadcastViews";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
 import { BroadcastCard } from "../components/BroadcastCard";
@@ -35,6 +36,7 @@ export function FeedScreen({
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const isSearching = debouncedQuery.trim().length > 0;
+  const onViewableBroadcastsChanged = useFlatListBroadcastViews<FeedBroadcast>((b) => [b.id, b.latest_reply?.id]);
 
   const load = useCallback(async ({ silent }: { silent: boolean }) => {
     if (debouncedQuery.trim()) return;
@@ -213,6 +215,8 @@ export function FeedScreen({
         <FlatList
           data={broadcasts}
           keyExtractor={(b) => b.id}
+          viewabilityConfig={broadcastViewabilityConfig}
+          onViewableItemsChanged={onViewableBroadcastsChanged}
           removeClippedSubviews={false}
           contentContainerStyle={{ padding: 16, gap: 12 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.signal500} title="" />}

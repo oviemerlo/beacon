@@ -9,6 +9,7 @@ import { FeedCardActionRow } from "./FeedCardActionRow";
 import { buildFeedCardActions, FeedCardOverflowMenu } from "./FeedCardOverflowMenu";
 import { SenderAvatar } from "./SenderAvatar";
 import { VerifiedMark } from "./VerifiedMark";
+import { FollowButton } from "./FollowButton";
 import { feedCardStyles } from "./feedCardStyles";
 import type { FeedSearchHit } from "../types/api";
 
@@ -40,6 +41,7 @@ export function SearchHitCard({
             <SenderAvatar fileId={hit.sender_avatar_file_id} name={hit.sender_id === currentUserId ? "You" : hit.sender_display_name} />
             <Text style={styles.senderName}>{hit.sender_id === currentUserId ? "You" : hit.sender_display_name}</Text>
             <VerifiedMark verified={hit.sender_is_verified} />
+            <FollowButton userId={hit.sender_id} initialFollowing={Boolean(hit.sender_is_following)} currentUserId={currentUserId} />
           </View>
           {echoAudienceLabels(hit.tags, hit.course_codes, hit.course_code).map((label) => (
             <View key={label} style={styles.broadcastTagPill}>

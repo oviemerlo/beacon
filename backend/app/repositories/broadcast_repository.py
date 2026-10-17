@@ -13,11 +13,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
-from app.models.broadcast import Broadcast, BroadcastCourse, BroadcastImpression, BroadcastTag, HiddenBroadcast
+from app.models.broadcast import Broadcast, BroadcastCourse, BroadcastImpression, BroadcastTag, BroadcastView, HiddenBroadcast
 from app.models.conversation import BlockedUser
 from app.models.school import UserCourseEnrollment
 from app.models.tag import Tag, UserFollowedTag, UserTag
 from app.models.user import User
+from app.repositories.follow_repository import followed_ids_subquery
 from app.services.regions import COUNTRY_NAME_TO_REGION
 
 
@@ -433,11 +434,13 @@ def _still_live():
 
 
 def _in_reach(user_id: uuid.UUID, distance_m):
-    """Radius is for delivering to other people. The sender always sees their own echo."""
+    """Radius is for delivering to other people. The sender always sees their
+    own echo, and a follower sees a sender's echoes regardless of distance."""
     return (
         (Broadcast.sender_id == user_id)
         | Broadcast.is_global.is_(True)
         | (distance_m <= Broadcast.radius_meters)
+        | Broadcast.sender_id.in_(followed_ids_subquery(user_id))
     )
 
 
@@ -667,6 +670,36 @@ async def record_impression(db: AsyncSession, broadcast_id: uuid.UUID, viewer_id
         .values(id=uuid.uuid4(), broadcast_id=broadcast_id, viewer_id=viewer_id)
         .on_conflict_do_nothing(constraint="uq_broadcast_impressions_broadcast_viewer")
     )
+
+
+async def record_views(db: AsyncSession, broadcast_ids: list[uuid.UUID], viewer_id: uuid.UUID) -> None:
+    """Idempotent batch — call from the client-side viewability-tracking endpoint."""
+    if not broadcast_ids:
+        return
+    result = await db.execute(
+        select(Broadcast.id).where(
+            Broadcast.id.in_(set(broadcast_ids)),
+            Broadcast.sender_id != viewer_id,
+            Broadcast.deleted_at.is_(None),
+        )
+    )
+    for broadcast_id in result.scalars().all():
+        await db.execute(
+            pg_insert(BroadcastView)
+            .values(id=uuid.uuid4(), broadcast_id=broadcast_id, viewer_id=viewer_id)
+            .on_conflict_do_nothing(constraint="uq_broadcast_views_broadcast_viewer")
+        )
+
+
+async def get_view_counts(db: AsyncSession, broadcast_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    if not broadcast_ids:
+        return {}
+    result = await db.execute(
+        select(BroadcastView.broadcast_id, func.count(BroadcastView.viewer_id))
+        .where(BroadcastView.broadcast_id.in_(broadcast_ids))
+        .group_by(BroadcastView.broadcast_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
 
 
 async def get_visible_with_context(db: AsyncSession, user_id: uuid.UUID, broadcast_id: uuid.UUID | str):

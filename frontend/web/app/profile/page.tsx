@@ -2,6 +2,7 @@ import { apiFetch, getCurrentUserOrNull } from "@/helpers/api";
 import { AppNav } from "@/components/AppNav";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { SetupChecklistBanner } from "@/components/SetupChecklistBanner";
+import { DmSettingsCard } from "@/components/DmSettingsCard";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -91,6 +92,20 @@ export default async function ProfilePage() {
           )}
         </div>
 
+        <DmSettingsCard
+          initialPermission={user.dm_permission ?? "no_one"}
+          initialTagIds={user.dm_tag_ids ?? []}
+          ownedTags={user.tags}
+        />
+
+        <div className="card mb-4">
+          <p className="font-medium mb-2">Following</p>
+          <Link href="/search-users" className="inline-block text-sm text-signal-400 hover:text-signal-300 mb-3">
+            Find people &amp; businesses
+          </Link>
+          <p className="text-parchment-500 text-sm">Followed accounts reach your feed at any distance.</p>
+        </div>
+
         <div className="card mb-4">
           <p className="font-medium mb-2">Blocked users</p>
           <Link href="/blocked-users" className="inline-block text-sm text-signal-400 hover:text-signal-300 mb-3">
@@ -125,7 +140,7 @@ export default async function ProfilePage() {
         </form>
         <Link
           href="/delete-account"
-          className="mt-3 w-full rounded-beacon bg-rust-400 px-4 py-2.5 font-semibold text-parchment-100 hover:opacity-90 transition-opacity inline-block text-center"
+          className="mt-4 block text-center text-xs text-parchment-500 hover:text-rust-400 transition-colors"
         >
           Delete account
         </Link>

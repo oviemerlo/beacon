@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.schemas import BroadcastCreateIn, BroadcastThreadOut, ReachEstimateOut
+from app.schemas.schemas import BroadcastCreateIn, BroadcastThreadOut, BroadcastViewsIn, ReachEstimateOut
 from app.services import broadcast_service
 from app.utils.rate_limit import limiter
 
@@ -43,6 +43,19 @@ async def create_broadcast(
     _ = request
     broadcast = await broadcast_service.create_broadcast(db, current_user.id, payload)
     return {"id": str(broadcast.id), "created_at": broadcast.created_at}
+
+
+@router.post("/views", status_code=200)
+@limiter.limit("120/hour")
+async def record_views(
+    request: Request,
+    payload: BroadcastViewsIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ = request
+    await broadcast_service.record_broadcast_views(db, current_user.id, payload.broadcast_ids)
+    return {"status": "ok"}
 
 
 @router.delete("/{broadcast_id}", status_code=204)

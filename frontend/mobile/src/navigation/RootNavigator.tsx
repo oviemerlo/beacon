@@ -22,6 +22,7 @@ import { NewGroupScreen } from "../screens/NewGroupScreen";
 import { JoinGroupScreen } from "../screens/JoinGroupScreen";
 import { FollowTagsScreen } from "../screens/FollowTagsScreen";
 import { BlockedUsersScreen } from "../screens/BlockedUsersScreen";
+import { UserSearchScreen } from "../screens/UserSearchScreen";
 import { AdminReportsScreen } from "../screens/AdminReportsScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { colors } from "../theme/tokens";
@@ -129,12 +130,14 @@ function ProfileStackNavigator({ onSignOut }: { onSignOut: () => void }) {
             onSignedOut={onSignOut}
             onOpenFollowTags={() => navigation.navigate("FollowTags")}
             onOpenBlockedUsers={() => navigation.navigate("BlockedUsers")}
+            onOpenUserSearch={() => navigation.navigate("UserSearch")}
             onOpenAdminReports={() => navigation.navigate("AdminReports")}
           />
         )}
       </ProfileStack.Screen>
       <ProfileStack.Screen name="FollowTags" component={FollowTagsScreen} options={{ title: "Echo Tags" }} />
       <ProfileStack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ title: "Blocked users" }} />
+      <ProfileStack.Screen name="UserSearch" component={UserSearchScreen} options={{ title: "Find people & businesses" }} />
       <ProfileStack.Screen name="AdminReports" component={AdminReportsScreen} options={{ title: "Admin reports" }} />
     </ProfileStack.Navigator>
   );

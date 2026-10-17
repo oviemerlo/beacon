@@ -113,3 +113,19 @@ class BroadcastImpression(Base):
     shown_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (UniqueConstraint("broadcast_id", "viewer_id", name="uq_broadcast_impressions_broadcast_viewer"),)
+
+
+class BroadcastView(Base):
+    """A confirmed read (viewability + dwell time client-side), distinct from
+    BroadcastImpression (merely served into feed). Covers echoes AND replies —
+    a reply is just a Broadcast row with parent_broadcast_id set, so counting
+    by broadcast_id naturally gives a per-reply count, not just a thread total."""
+
+    __tablename__ = "broadcast_views"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    broadcast_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("broadcasts.id", ondelete="CASCADE"), nullable=False)
+    viewer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("broadcast_id", "viewer_id", name="uq_broadcast_views_broadcast_viewer"),)

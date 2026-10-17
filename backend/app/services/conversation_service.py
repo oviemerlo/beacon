@@ -85,6 +85,100 @@ async def start_conversation(db: AsyncSession, initiator_id: uuid.UUID, broadcas
     return conversation
 
 
+async def start_direct_message(db: AsyncSession, initiator_id: uuid.UUID, recipient_username: str, first_message: str) -> Conversation:
+    await require_terms_accepted(db, initiator_id)
+    recipient = await user_repository.get_by_username(db, recipient_username.strip().lstrip("@"))
+    if recipient is None or recipient.is_suspended:
+        raise NotFoundError("No user found with that handle")
+    if recipient.id == initiator_id:
+        raise ForbiddenError("Cannot message yourself")
+
+    await _assert_messaging_allowed(db, initiator_id, recipient.id)
+
+    if recipient.dm_permission == "no_one":
+        raise ForbiddenError("This user isn't accepting direct messages")
+    if recipient.dm_permission == "tag_match":
+        gate_tag_ids = set(await user_repository.get_dm_tag_ids(db, recipient.id))
+        sender_tag_ids = await user_repository.get_owned_tag_ids(db, initiator_id)
+        if not gate_tag_ids or not (gate_tag_ids & sender_tag_ids):
+            raise ForbiddenError("This user only accepts messages from people who share one of their selected tags")
+    # dm_permission == "everyone" falls through
+
+    conversation = await conversation_repository.find_existing_direct(db, initiator_id, recipient.id)
+    if conversation is None:
+        conversation = await conversation_repository.create_direct(db, initiator_id, recipient.id)
+    elif conversation.dm_status == "declined":
+        raise ForbiddenError("This conversation was declined")
+
+    moderation_result = await moderate_text(first_message)
+    if moderation_result.decision == "reject":
+        raise ValidationError("This message can't be sent.")
+    moderation_status = "flagged" if moderation_result.decision == "flag" else "clean"
+    message = await conversation_repository.add_message(
+        db, conversation.id, initiator_id, first_message, [],
+        moderation_status=moderation_status, moderation_labels=moderation_result.raw_result_json,
+    )
+    if moderation_status == "flagged":
+        await _create_message_moderation_report(db, message.id, first_message, moderation_result)
+    await db.commit()
+    await db.refresh(conversation)
+    schedule_previews(first_message, message_id=message.id)
+    return conversation
+
+
+async def accept_direct_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> Conversation:
+    conversation = await _assert_participant(db, user_id, conversation_id)
+    if conversation.dm_status != "pending" or conversation.recipient_id != user_id:
+        raise ForbiddenError("Nothing to accept")
+    conversation.dm_status = "accepted"
+    await db.commit()
+    return conversation
+
+
+async def decline_direct_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> None:
+    conversation = await _assert_participant(db, user_id, conversation_id)
+    if conversation.dm_status != "pending" or conversation.recipient_id != user_id:
+        raise ForbiddenError("Nothing to decline")
+    conversation.dm_status = "declined"
+    await conversation_repository.hide_for_user(db, user_id, conversation.id)
+    await db.commit()
+
+
+async def list_direct_message_requests(db: AsyncSession, user_id: uuid.UUID) -> list[dict]:
+    conversations = await conversation_repository.list_pending_requests_for_user(db, user_id)
+    items = []
+    for conversation in conversations:
+        other = await user_repository.get_by_id(db, conversation.initiator_id)
+        latest = await conversation_repository.latest_message_for_conversation(db, conversation.id)
+        items.append({
+            "id": str(conversation.id),
+            "from_user_id": str(conversation.initiator_id),
+            "from_display_name": other.display_name if other else "Unknown",
+            "from_username": other.username if other else "unknown",
+            "preview": latest.body if latest else "",
+            "created_at": conversation.created_at,
+        })
+    return items
+
+
+async def update_dm_settings(db: AsyncSession, user_id: uuid.UUID, dm_permission: str, tag_ids: list[int]) -> None:
+    if dm_permission not in ("everyone", "tag_match", "no_one"):
+        raise ValidationError("Invalid dm_permission")
+    user = await user_repository.get_by_id(db, user_id)
+    if user is None:
+        raise NotFoundError("User not found")
+    if dm_permission == "tag_match":
+        owned = await user_repository.get_owned_tag_ids(db, user_id)
+        tag_ids = [t for t in tag_ids if t in owned]  # can only gate on tags they actually hold
+        if not tag_ids:
+            raise ValidationError("Select at least one of your own tags for tag_match")
+    else:
+        tag_ids = []
+    user.dm_permission = dm_permission
+    await user_repository.set_dm_tags(db, user_id, tag_ids)
+    await db.commit()
+
+
 async def _assert_participant(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> Conversation:
     conversation = await conversation_repository.get_by_id(db, conversation_id)
     if conversation is None or not await conversation_repository.is_participant(db, conversation.id, user_id):
@@ -104,6 +198,25 @@ async def _attach_message_attachments(db: AsyncSession, messages: list[Message])
         message._api_attachments = _attachment_payloads(by_id.get(message.id, []))
 
 
+async def get_message_read_counts(
+    db: AsyncSession, conversation: Conversation, messages: list[Message], viewer_id: uuid.UUID
+) -> dict[uuid.UUID, int]:
+    """Exact per-message read count for a GROUP conversation only (conversation.name is not None).
+    Counts other participants whose last_read_at is at or after the message's sent_at."""
+    if conversation.name is None:
+        return {}
+    receipts = await conversation_repository.get_group_read_receipts(db, conversation.id)
+    receipts.pop(viewer_id, None)
+    counts: dict[uuid.UUID, int] = {}
+    for message in messages:
+        counts[message.id] = sum(
+            1
+            for user_id, last_read_at in receipts.items()
+            if user_id != message.sender_id and last_read_at is not None and last_read_at >= message.sent_at
+        )
+    return counts
+
+
 async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: str) -> list[Message]:
     conversation = await _assert_participant(db, user_id, conversation_id)
     messages = await conversation_repository.list_messages(db, conversation_id, viewer_id=user_id)
@@ -112,7 +225,9 @@ async def list_messages(db: AsyncSession, user_id: uuid.UUID, conversation_id: s
     await db.commit()
     await _attach_message_link_previews(db, messages)
     await _attach_message_attachments(db, messages)
+    read_counts = await get_message_read_counts(db, conversation, messages, user_id)
     for message in messages:
+        message._api_read_by_count = read_counts.get(message.id)
         if message.deleted_at is not None:
             message.body = ""
             message.link_previews = []
@@ -142,12 +257,14 @@ async def send_message(db: AsyncSession, user_id: uuid.UUID, conversation_id: st
             raise NotFoundError("Conversation not found")
         other_user_id = conversation.recipient_id if conversation.initiator_id == user_id else conversation.initiator_id
         await _assert_messaging_allowed(db, user_id, other_user_id)
-        if conversation.origin_broadcast_id is None:
-            raise NotFoundError("Broadcast not found")
-        root_echo_id = await conversation_repository.resolve_root_echo_id(db, conversation.origin_broadcast_id)
-        if root_echo_id is None:
-            raise NotFoundError("Broadcast not found")
-        mentioned_user_ids = await mention_service.validate_mentions_for_echo(db, body, root_echo_id, user_id)
+        if conversation.origin_broadcast_id is not None:
+            root_echo_id = await conversation_repository.resolve_root_echo_id(db, conversation.origin_broadcast_id)
+            if root_echo_id is None:
+                raise NotFoundError("Broadcast not found")
+            mentioned_user_ids = await mention_service.validate_mentions_for_echo(db, body, root_echo_id, user_id)
+        elif conversation.dm_status == "pending" and user_id == conversation.recipient_id:
+            raise ForbiddenError("Accept this request before replying")
+        # else: direct DM with no origin broadcast and no mention context — mentioned_user_ids stays []
     moderation_result = await moderate_text(body)
     if moderation_result.decision == "reject":
         raise ValidationError("This message can't be sent.")
@@ -293,8 +410,8 @@ async def list_conversations_for_user(db: AsyncSession, user_id: uuid.UUID) -> l
         items.append(
             {
                 "id": str(conversation.id),
-                "origin_broadcast_id": str(conversation.origin_broadcast_id),
-                "origin_broadcast_preview": origin_preview[:160] if origin_preview else "Original broadcast unavailable.",
+                "origin_broadcast_id": str(conversation.origin_broadcast_id) if conversation.origin_broadcast_id is not None else None,
+                "origin_broadcast_preview": _origin_broadcast_preview(conversation, origin_preview, 160),
                 "origin_broadcast_sender_display_name": (
                     conversation.origin_broadcast.sender.display_name
                     if conversation.origin_broadcast is not None and conversation.origin_broadcast.sender is not None
@@ -310,6 +427,8 @@ async def list_conversations_for_user(db: AsyncSession, user_id: uuid.UUID) -> l
                 "last_message_at": latest.sent_at if latest else conversation.created_at,
                 "unread_count": await conversation_repository.count_unread_in_conversation(db, user_id, conversation.id),
                 "has_mention": conversation.id in mention_conversation_ids,
+                "is_direct": conversation.origin_broadcast_id is None and conversation.name is None,
+                "dm_status": conversation.dm_status,
             }
         )
     items.sort(key=lambda item: item["last_message_at"], reverse=True)
@@ -329,8 +448,8 @@ async def search_messages_for_user(db: AsyncSession, user_id: uuid.UUID, query: 
         items.append(
             {
                 "id": str(conversation.id),
-                "origin_broadcast_id": str(conversation.origin_broadcast_id),
-                "origin_broadcast_preview": origin_preview[:160] if origin_preview else "Original broadcast unavailable.",
+                "origin_broadcast_id": str(conversation.origin_broadcast_id) if conversation.origin_broadcast_id is not None else None,
+                "origin_broadcast_preview": _origin_broadcast_preview(conversation, origin_preview, 160),
                 "origin_broadcast_sender_display_name": (
                     conversation.origin_broadcast.sender.display_name
                     if conversation.origin_broadcast is not None and conversation.origin_broadcast.sender is not None
@@ -409,14 +528,23 @@ async def get_conversation_context(db: AsyncSession, user_id: uuid.UUID, convers
         "participant_count": participant_count,
         "participants": participants,
         "origin_broadcast_id": str(conversation.origin_broadcast_id) if conversation.origin_broadcast_id is not None else None,
-        "origin_broadcast_preview": origin_preview[:220] if origin_preview else "Original broadcast unavailable.",
+        "origin_broadcast_preview": _origin_broadcast_preview(conversation, origin_preview, 220),
         "origin_broadcast_sender_id": str(origin_sender.id) if origin_sender is not None else None,
         "origin_broadcast_sender_display_name": origin_sender.display_name if origin_sender is not None else "Unknown",
         "other_participant_id": str(other_user_id) if other_user_id is not None else None,
         "other_participant_display_name": other_user.display_name if other_user is not None else (conversation.name or "Unknown"),
         "other_participant_avatar_file_id": str(other_avatar_file_id) if other_avatar_file_id else None,
         "invite_url": f"{settings.FRONTEND_URL}/join/{group_invite.token}" if group_invite else None,
+        "dm_status": conversation.dm_status,
     }
+
+
+def _origin_broadcast_preview(conversation: Conversation, origin_preview: str, limit: int) -> str:
+    if origin_preview:
+        return origin_preview[:limit]
+    if conversation.origin_broadcast_id is None and conversation.name is None:
+        return "Direct message"
+    return "Original broadcast unavailable."
 
 
 def _other_participant_id(conversation: Conversation, user_id: uuid.UUID) -> uuid.UUID | None:

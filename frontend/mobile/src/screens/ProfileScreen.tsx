@@ -7,6 +7,7 @@ import { signOut } from "../helpers/auth";
 import { echoAudienceLabels } from "../helpers/tags";
 import { colors, radii } from "../theme/tokens";
 import { Card } from "../components/Shared";
+import { TagChipRow } from "../components/TagChip";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { SetupChecklistBanner } from "../components/SetupChecklistBanner";
 import type { BlockedUsersList, UserProfile } from "../types/api";
@@ -15,11 +16,13 @@ export function ProfileScreen({
   onSignedOut,
   onOpenFollowTags,
   onOpenBlockedUsers,
+  onOpenUserSearch,
   onOpenAdminReports,
 }: {
   onSignedOut: () => void;
   onOpenFollowTags: () => void;
   onOpenBlockedUsers: () => void;
+  onOpenUserSearch: () => void;
   onOpenAdminReports: () => void;
 }) {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -29,6 +32,10 @@ export function ProfileScreen({
   const [displayNameError, setDisplayNameError] = useState<string | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const [dmPermission, setDmPermission] = useState<"everyone" | "tag_match" | "no_one">("no_one");
+  const [dmTagIds, setDmTagIds] = useState<number[]>([]);
+  const [savingDm, setSavingDm] = useState(false);
+  const [dmError, setDmError] = useState<string | null>(null);
   const tabBarHeight = useBottomTabBarHeight();
 
   useFocusEffect(
@@ -37,6 +44,8 @@ export function ProfileScreen({
         .then((me) => {
           setUser(me);
           setDisplayNameDraft((current) => current || me.display_name);
+          setDmPermission(me.dm_permission ?? "no_one");
+          setDmTagIds(me.dm_tag_ids ?? []);
         })
         .catch(() => {});
       apiFetch<BlockedUsersList>("/blocks")
@@ -44,6 +53,21 @@ export function ProfileScreen({
         .catch(() => setBlockedCount(0));
     }, [])
   );
+
+  async function saveDmSettings(nextPermission: typeof dmPermission, nextTagIds: number[]) {
+    setSavingDm(true);
+    setDmError(null);
+    try {
+      await apiFetch("/users/me/dm-settings", {
+        method: "PATCH",
+        body: JSON.stringify({ dm_permission: nextPermission, tag_ids: nextPermission === "tag_match" ? nextTagIds : [] }),
+      });
+    } catch (error) {
+      setDmError(error instanceof Error ? error.message : "Could not save DM settings.");
+    } finally {
+      setSavingDm(false);
+    }
+  }
 
   async function saveDisplayName() {
     const trimmed = displayNameDraft.trim();
@@ -158,6 +182,56 @@ export function ProfileScreen({
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
+        <Text style={styles.sectionLabel}>Who can message you directly</Text>
+        <Text style={styles.emptyText}>Without needing to reply to one of your echoes first.</Text>
+        {(["everyone", "tag_match", "no_one"] as const).map((option) => (
+          <Pressable
+            key={option}
+            style={styles.dmOptionRow}
+            onPress={() => {
+              setDmPermission(option);
+              void saveDmSettings(option, dmTagIds);
+            }}
+          >
+            <View style={[styles.radioOuter, dmPermission === option && styles.radioOuterActive]}>
+              {dmPermission === option && <View style={styles.radioInner} />}
+            </View>
+            <Text style={styles.dmOptionText}>
+              {option === "everyone" ? "Everyone" : option === "tag_match" ? "Someone who shares a tag I pick" : "No one"}
+            </Text>
+          </Pressable>
+        ))}
+        {dmPermission === "tag_match" && (
+          <View style={{ marginTop: 10 }}>
+            {user.tags.length === 0 ? (
+              <Text style={styles.emptyText}>Add Echo Tags first — you can only gate on tags you hold.</Text>
+            ) : (
+              <TagChipRow
+                tags={user.tags}
+                selectedIds={dmTagIds}
+                onToggle={(tagId) => {
+                  const next = dmTagIds.includes(tagId) ? dmTagIds.filter((id) => id !== tagId) : [...dmTagIds, tagId];
+                  setDmTagIds(next);
+                  void saveDmSettings("tag_match", next);
+                }}
+                onShowCountries={() => {}}
+              />
+            )}
+          </View>
+        )}
+        {savingDm && <ActivityIndicator color={colors.signal500} style={{ marginTop: 8 }} />}
+        {dmError && <Text style={styles.errorText}>{dmError}</Text>}
+      </Card>
+
+      <Card style={{ marginBottom: 12 }}>
+        <Text style={styles.sectionLabel}>Following</Text>
+        <Pressable onPress={onOpenUserSearch} style={styles.followTagsButton}>
+          <Text style={styles.followTagsButtonText}>Find people & businesses</Text>
+        </Pressable>
+        <Text style={styles.emptyText}>Followed accounts reach your feed at any distance.</Text>
+      </Card>
+
+      <Card style={{ marginBottom: 12 }}>
         <Text style={styles.sectionLabel}>Blocked users</Text>
         <Pressable onPress={onOpenBlockedUsers} style={styles.followTagsButton}>
           <Text style={styles.followTagsButtonText}>Manage</Text>
@@ -195,12 +269,13 @@ export function ProfileScreen({
       </Pressable>
       {deleteAccountError ? <Text style={styles.errorText}>{deleteAccountError}</Text> : null}
       <Pressable
-        style={[styles.deleteAccountButton, deletingAccount && styles.deleteAccountButtonDisabled]}
+        style={styles.deleteAccountLink}
         onPress={requestDeleteAccount}
         disabled={deletingAccount}
+        hitSlop={8}
       >
         {deletingAccount ? (
-          <ActivityIndicator color={colors.parchment100} />
+          <ActivityIndicator color={colors.parchment500} size="small" />
         ) : (
           <Text style={styles.deleteAccountText}>Delete account</Text>
         )}
@@ -241,15 +316,21 @@ const styles = StyleSheet.create({
   pillText: { color: colors.parchment300, fontSize: 11, fontFamily: "monospace" },
   followTagsButton: { borderColor: colors.signal500, borderWidth: 1, borderRadius: radii.beacon, paddingVertical: 8, alignItems: "center", marginBottom: 10 },
   followTagsButtonText: { color: colors.signal400, fontWeight: "600" },
+  dmOptionRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: colors.dusk600,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioOuterActive: { borderColor: colors.signal500 },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.signal500 },
+  dmOptionText: { color: colors.parchment100, fontSize: 14, flex: 1 },
   signOutButton: { borderColor: colors.rust400, borderWidth: 1, borderRadius: radii.beacon, paddingVertical: 12, alignItems: "center" },
   signOutText: { color: colors.rust400, fontWeight: "600" },
-  deleteAccountButton: {
-    backgroundColor: colors.rust400,
-    borderRadius: radii.beacon,
-    paddingVertical: 12,
-    alignItems: "center",
-    marginTop: 12,
-  },
-  deleteAccountButtonDisabled: { opacity: 0.6 },
-  deleteAccountText: { color: colors.parchment100, fontWeight: "700" },
+  deleteAccountLink: { alignItems: "center", marginTop: 16, paddingVertical: 8 },
+  deleteAccountText: { color: colors.parchment500, fontSize: 12 },
 });

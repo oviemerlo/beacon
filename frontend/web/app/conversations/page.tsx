@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { clientFetch } from "@/helpers/client-api";
 import { promptAndSubmitReport } from "@/helpers/report-actions";
 import { splitMentionParts } from "@/helpers/mentions";
 import { formatMessageSentAt } from "@/helpers/time";
 import { usePolling } from "@/helpers/usePolling";
-import type { ConversationSearchHit, ConversationThread, MentionNotification } from "@/types/api";
+import type { ConversationSearchHit, ConversationThread, DmRequest, MentionNotification } from "@/types/api";
 
 export default function ConversationsPage() {
+  const router = useRouter();
   const [threads, setThreads] = useState<ConversationThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -19,16 +21,24 @@ export default function ConversationsPage() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [mentions, setMentions] = useState<MentionNotification[]>([]);
+  const [requests, setRequests] = useState<DmRequest[]>([]);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeHandle, setComposeHandle] = useState("");
+  const [composeMessage, setComposeMessage] = useState("");
+  const [composeError, setComposeError] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
   const isSearching = debouncedQuery.trim().length > 0;
 
   const loadConversations = useCallback(async ({ silent }: { silent: boolean }) => {
     if (debouncedQuery.trim()) return;
-    const [rows, mentionRows] = await Promise.all([
+    const [rows, mentionRows, requestRows] = await Promise.all([
       clientFetch<ConversationThread[]>("/conversations"),
       clientFetch<MentionNotification[]>("/conversations/mentions").catch(() => []),
+      clientFetch<DmRequest[]>("/conversations/requests").catch(() => [] as DmRequest[]),
     ]);
     setThreads(rows);
     setMentions(mentionRows);
+    setRequests(requestRows);
     if (!silent) setLoading(false);
     if (!silent) {
       try {
@@ -73,11 +83,90 @@ export default function ConversationsPage() {
     };
   }, [debouncedQuery, isSearching]);
 
+  async function sendDirectMessage() {
+    const handle = composeHandle.trim().replace(/^@/, "");
+    if (!handle || !composeMessage.trim()) return;
+    setComposing(true);
+    setComposeError(null);
+    try {
+      const { conversation_id } = await clientFetch<{ conversation_id: string }>("/conversations/direct", {
+        method: "POST",
+        body: JSON.stringify({ recipient_username: handle, first_message: composeMessage.trim() }),
+      });
+      setComposeOpen(false);
+      setComposeHandle("");
+      setComposeMessage("");
+      router.push(`/conversations/${conversation_id}`);
+    } catch (error) {
+      setComposeError(error instanceof Error ? error.message : "Couldn't send that message.");
+    } finally {
+      setComposing(false);
+    }
+  }
+
+  async function respondToRequest(requestId: string, accept: boolean) {
+    try {
+      await clientFetch(`/conversations/${requestId}/${accept ? "accept" : "decline"}`, { method: "POST" });
+      setRequests((rows) => rows.filter((row) => row.id !== requestId));
+      if (accept) router.push(`/conversations/${requestId}`);
+    } catch {
+      window.alert(accept ? "Couldn't accept that request." : "Couldn't decline that request.");
+    }
+  }
+
   return (
     <div className="min-h-screen">
       <AppNav />
       <main className="max-w-2xl mx-auto px-5 py-6">
         <h1 className="font-display text-xl font-bold mb-5">Messages</h1>
+        <button type="button" className="btn-secondary w-full mb-3" onClick={() => setComposeOpen((open) => !open)}>
+          {composeOpen ? "Cancel" : "Message someone by handle"}
+        </button>
+        {composeOpen && (
+          <div className="card mb-4">
+            <input
+              className="input-field"
+              placeholder="@handle"
+              value={composeHandle}
+              onChange={(event) => setComposeHandle(event.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              aria-label="Handle"
+            />
+            <textarea
+              className="input-field mt-2 min-h-20"
+              placeholder="Say something..."
+              value={composeMessage}
+              onChange={(event) => setComposeMessage(event.target.value)}
+              aria-label="Message"
+            />
+            {composeError && <p className="text-rust-400 text-sm mt-2">{composeError}</p>}
+            <button type="button" className="btn-primary w-full mt-3" onClick={() => void sendDirectMessage()} disabled={composing}>
+              {composing ? "Sending…" : "Send"}
+            </button>
+          </div>
+        )}
+        {requests.length > 0 && (
+          <div className="flex flex-col gap-3 mb-5">
+            {requests.map((req) => (
+              <div key={req.id} className="card">
+                <p className="text-signal-400 text-[10px] font-mono mb-1">Message request</p>
+                <p className="text-sm">
+                  @{req.from_username} ({req.from_display_name})
+                </p>
+                <p className="text-parchment-100 text-sm mt-1 break-all">{req.preview}</p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  <button type="button" className="feed-card-action" onClick={() => void respondToRequest(req.id, true)}>
+                    Accept
+                  </button>
+                  <button type="button" className="feed-card-action" onClick={() => void respondToRequest(req.id, false)}>
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="mb-5">
           <input
             className="input-field"
@@ -139,7 +228,7 @@ export default function ConversationsPage() {
           </>
         ) : loading ? (
           <p className="text-parchment-500 text-sm font-mono">Loading conversations…</p>
-        ) : threads.length === 0 ? (
+        ) : threads.length === 0 && requests.length === 0 ? (
           <div className="card text-center py-10">
             <p className="font-medium">No conversations yet.</p>
             <p className="text-parchment-500 text-sm mt-1">
@@ -164,16 +253,20 @@ export default function ConversationsPage() {
                       : `Broadcast from ${t.origin_broadcast_sender_display_name}: `;
                     return (
                       <>
-                        <div
-                          className={`mt-1 mb-2 max-w-[62%] rounded-md border border-dusk-600 border-l-4 border-l-signal-500 bg-dusk-800/70 px-2.5 py-2 ${
-                            originWasMine ? "ml-auto" : "mr-auto"
-                          }`}
-                        >
-                          <p className="text-parchment-300 text-sm italic break-all">
-                            {quotePrefix}
-                            {t.origin_broadcast_preview}
-                          </p>
-                        </div>
+                        {t.is_direct ? (
+                          <p className="text-signal-400 text-[10px] font-mono mb-2">Direct message</p>
+                        ) : (
+                          <div
+                            className={`mt-1 mb-2 max-w-[62%] rounded-md border border-dusk-600 border-l-4 border-l-signal-500 bg-dusk-800/70 px-2.5 py-2 ${
+                              originWasMine ? "ml-auto" : "mr-auto"
+                            }`}
+                          >
+                            <p className="text-parchment-300 text-sm italic break-all">
+                              {quotePrefix}
+                              {t.origin_broadcast_preview}
+                            </p>
+                          </div>
+                        )}
                         {isIncomingLatest ? (
                           <div className="max-w-[62%] mr-auto">
                             <p className={isUnread ? "font-semibold" : "font-normal"}>{t.other_participant.display_name}:</p>

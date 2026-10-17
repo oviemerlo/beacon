@@ -122,7 +122,10 @@ async def _load_profile(db: AsyncSession, user_id: uuid.UUID) -> UserProfileOut:
     profile = _profile_out(user)
     course_codes = await school_service.get_my_courses(db, user.id)
     avatar = await upload_repository.get_latest_avatar_for_user(db, user.id)
-    updates: dict = {"course_codes": course_codes}
+    updates: dict = {
+        "course_codes": course_codes,
+        "dm_tag_ids": await user_repository.get_dm_tag_ids(db, user.id),
+    }
     if avatar is not None:
         updates["avatar_file_id"] = avatar.id
         updates["avatar_scan_status"] = avatar.scan_status

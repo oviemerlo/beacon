@@ -270,7 +270,7 @@ export default function ConversationDetailPage() {
             </button>
           )}
         </div>
-        {context && !isGroup && (
+        {context && !isGroup && context.origin_broadcast_id && (
           <div className={`mb-4 flex w-full ${originWasMine ? "justify-end" : "justify-start"}`}>
             <div className="max-w-[min(75%,28rem)] rounded-beacon border border-dusk-600 border-l-4 border-l-signal-500 bg-dusk-800/70 px-3 py-2.5">
               <p className="text-signal-400 font-semibold text-xs">
@@ -281,6 +281,9 @@ export default function ConversationDetailPage() {
               <p className="text-parchment-300 text-sm mt-1 italic break-all">{context.origin_broadcast_preview}</p>
             </div>
           </div>
+        )}
+        {context && !isGroup && !context.origin_broadcast_id && (
+          <p className="text-signal-400 text-[10px] font-mono mb-4">Direct message</p>
         )}
         {isGroup && (
           <div className="card mb-4">
@@ -427,6 +430,12 @@ export default function ConversationDetailPage() {
                       <p className="text-parchment-500 text-[10px] font-mono">
                         {formatMessageSentAt(m.sent_at)}
                       </p>
+                      {isGroup && isMine && !isDeleted && (m.read_by_count ?? 0) > 0 ? (
+                        <p className="text-parchment-500 text-[10px] font-mono">Read by {m.read_by_count}</p>
+                      ) : null}
+                      {!isGroup && isMine && !isDeleted ? (
+                        <span className="text-parchment-500 text-[10px] font-mono">{m.read_at ? "Read" : "Sent"}</span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -464,6 +473,32 @@ export default function ConversationDetailPage() {
             </div>
           )}
           {sendError && <p className="text-rust-400 text-sm mb-2">{sendError}</p>}
+          {context?.dm_status === "pending" && currentUserId != null && context.created_by_user_id !== currentUserId ? (
+            <div className="card">
+              <p className="text-sm text-parchment-100">{context.other_participant_display_name} wants to message you.</p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  className="btn-primary px-4"
+                  onClick={() => void clientFetch(`/conversations/${conversationId}/accept`, { method: "POST" }).then(() => load())}
+                >
+                  Accept
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary px-4"
+                  onClick={() =>
+                    void clientFetch(`/conversations/${conversationId}/decline`, { method: "POST" }).then(() =>
+                      router.push("/conversations")
+                    )
+                  }
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           <div className="mb-2">
             <BroadcastAttachments
               files={attachments}
@@ -507,6 +542,8 @@ export default function ConversationDetailPage() {
               Send
             </button>
           </div>
+          </>
+          )}
         </div>
       </main>
     </div>

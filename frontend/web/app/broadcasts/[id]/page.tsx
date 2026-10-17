@@ -12,8 +12,10 @@ import { buildFeedCardActions, FeedCardOverflowMenu } from "@/components/FeedCar
 import { BROADCAST_CONTENT_MAX } from "@/helpers/broadcast-content";
 import { SenderAvatar } from "@/components/SenderAvatar";
 import { VerifiedMark } from "@/components/VerifiedMark";
+import { FollowButton } from "@/components/FollowButton";
 import { reachBadgeLabel } from "@/helpers/broadcast-reach";
 import { clientFetch } from "@/helpers/client-api";
+import { useBroadcastViewTracking } from "@/helpers/broadcastViews";
 import { splitMentionParts } from "@/helpers/mentions";
 import { echoAudienceLabels } from "@/helpers/tags";
 import { formatBroadcastSentAt } from "@/helpers/time";
@@ -207,9 +209,10 @@ function ThreadItem({
   const isOwn = currentUserId === item.sender_id;
   const reachLabel = reachBadgeLabel(item.is_global, item.radius_meters);
   const audienceLabels = echoAudienceLabels(item.tags, item.course_codes, item.course_code);
+  const viewRef = useBroadcastViewTracking<HTMLDivElement>([item.id]);
 
   return (
-    <div className={isParent ? "" : "border border-dusk-700 rounded-beacon p-3"}>
+    <div ref={viewRef} className={isParent ? "" : "border border-dusk-700 rounded-beacon p-3"}>
       <EchoMediaLayout
         attachments={item.attachments}
         corner={
@@ -233,6 +236,7 @@ function ThreadItem({
             <SenderAvatar fileId={item.sender_avatar_file_id} name={item.sender_display_name} />
             {item.sender_display_name}
             <VerifiedMark verified={item.sender_is_verified} />
+            <FollowButton userId={item.sender_id} initialFollowing={Boolean(item.sender_is_following)} currentUserId={currentUserId} />
           </p>
           {isParent &&
             audienceLabels.map((label) => (
@@ -256,6 +260,9 @@ function ThreadItem({
       </EchoMediaLayout>
         <div className="flex items-center gap-2 mt-auto pt-2">
           <span className="text-parchment-500/80 text-[11px] font-light">{formatBroadcastSentAt(item.created_at)}</span>
+          {item.view_count_label ? (
+            <span className="text-parchment-500/80 text-[11px] font-light font-mono">Seen by {item.view_count_label}</span>
+          ) : null}
           {isParent && (
             <span className="feed-card-reach">{reachLabel}</span>
           )}

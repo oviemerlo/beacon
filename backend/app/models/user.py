@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from geoalchemy2 import Geography
 from geoalchemy2.shape import to_shape
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.associationproxy import association_proxy
@@ -14,7 +14,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.school import SchoolVerification
-    from app.models.tag import UserFollowedTag, UserTag
+    from app.models.tag import UserDmTag, UserFollowedTag, UserTag
 
 
 class User(Base):
@@ -38,6 +38,8 @@ class User(Base):
 
     feed_radius_meters: Mapped[int] = mapped_column(default=8000)
     discoverable_in_broadcasts: Mapped[bool] = mapped_column(Boolean, default=True)  # opt-out toggle
+    dm_permission: Mapped[str] = mapped_column(String(20), default="no_one", server_default="no_one", nullable=False)
+    # 'everyone' | 'tag_match' | 'no_one'
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_digest_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -54,6 +56,8 @@ class User(Base):
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     user_tags: Mapped[list["UserTag"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     followed_tag_rows: Mapped[list["UserFollowedTag"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    dm_tag_rows: Mapped[list["UserDmTag"]] = relationship(cascade="all, delete-orphan")
+    dm_tags = association_proxy("dm_tag_rows", "tag")
     school_verification: Mapped["SchoolVerification | None"] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -90,6 +94,13 @@ class User(Base):
         if self.date_of_birth is None:
             return None
         return calculate_age(self.date_of_birth)
+
+    __table_args__ = (
+        CheckConstraint(
+            "dm_permission IN ('everyone', 'tag_match', 'no_one')",
+            name="ck_users_dm_permission",
+        ),
+    )
 
 
 class OAuthAccount(Base):

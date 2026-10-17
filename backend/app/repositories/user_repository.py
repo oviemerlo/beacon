@@ -15,16 +15,31 @@ repository calls that either all succeed or all roll back together.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select, text, union
+from sqlalchemy import delete, func, select, text, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation, ConversationInvite, ConversationParticipant
-from app.models.tag import Tag, UserFollowedTag, UserTag
+from app.models.tag import Tag, UserDmTag, UserFollowedTag, UserTag
 from app.models.user import OAuthAccount, User
 from sqlalchemy.orm import selectinload
 
 async def get_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:
     return await db.get(User, user_id)
+
+
+async def search_by_handle_prefix(db, prefix: str, exclude_user_id: uuid.UUID, limit: int = 20) -> list[User]:
+    pattern = f"{prefix.lower()}%"
+    result = await db.execute(
+        select(User)
+        .where(
+            User.id != exclude_user_id,
+            User.is_suspended.is_(False),
+            (func.lower(User.username).like(pattern)) | (func.lower(User.display_name).like(pattern)),
+        )
+        .order_by(User.username)
+        .limit(limit)
+    )
+    return list(result.scalars().all())
 
 
 async def get_any_admin_user(db: AsyncSession) -> User | None:
@@ -46,6 +61,24 @@ async def get_by_id_with_tags(db: AsyncSession, user_id: uuid.UUID) -> User | No
         )
     )
     return result.scalar_one_or_none()
+
+async def get_dm_tag_ids(db: AsyncSession, user_id: uuid.UUID) -> list[int]:
+    result = await db.execute(select(UserDmTag.tag_id).where(UserDmTag.user_id == user_id))
+    return [row[0] for row in result.all()]
+
+
+async def set_dm_tags(db: AsyncSession, user_id: uuid.UUID, tag_ids: list[int]) -> None:
+    await db.execute(delete(UserDmTag).where(UserDmTag.user_id == user_id))
+    for tag_id in tag_ids:
+        db.add(UserDmTag(user_id=user_id, tag_id=tag_id))
+    await db.flush()
+
+
+async def get_owned_tag_ids(db: AsyncSession, user_id: uuid.UUID) -> set[int]:
+    """The user's own onboarding tags (UserTag), for tag_match intersection checks."""
+    result = await db.execute(select(UserTag.tag_id).where(UserTag.user_id == user_id))
+    return {row[0] for row in result.all()}
+
 
 async def get_by_username(db: AsyncSession, username: str) -> User | None:
     result = await db.execute(select(User).where(User.username == username))

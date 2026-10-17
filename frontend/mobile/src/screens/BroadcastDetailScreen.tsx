@@ -7,6 +7,7 @@ import { apiFetch } from "../helpers/api";
 import { reachBadgeLabel } from "../helpers/broadcastReach";
 import { splitMentionParts } from "../helpers/mentions";
 import { usePolling } from "../helpers/usePolling";
+import { useScrollViewBroadcastViews } from "../helpers/broadcastViews";
 import { echoAudienceLabels } from "../helpers/tags";
 import { formatBroadcastSentAt } from "../helpers/time";
 import { uploadBroadcastAttachment, type PickedUpload } from "../helpers/uploads";
@@ -21,6 +22,7 @@ import { ShareButton } from "../components/ShareButton";
 import { buildFeedCardActions, FeedCardOverflowMenu } from "../components/FeedCardOverflowMenu";
 import { SenderAvatar } from "../components/SenderAvatar";
 import { VerifiedMark } from "../components/VerifiedMark";
+import { FollowButton } from "../components/FollowButton";
 import type { BroadcastThread, FeedBroadcast, UserProfile } from "../types/api";
 
 export function BroadcastDetailScreen({
@@ -40,6 +42,7 @@ export function BroadcastDetailScreen({
   const [error, setError] = useState<string | null>(null);
   const [composerHeight, setComposerHeight] = useState(60);
   const insets = useSafeAreaInsets();
+  const viewTracking = useScrollViewBroadcastViews();
 
   const currentUserId = currentUser?.id ?? null;
 
@@ -75,6 +78,13 @@ export function BroadcastDetailScreen({
   }, [broadcastId]);
 
   usePolling(loadThread, [loadThread], 5000);
+
+  const checkVisibleItems = viewTracking.check;
+  useEffect(() => {
+    if (!thread) return;
+    const t = setTimeout(checkVisibleItems, 300);
+    return () => clearTimeout(t);
+  }, [thread, checkVisibleItems]);
 
   async function postReplyInFeed() {
     if (!message.trim() || !thread) return;
@@ -138,12 +148,15 @@ export function BroadcastDetailScreen({
 
   return (
     <View style={styles.container}>
+      <View ref={viewTracking.viewportRef} style={styles.scroll} collapsable={false}>
       <KeyboardAwareScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: 24 }]}
         keyboardShouldPersistTaps="handled"
         bottomOffset={insets.bottom + 120}
         extraKeyboardSpace={insets.bottom + 80}
+        onScroll={viewTracking.onScroll}
+        onContentSizeChange={viewTracking.check}
       >
         {loadingThread && <ActivityIndicator color={colors.signal500} style={{ marginBottom: 12 }} />}
         {threadError && <Text style={styles.error}>{threadError}</Text>}
@@ -151,6 +164,7 @@ export function BroadcastDetailScreen({
           <Card style={styles.threadCard}>
             <ThreadItem
               item={thread.parent}
+              trackRef={viewTracking.register(thread.parent.id)}
               currentUserId={currentUserId}
               onRemoved={onLeaveThread}
               onBlocked={onLeaveThread}
@@ -165,6 +179,7 @@ export function BroadcastDetailScreen({
                     key={item.id}
                     item={item}
                     isReply
+                    trackRef={viewTracking.register(item.id)}
                     currentUserId={currentUserId}
                     onRemoved={onReplyRemoved}
                     onBlocked={onReplyBlocked}
@@ -175,6 +190,7 @@ export function BroadcastDetailScreen({
           </Card>
         )}
       </KeyboardAwareScrollView>
+      </View>
       <KeyboardStickyView style={[styles.composerWrapper, { paddingBottom: insets.bottom + 12 }]}>
         <Card style={styles.composerCard}>
           <TextInput
@@ -213,12 +229,14 @@ export function BroadcastDetailScreen({
 function ThreadItem({
   item,
   isReply = false,
+  trackRef,
   currentUserId,
   onRemoved,
   onBlocked,
 }: {
   item: FeedBroadcast;
   isReply?: boolean;
+  trackRef?: (node: View | null) => void;
   currentUserId: string | null;
   onRemoved: (id: string) => void;
   onBlocked: (senderId: string) => void;
@@ -227,7 +245,7 @@ function ThreadItem({
   const reachLabel = reachBadgeLabel(item.is_global, item.radius_meters);
   const audienceLabels = echoAudienceLabels(item.tags, item.course_codes, item.course_code);
   return (
-    <View style={[isReply && styles.replyItem]}>
+    <View ref={trackRef} collapsable={false} style={[isReply && styles.replyItem]}>
       <EchoMediaLayout
         attachments={item.attachments}
         corner={
@@ -251,6 +269,7 @@ function ThreadItem({
           <SenderAvatar fileId={item.sender_avatar_file_id} name={item.sender_display_name} />
           <Text style={styles.senderName}>{item.sender_display_name}</Text>
           <VerifiedMark verified={item.sender_is_verified} />
+          <FollowButton userId={item.sender_id} initialFollowing={Boolean(item.sender_is_following)} currentUserId={currentUserId} />
           {!isReply
             ? audienceLabels.map((label) => (
                 <View key={label} style={styles.broadcastTagPill}>
@@ -270,6 +289,7 @@ function ThreadItem({
       </EchoMediaLayout>
         <View style={styles.threadMetaRow}>
           <Text style={styles.sentAtLabel}>{formatBroadcastSentAt(item.created_at)}</Text>
+          {item.view_count_label ? <Text style={styles.sentAtLabel}>Seen by {item.view_count_label}</Text> : null}
           {!isReply && (
             <View style={styles.reachPill}>
               <Text style={styles.reachPillText}>{reachLabel}</Text>

@@ -35,6 +35,49 @@ async def find_existing(db: AsyncSession, initiator_id: uuid.UUID, recipient_id:
     return result.scalar_one_or_none()
 
 
+async def find_existing_direct(db: AsyncSession, user_a: uuid.UUID, user_b: uuid.UUID) -> Conversation | None:
+    result = await db.execute(
+        select(Conversation).where(
+            Conversation.origin_broadcast_id.is_(None),
+            Conversation.name.is_(None),
+            or_(
+                (Conversation.initiator_id == user_a) & (Conversation.recipient_id == user_b),
+                (Conversation.initiator_id == user_b) & (Conversation.recipient_id == user_a),
+            ),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_direct(db: AsyncSession, initiator_id: uuid.UUID, recipient_id: uuid.UUID) -> Conversation:
+    conversation = Conversation(
+        initiator_id=initiator_id,
+        recipient_id=recipient_id,
+        origin_broadcast_id=None,
+        dm_status="pending",
+        created_by_user_id=initiator_id,
+    )
+    db.add(conversation)
+    await db.flush()
+    db.add(ConversationParticipant(conversation_id=conversation.id, user_id=initiator_id, role="admin"))
+    db.add(ConversationParticipant(conversation_id=conversation.id, user_id=recipient_id, role="member"))
+    await db.flush()
+    return conversation
+
+
+async def list_pending_requests_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[Conversation]:
+    result = await db.execute(
+        select(Conversation)
+        .where(
+            Conversation.recipient_id == user_id,
+            Conversation.dm_status == "pending",
+            Conversation.id.not_in(_hidden_conversation_ids(user_id)),
+        )
+        .order_by(Conversation.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
 async def create(db: AsyncSession, initiator_id: uuid.UUID, recipient_id: uuid.UUID, broadcast_id: uuid.UUID) -> Conversation:
     conversation = Conversation(
         initiator_id=initiator_id,
@@ -134,7 +177,24 @@ async def mark_read_for_user_in_conversation(db: AsyncSession, user_id: uuid.UUI
         )
         .values(read_at=datetime.now(timezone.utc))
     )
+    await db.execute(
+        update(ConversationParticipant)
+        .where(
+            ConversationParticipant.conversation_id == conversation_id,
+            ConversationParticipant.user_id == user_id,
+        )
+        .values(last_read_at=datetime.now(timezone.utc))
+    )
     await db.flush()
+
+
+async def get_group_read_receipts(db: AsyncSession, conversation_id: uuid.UUID) -> dict[uuid.UUID, datetime | None]:
+    """user_id -> last_read_at for every participant in this conversation."""
+    result = await db.execute(
+        select(ConversationParticipant.user_id, ConversationParticipant.last_read_at)
+        .where(ConversationParticipant.conversation_id == conversation_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
 
 
 async def mark_all_read_for_user(db: AsyncSession, user_id: uuid.UUID) -> None:

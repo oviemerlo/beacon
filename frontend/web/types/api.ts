@@ -22,6 +22,8 @@ export interface UserProfile {
   longitude: number | null;
   feed_radius_meters: number;
   discoverable_in_broadcasts: boolean;
+  dm_permission: "everyone" | "tag_match" | "no_one";
+  dm_tag_ids: number[];
   tags: Tag[];
   course_codes?: string[];
   followed_tag_limit: number;
@@ -96,11 +98,13 @@ export interface LatestFeedReply {
   sender_id: string;
   sender_display_name: string;
   sender_is_verified?: boolean;
+  sender_is_following?: boolean;
   sender_avatar_file_id?: string | null;
   content: string;
   created_at: string;
   attachments?: BroadcastAttachment[];
   link_previews?: LinkPreview[];
+  view_count_label?: string | null;
 }
 
 export interface FeedBroadcast {
@@ -108,6 +112,7 @@ export interface FeedBroadcast {
   sender_id: string;
   sender_display_name: string;
   sender_is_verified?: boolean;
+  sender_is_following?: boolean;
   sender_avatar_file_id?: string | null;
   content: string;
   distance_m: number;
@@ -124,6 +129,7 @@ export interface FeedBroadcast {
   replies?: FeedReply[];
   attachments?: BroadcastAttachment[];
   link_previews?: LinkPreview[];
+  view_count_label?: string | null;
 }
 
 export interface BroadcastAttachment {
@@ -149,6 +155,7 @@ export interface FeedReply {
   sender_id: string;
   sender_display_name: string;
   sender_is_verified?: boolean;
+  sender_is_following?: boolean;
   content: string;
   distance_m: number;
   shared_tag_count?: number;
@@ -217,6 +224,17 @@ export interface ConversationThread {
   last_message_at: string;
   unread_count: number;
   has_mention?: boolean;
+  is_direct?: boolean;
+  dm_status?: "pending" | "accepted" | "declined" | null;
+}
+
+export interface DmRequest {
+  id: string;
+  from_user_id: string;
+  from_display_name: string;
+  from_username: string;
+  preview: string;
+  created_at: string;
 }
 
 export interface ConversationContext {
@@ -234,6 +252,7 @@ export interface ConversationContext {
   max_participants?: number | null;
   participant_count?: number | null;
   participants?: ConversationParticipant[];
+  dm_status?: "pending" | "accepted" | "declined" | null;
 }
 
 export interface ConversationParticipant {
@@ -277,6 +296,7 @@ export interface Message {
   mentioned_user_ids?: string[];
   link_previews?: LinkPreview[];
   attachments?: BroadcastAttachment[];
+  read_by_count?: number | null;
 }
 
 export interface MentionCandidate {
@@ -370,6 +390,7 @@ export interface FeedSearchHit {
   sender_id: string;
   sender_display_name: string;
   sender_is_verified?: boolean;
+  sender_is_following?: boolean;
   sender_avatar_file_id?: string | null;
   tags: Tag[];
   course_code?: string | null;
@@ -391,4 +412,17 @@ export interface ConversationSearchHit {
   is_reply_to_you: boolean;
   other_participant: { id: string; display_name: string };
   matches: ConversationSearchMatch[];
+}
+
+export interface FollowingListItem {
+  id: string;
+  username: string;
+  display_name: string;
+  account_type: string;
+  is_verified: boolean;
+  avatar_file_id?: string | null;
+}
+
+export interface FollowTarget extends FollowingListItem {
+  is_following: boolean;
 }

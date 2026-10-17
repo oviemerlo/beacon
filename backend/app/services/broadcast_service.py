@@ -176,6 +176,11 @@ async def hide_broadcast(db: AsyncSession, current_user_id: uuid.UUID, broadcast
     await db.commit()
 
 
+async def record_broadcast_views(db: AsyncSession, user_id: uuid.UUID, broadcast_ids: list[uuid.UUID]) -> None:
+    await broadcast_repository.record_views(db, broadcast_ids, user_id)
+    await db.commit()
+
+
 async def get_public_broadcast(db: AsyncSession, broadcast_id: uuid.UUID) -> PublicBroadcastOut:
     broadcast = await broadcast_repository.get_by_id(db, broadcast_id)
     if broadcast is None or broadcast.deleted_at is not None or broadcast.moderation_status == "rejected":

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories import broadcast_repository, feed_search_repository, user_repository
+from app.repositories import broadcast_repository, feed_search_repository, follow_repository, user_repository
 from app.services import user_service
 from app.services.broadcast_tags import attach_course_codes, attach_sender_avatars, serialize_echo_rows, serialize_search_hit, tag_payload
 from app.services.exceptions import ValidationError
@@ -64,7 +64,8 @@ async def search_history(db: AsyncSession, user_id: uuid.UUID, query: str, tag_i
         raise ValidationError("A keyword is required")
     hits = await feed_search_repository.search_history(db, user_id, keyword, tag_ids, course_codes)
     viewer_tags = await user_service.list_identity_tags(db, user_id)
-    payloads = [serialize_search_hit(hit, user_id, viewer_tags) for hit in hits]
+    following_ids = await follow_repository.get_following_ids_for_set(db, user_id, list({hit.broadcast.sender_id for hit in hits}))
+    payloads = [serialize_search_hit(hit, user_id, viewer_tags, following_ids) for hit in hits]
     await attach_sender_avatars(db, payloads, [hit.broadcast for hit in hits])
     await attach_course_codes(db, payloads, [hit.broadcast for hit in hits])
     return payloads
