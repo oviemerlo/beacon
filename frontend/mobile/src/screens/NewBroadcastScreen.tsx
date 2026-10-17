@@ -247,6 +247,46 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
       nestedScrollEnabled
       scrollEnabled
     >
+      <View style={styles.selectedHeader}>
+        <Text style={styles.label}>Selected for this broadcast</Text>
+        <View style={styles.selectedActions}>
+          <Pressable
+            onPress={clearAllTargeting}
+            disabled={!canClearAll}
+            style={[styles.pill, !canClearAll && styles.pillDisabled]}
+          >
+            <Text style={styles.pillText}>Clear all tags</Text>
+          </Pressable>
+          <Pressable
+            onPress={selectAllTargeting}
+            disabled={!canSelectAll}
+            style={[styles.pill, !canSelectAll && styles.pillDisabled]}
+          >
+            <Text style={styles.pillText}>Select all tags</Text>
+          </Pressable>
+        </View>
+      </View>
+      {selectedTags.length === 0 && selectedCourseCodes.length === 0 ? (
+        <Text style={styles.emptyText}>Select at least one tag. School and course tags AND with every other selected tag.</Text>
+      ) : (
+        <View style={[styles.tagPillRow, { marginBottom: 20 }]}>
+          {selectedTags.map((tag) => (
+            <Pressable
+              key={tag.id}
+              onPress={() => toggleTargetTag(tag.id)}
+              style={[styles.pill, styles.pillActive]}
+            >
+              <Text style={[styles.pillText, styles.pillTextActive]}>{tag.label}</Text>
+            </Pressable>
+          ))}
+          {selectedCourseCodes.map((course) => (
+            <Pressable key={course} onPress={() => toggleCourse(course)} style={[styles.pill, styles.pillActive]}>
+              <Text style={[styles.pillText, styles.pillTextActive]}>{course}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
       <TextInput
         style={styles.textarea}
         placeholder="What do you want people nearby to know?"
@@ -299,47 +339,13 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
               : " "}
       </Text>
 
-      <View style={styles.selectedHeader}>
-        <Text style={styles.label}>Selected for this broadcast</Text>
-        <View style={styles.selectedActions}>
-          <Pressable
-            onPress={clearAllTargeting}
-            disabled={!canClearAll}
-            style={[styles.pill, !canClearAll && styles.pillDisabled]}
-          >
-            <Text style={styles.pillText}>Clear all tags</Text>
-          </Pressable>
-          <Pressable
-            onPress={selectAllTargeting}
-            disabled={!canSelectAll}
-            style={[styles.pill, !canSelectAll && styles.pillDisabled]}
-          >
-            <Text style={styles.pillText}>Select all tags</Text>
-          </Pressable>
-        </View>
-      </View>
-      {selectedTags.length === 0 && selectedCourseCodes.length === 0 ? (
-        <Text style={styles.emptyText}>Select at least one tag. School and course tags AND with every other selected tag.</Text>
-      ) : (
-        <View style={styles.tagPillRow}>
-          {selectedTags.map((tag) => (
-            <Pressable
-              key={tag.id}
-              onPress={() => toggleTargetTag(tag.id)}
-              style={[styles.pill, styles.pillActive]}
-            >
-              <Text style={[styles.pillText, styles.pillTextActive]}>{tag.label}</Text>
-            </Pressable>
-          ))}
-          {selectedCourseCodes.map((course) => (
-            <Pressable key={course} onPress={() => toggleCourse(course)} style={[styles.pill, styles.pillActive]}>
-              <Text style={[styles.pillText, styles.pillTextActive]}>{course}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      {error && <Text style={styles.error}>{error}</Text>}
 
-      <Text style={styles.profileLabel}>Your profile tags</Text>
+      <Pressable style={styles.buttonPrimary} onPress={publish} disabled={posting || !content.trim() || selectedTagIds.length === 0}>
+        {posting ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonPrimaryText}>Send an Echo</Text>}
+      </Pressable>
+
+      <Text style={[styles.profileLabel, { marginTop: 40 }]}>Your profile tags</Text>
       {generalProfileTags.length === 0 ? (
         <Text style={styles.emptyText}>No profile tags yet. Add tags from your profile.</Text>
       ) : availableProfileTags.length === 0 ? (
@@ -401,12 +407,6 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
           )}
         </View>
       )}
-
-      {error && <Text style={styles.error}>{error}</Text>}
-
-      <Pressable style={styles.buttonPrimary} onPress={publish} disabled={posting || !content.trim() || selectedTagIds.length === 0}>
-        {posting ? <ActivityIndicator color={colors.dusk950} /> : <Text style={styles.buttonPrimaryText}>Send an Echo</Text>}
-      </Pressable>
     </ScrollView>
   );
 }
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   label: { color: colors.parchment100, fontSize: 14, fontWeight: "600" },
-  selectedHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 },
+  selectedHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 4, marginBottom: 12 },
   selectedActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   emptyText: { color: colors.parchment500, fontSize: 13, marginBottom: 8 },
   reachReminder: { color: colors.signal400, fontSize: 12, fontWeight: "600", marginBottom: 12 },

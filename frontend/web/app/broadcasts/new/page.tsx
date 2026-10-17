@@ -191,6 +191,50 @@ export default function NewBroadcastPage() {
       <main className="max-w-2xl mx-auto px-5 py-6">
         <h1 className="font-display text-xl font-bold mb-8">New broadcast</h1>
 
+        <div className="mb-6">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <p className="text-sm font-medium">Selected for this broadcast</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={clearAllTargeting}
+                disabled={!canClearAll}
+                className="tag-pill disabled:opacity-40"
+              >
+                Clear all tags
+              </button>
+              <button
+                onClick={selectAllTargeting}
+                disabled={!canSelectAll}
+                className="tag-pill disabled:opacity-40"
+              >
+                Select all tags
+              </button>
+            </div>
+          </div>
+          {selectedTags.length === 0 && selectedCourseCodes.length === 0 ? (
+            <p className="text-parchment-500 text-sm">
+              Select at least one tag. School and course tags AND with every other selected tag.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {selectedTags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => toggleTargetTag(tag.id)}
+                  className="tag-pill tag-pill-active"
+                >
+                  {tag.label}
+                </button>
+              ))}
+              {selectedCourseCodes.map((course) => (
+                <button key={course} onClick={() => toggleCourse(course)} className="tag-pill tag-pill-active">
+                  {course}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <textarea
           className="input-field min-h-[120px] resize-none"
           placeholder="What do you want people nearby to know?"
@@ -261,51 +305,12 @@ export default function NewBroadcastPage() {
                 : "\u00a0"}
         </p>
 
-        <div className="mb-10">
-          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-            <p className="text-sm font-medium">Selected for this broadcast</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={clearAllTargeting}
-                disabled={!canClearAll}
-                className="tag-pill disabled:opacity-40"
-              >
-                Clear all tags
-              </button>
-              <button
-                onClick={selectAllTargeting}
-                disabled={!canSelectAll}
-                className="tag-pill disabled:opacity-40"
-              >
-                Select all tags
-              </button>
-            </div>
-          </div>
-          {selectedTags.length === 0 && selectedCourseCodes.length === 0 ? (
-            <p className="text-parchment-500 text-sm">
-              Select at least one tag. School and course tags AND with every other selected tag.
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {selectedTags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => toggleTargetTag(tag.id)}
-                  className="tag-pill tag-pill-active"
-                >
-                  {tag.label}
-                </button>
-              ))}
-              {selectedCourseCodes.map((course) => (
-                <button key={course} onClick={() => toggleCourse(course)} className="tag-pill tag-pill-active">
-                  {course}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {error && <p className="text-rust-400 text-sm mb-4">{error}</p>}
+        <button onClick={publish} disabled={posting || !content.trim() || selectedTagIds.length === 0} className="btn-primary w-full mt-2">
+          {posting ? "Posting…" : "Send an Echo"}
+        </button>
 
-        <div className="mb-10">
+        <div className="mt-12 mb-10">
           <p className="text-sm font-medium mb-4">Your profile tags</p>
           {generalProfileTags.length === 0 ? (
             <p className="text-parchment-500 text-sm">
@@ -375,11 +380,6 @@ export default function NewBroadcastPage() {
             )}
           </div>
         )}
-
-        {error && <p className="text-rust-400 text-sm mb-4">{error}</p>}
-        <button onClick={publish} disabled={posting || !content.trim() || selectedTagIds.length === 0} className="btn-primary w-full mt-2">
-          {posting ? "Posting…" : "Send an Echo"}
-        </button>
       </main>
     </div>
   );
