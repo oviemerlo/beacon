@@ -267,7 +267,7 @@ export function NewBroadcastScreen({ onPosted }: { onPosted: () => void }) {
         </View>
       </View>
       {selectedTags.length === 0 && selectedCourseCodes.length === 0 ? (
-        <Text style={styles.emptyText}>Select at least one tag. School and course tags AND with every other selected tag.</Text>
+        <Text style={styles.emptyText}>No tags selected yet. Pick at least one from the sections below to choose who sees this broadcast.</Text>
       ) : (
         <View style={[styles.tagPillRow, { marginBottom: 20 }]}>
           {selectedTags.map((tag) => (

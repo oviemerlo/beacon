@@ -213,7 +213,7 @@ export default function NewBroadcastPage() {
           </div>
           {selectedTags.length === 0 && selectedCourseCodes.length === 0 ? (
             <p className="text-parchment-500 text-sm">
-              Select at least one tag. School and course tags AND with every other selected tag.
+              No tags selected yet. Pick at least one from the sections below to choose who sees this broadcast.
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
